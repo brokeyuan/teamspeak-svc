@@ -37,6 +37,18 @@ jobs:
       - name: Client manager regressions
         shell: pwsh
         run: ./review/client-fixes/RunManagerTests.ps1
+      - name: Client mic redirect regressions (P0/F02)
+        shell: pwsh
+        run: ./review/p0-defects/RunMicRedirector.ps1
+      - name: Client identity trust regressions (P0/F04+F05)
+        shell: pwsh
+        run: ./review/p0-defects/RunClientIdentity.ps1
+      - name: Bridge membership regressions (P0/F06)
+        shell: pwsh
+        run: ./review/p0-defects/RunBridgeMembership.ps1
+      - name: Bridge identity issuing regressions (P0/revision store)
+        shell: pwsh
+        run: ./review/p0-defects/RunIdentityIssuing.ps1
       - name: Server regressions
         shell: pwsh
         run: ./review/server-fixes/RunServerChecks.ps1

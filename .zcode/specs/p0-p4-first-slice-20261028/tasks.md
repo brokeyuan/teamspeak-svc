@@ -94,7 +94,11 @@
   - `rule` TR-5.2: 撤销多声明玩家时广播条数=声明条数；core IdentityTrustRegression 并入 protocolTest 通过。
 
 ## Task 6: P0 收口——CI 接入与全量绿
-- **Status**: `pending`
+- **Status**: `completed`
+- **Completion Evidence**:
+  - TR-6.1: ci.yml 新增 4 个 P0 runner 步骤（RunMicRedirector / RunClientIdentity / RunBridgeMembership / RunIdentityIssuing）。本地 CI 等价序列全绿：core `clean test`（108+15，EXIT=0）→ 客户端 `clean build`（EXIT=0）→ 旧桥 `clean build`（EXIT=0）→ 9 组 harness 回归（RunProtocol/RunMapper/RunTests/RunManagerTests/RunMicRedirector/RunClientIdentity/RunBridgeMembership/RunIdentityIssuing/RunServerChecks）退出码全 0。
+  - TR-6.2: P0 阶段提交齐全（c3b9164 / b2ce9e6 / 8263c3e / 483d6ee + 本提交）。
+  - P0 缺陷修复总结：F02（麦克风先取消后处理）、F04/F05（真实 expiry + 显式信任 + 持久防重放）、F06（UNKNOWN 按群过滤 + 快照 TTL）、签发端（revision 跨重启单调 + 逐条撤销广播）。所有失败用例均在旧代码上验证过确实失败。
 - **Priority**: high
 - **Depends On**: Tasks 2,3,4,5
 - **Description**:
