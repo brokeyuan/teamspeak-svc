@@ -38,6 +38,16 @@ public final class ServerTrustDirectory {
         directoryRevision++;
     }
 
+    /** 按 issuerKeyId 查询信任状态（客户端在只有声明头时使用）。 */
+    public synchronized boolean isTrusted(String issuerKeyId) {
+        return issuerKeyId != null && trustedIssuers.containsKey(issuerKeyId);
+    }
+
+    /** 返回指定声明的撤销墓碑 revision（未撤销为 null）。 */
+    public synchronized Long revocationWatermark(String claimKey) {
+        return revokedClaims.get(claimKey);
+    }
+
     public synchronized Verification verify(SignedPlayerClaim claim, long nowEpochSeconds) {
         PublicKey issuer = trustedIssuers.get(claim.issuerKeyId());
         if (issuer == null || !claim.verify(issuer, nowEpochSeconds)) {

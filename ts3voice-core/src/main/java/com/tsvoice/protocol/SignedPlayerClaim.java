@@ -21,6 +21,10 @@ public record SignedPlayerClaim(int version, String issuerKeyId, UUID mcUuid,
                                 long issuedAtEpochSeconds, long expiresAtEpochSeconds, byte[] signature) {
     public static final int CURRENT_VERSION = 1;
     public static final String DOMAIN = "tsvoice-player-claim-v1";
+    /** 首期声明 TTL 上限（与现有签发端 CLAIM_TTL_SECONDS 一致）。 */
+    public static final long MAX_TTL_SECONDS = 24 * 60 * 60;
+    /** 客户端接受的签发时钟偏差。 */
+    public static final long CLOCK_SKEW_SECONDS = 60;
 
     public SignedPlayerClaim {
         if (mcUuid == null || tsVirtualServerUid == null || tsVirtualServerUid.isBlank()
@@ -62,6 +66,23 @@ public record SignedPlayerClaim(int version, String issuerKeyId, UUID mcUuid,
         } catch (GeneralSecurityException e) {
             return false;
         }
+    }
+
+    /**
+     * 客户端侧策略校验：在签名/版本/到期之外，还拒绝未来签发（超出时钟偏差）
+     * 与超过上限的声明 TTL —— 包括旧实现可能已签发的超长声明。
+     */
+    public boolean verifyWithPolicy(PublicKey issuerKey, long nowEpochSeconds) {
+        if (version != CURRENT_VERSION) {
+            return false;
+        }
+        if (issuedAtEpochSeconds > nowEpochSeconds + CLOCK_SKEW_SECONDS) {
+            return false;
+        }
+        if (expiresAtEpochSeconds - issuedAtEpochSeconds > MAX_TTL_SECONDS) {
+            return false;
+        }
+        return verify(issuerKey, nowEpochSeconds);
     }
 
     public String encode() {

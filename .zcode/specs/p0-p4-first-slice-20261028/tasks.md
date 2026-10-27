@@ -56,7 +56,13 @@
   - `rule` TR-3.2: 修复后全绿；ServerRegression 无倒退。
 
 ## Task 4: 客户端身份信任/过期/防重放修复（F04/F05，失败测试先行）
-- **Status**: `pending`
+- **Status**: `completed`
+- **Completion Evidence**:
+  - TR-4.1（旧代码失败证据）：RunClientIdentity.ps1 首次运行 10 项 FAIL——真实 expiry 未存（F04）、未信任 issuer 入库（F05，经 map 内容断言暴露；评估已指出 F04 会使 lookup 全 null，仅查 lookup 会假通过）、未来 issuedAt / 超 24h TTL 未拒、撤销重放重入库、重启后墓碑缺失、重连后等 revision 重放。对照项（跨 serverUID、过期、畸形、撤销移除）旧代码即 PASS。
+  - TR-4.2（修复后全绿）：15/15 PASS；core `gradlew clean test` 108 项通过（SignedPlayerClaim/ServerTrustDirectory 变更无倒退）；5 组既有回归 + F02/F06 新回归全部退出码 0；客户端 `gradlew compileJava` 通过。
+  - 实现：P/SignedPlayerClaim 新增 MAX_TTL_SECONDS=24h、CLOCK_SKEW_SECONDS=60、verifyWithPolicy()（版本/未来签发/超 TTL/签名/到期）；P/ServerTrustDirectory 新增 isTrusted(issuerKeyId)、revocationWatermark(claimKey)；C/ClientIdentityService 重写——ServerTrustDirectory 实例默认空（D10：未知 issuer 不提升，语音 Ghost）、所有策略通过的声明推进持久高水位（identity-trust.json，ConfigFileUtil.writePrivate 原子写，换服/断线不清除）、ClaimRevoked 写墓碑并按 revision 移除、pinTrustedIssuer/unpinTrustedIssuer 显式信任操作、存储 claim 真实 expiresAtEpochSeconds。wire 格式未变。
+  - 边界说明：墓碑"至少保留至 revokedAt+TTL+偏差"以无限期保留最高 revision 实现（强于下限）；多 issuer 同一 (server,tsClientUid) 各自独立 claimKey；信任配置 UI 属 P3+，当前目录为空即全部 Ghost。
+  - 测试设施：receiver 录制型 stub（ClientPlayNetworking.RECEIVERS）走真实注册路径；PowerShell 包装 javac stderr 注记 + stdout 重定向会令 `powershell -File` 退出码失真，脚本末尾显式 `exit $LASTEXITCODE`。
 - **Priority**: high
 - **Depends On**: Task 1
 - **Description**:
