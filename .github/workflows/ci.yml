@@ -49,6 +49,9 @@ jobs:
       - name: Bridge identity issuing regressions (P0/revision store)
         shell: pwsh
         run: ./review/p0-defects/RunIdentityIssuing.ps1
+      - name: Session isolation regressions (P1/F03)
+        shell: pwsh
+        run: ./review/p1-isolation/RunSessionIsolation.ps1
       - name: Server regressions
         shell: pwsh
         run: ./review/server-fixes/RunServerChecks.ps1

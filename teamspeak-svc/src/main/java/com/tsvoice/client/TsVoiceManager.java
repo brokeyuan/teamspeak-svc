@@ -51,6 +51,9 @@ public final class TsVoiceManager {
     private static volatile boolean sessionRunning = false;
     /** 会话代际：stopSession 递增使旧线程的清理不再影响新会话。 */
     private static volatile long sessionGeneration = 0;
+    /** 当前会话的协调器 token：回调绑定它，旧会话回调据此整体丢弃。 */
+    private static volatile com.tsvoice.client.connection.VoiceState.SessionToken sessionToken =
+            new com.tsvoice.client.connection.VoiceState.SessionToken(0);
     /** 用户手动断开：在换服或再次手动连接前抑制自动激活。 */
     private static volatile boolean userDisabled = false;
     private static volatile String lastError = "";
@@ -149,14 +152,20 @@ public final class TsVoiceManager {
     /** SVC 客户端连接建立（进入世界且 SVC 激活）。 */
     public static void onSvcConnected() {
         svcConnected = true;
+        com.tsvoice.client.backend.SvcBackendAdapter.onSvcConnected();
         evaluateActivation();
     }
 
-    /** SVC 客户端断开。 */
+    /**
+     * SVC 客户端断开。P1 起只更新适配器与状态显示，不再销毁 TS 会话 ——
+     * TS 路由被选中期间麦克风保持消费（不泄漏回 SVC），TS 重连循环继续。
+     */
     public static void onSvcDisconnected() {
         svcConnected = false;
-        stopSession();
-        state = activeConfig != null ? State.WAITING_SVC : State.DORMANT;
+        com.tsvoice.client.backend.SvcBackendAdapter.onSvcDisconnected();
+        if (activeConfig == null && !sessionRunning) {
+            state = State.DORMANT;
+        }
     }
 
     // ---- 激活策略 ----
@@ -299,6 +308,7 @@ public final class TsVoiceManager {
         sessionRunning = true;
         state = State.CONNECTING;
         long gen = ++sessionGeneration;
+        sessionToken = com.tsvoice.client.connection.BackendCoordinator.beginSession();
         Thread t = new Thread(() -> sessionLoop(gen), "teamspeak-svc-voice");
         t.setDaemon(true);
         t.start();
@@ -309,6 +319,8 @@ public final class TsVoiceManager {
         sessionGeneration++;
         sessionRunning = false;
         lastAppliedConfig = null;
+        com.tsvoice.client.connection.BackendCoordinator.endSession(sessionToken);
+        sessionToken = new com.tsvoice.client.connection.VoiceState.SessionToken(0);
         Thread t = sessionThread;
         if (t != null) {
             t.interrupt();
@@ -340,7 +352,7 @@ public final class TsVoiceManager {
 
     /** 当前线程是否仍代表有效会话（未被 stopSession 换代）。 */
     private static boolean active(long gen) {
-        return sessionRunning && svcConnected && gen == sessionGeneration;
+        return sessionRunning && gen == sessionGeneration;
     }
 
     private static void disconnectQuiet(Ts3VoiceClient c) {
@@ -358,7 +370,7 @@ public final class TsVoiceManager {
             long backoffMs = INITIAL_BACKOFF_MS;
             while (active(gen)) {
                 try {
-                    Ts3VoiceClient c = connect();
+                    Ts3VoiceClient c = connect(gen);
                     boolean committed;
                     synchronized (TsVoiceManager.class) {
                         committed = active(gen);
@@ -373,10 +385,14 @@ public final class TsVoiceManager {
                         disconnectQuiet(c);
                         return;
                     }
+                    com.tsvoice.client.connection.BackendCoordinator.publishRoute(sessionToken,
+                            com.tsvoice.client.connection.VoiceState.BackendKind.TS3, true);
                 } catch (Exception e) {
                     if (gen == sessionGeneration) {
                         state = State.RECONNECTING;
                         lastError = e.getMessage() == null ? e.toString() : e.getMessage();
+                        com.tsvoice.client.connection.BackendCoordinator.publishRoute(sessionToken,
+                                com.tsvoice.client.connection.VoiceState.BackendKind.TS3, false);
                     }
                     TeamspeakSvcClient.LOGGER.warn("[teamspeak-svc] TS connect failed: {}. Retrying in {}ms",
                             e.getMessage(), backoffMs);
@@ -418,6 +434,8 @@ public final class TsVoiceManager {
                         return;
                     }
                     state = State.RECONNECTING;
+                    com.tsvoice.client.connection.BackendCoordinator.publishRoute(sessionToken,
+                            com.tsvoice.client.connection.VoiceState.BackendKind.TS3, false);
                     lost = client;
                     client = null;
                 }
@@ -441,7 +459,7 @@ public final class TsVoiceManager {
         }
     }
 
-    private static Ts3VoiceClient connect() throws Exception {
+    private static Ts3VoiceClient connect(long gen) throws Exception {
         SessionConfig cfg = activeConfig;
         if (cfg == null) {
             throw new IllegalStateException("no session config");
@@ -459,8 +477,18 @@ public final class TsVoiceManager {
         String nickname = "[MC] " + Minecraft.getInstance().getUser().getName();
         Ts3VoiceClient c = new Ts3VoiceClient(identity, nickname, "", cfg.tcp());
         c.setServerPassword(cfg.password());
-        c.setTextListener(TsVoiceManager::onTsText);
-        c.setVoiceListener(TsVoiceManager::handleVoiceFrame);
+        // 回调绑定来源 client 与会话代际（投递/处理双检）：被替换会话的迟到回调
+        // 在此整体丢弃，不得查询全局"当前 client"解释自己的 clid/文本。
+        c.setTextListener((invokerName, message) -> {
+            if (active(gen) && client == c) {
+                onTsText(invokerName, message);
+            }
+        });
+        c.setVoiceListener(frame -> {
+            if (active(gen) && client == c) {
+                handleVoiceFrame(c, frame);
+            }
+        });
         try {
             c.connect(InetAddress.getByName(cfg.host()), cfg.port(), CONNECT_TIMEOUT_MS);
         } catch (Exception e) {
@@ -488,6 +516,9 @@ public final class TsVoiceManager {
         }
         // TS 用户在频道间移动 → Ghost 可见性实时同步（进我频道=出现，离开=消失）
         c.setChannelMembershipListener(clid -> {
+            if (!active(gen) || client != c) {
+                return;
+            }
             try {
                 TsAudioInjector.syncAllGhostVisibility(c);
             } catch (Exception e) {
@@ -637,13 +668,10 @@ public final class TsVoiceManager {
         return client;
     }
 
-    private static void handleVoiceFrame(Ts3VoiceClient.TsVoiceIn frame) {
+    /** TS 语音帧处理：source 是帧的来源会话，解析只依赖 source（F03）。 */
+    private static void handleVoiceFrame(Ts3VoiceClient source, Ts3VoiceClient.TsVoiceIn frame) {
         voiceCounter.incrementAndGet();
-        Ts3VoiceClient c = client;
-        if (c == null) {
-            return;
-        }
-        String uid = c.getUniqueIdOf(frame.senderClid());
+        String uid = source.getUniqueIdOf(frame.senderClid());
         if (uid == null) {
             if (unknownClids.add(frame.senderClid())) {
                 TeamspeakSvcClient.LOGGER.warn("[teamspeak-svc] voice frame from unknown clid {} (TS client list not synced) — dropped",
@@ -651,11 +679,11 @@ public final class TsVoiceManager {
             }
             return; // 未知 clid（映射尚未同步）
         }
-        String nickname = c.getNicknameOf(frame.senderClid());
+        String nickname = source.getNicknameOf(frame.senderClid());
         // TS nicknames/descriptions are unverified presentation data. Only a signed
         // claim can map a TS user to an MC player; everyone else is a normal Ghost.
         java.util.UUID mcUuid = ClientIdentityService.getVerifiedMcUuid(
-                c.getVirtualServerUid(), uid);
+                source.getVirtualServerUid(), uid);
         TsAudioInjector.onTsFrame(uid, nickname, mcUuid, frame.sequence(), frame.codec(), frame.opus());
     }
 }

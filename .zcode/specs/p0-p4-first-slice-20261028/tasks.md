@@ -109,7 +109,14 @@
   - `rule` TR-6.2: P0 阶段 git 提交存在且包含全部 P0 变更。
 
 ## Task 7: P1 控制平面骨架与会话 token 隔离（F03）
-- **Status**: `pending`
+- **Status**: `completed`
+- **Completion Evidence**:
+  - 失败证据（旧代码）：RunSessionIsolation.ps1 首次运行 5 项 FAIL——旧会话语音帧经全局新 client 解析后注入（F03 核心缺陷）、旧会话文字经静态方法引用送达 MC 聊天、旧会话成员回调仍以旧 client 同步 Ghost、新会话帧/文字计数被旧回调污染。
+  - 修复后全绿：10/10 PASS（含当前会话帧正常解析、手动断开关闭会话 client）。
+  - 实现：新增 C/connection/VoiceState.java（SessionToken/RouteSnapshot/BackendKind/FailureKind 集中定义）、C/connection/BackendCoordinator.java（token 签发/失效、volatile 不可变路由快照、publishRoute 拒绝旧 token）、C/backend/SvcBackendAdapter.java（SVC 连接观察者）；TsVoiceManager——startSession 签发 token、connect(gen) 将 voice/text/membership 回调绑定 (来源 client, gen) 双检、handleVoiceFrame 改为依赖 source 参数解析（不再查询全局 client）、连接/断线/重连发布路由快照。
+  - **SVC 断连解耦（TR-7.2）**：onSvcDisconnected 不再 stopSession——只更新 SvcBackendAdapter 与状态显示；active(gen) 移除 svcConnected 条件，TS 会话在 SVC 断开期间继续运行与重连（麦克风归属不变，不泄漏回 SVC）。这是 P1 验收" SVC 连接变化只更新 SvcBackendAdapter"的直接实现，也是 F01（P2）的前置。**注意**：TS 会话启动仍要求 svcConnected（F01 的启动门在 P2 前端验证后才解除）。
+  - **计划偏差说明**：TsBackendSession/SelectionPolicy 未在本任务创建——其消费者（有界队列 Task 8、播放注册表 Task 9、能力回退 P4）尚未存在，先创建会形成无落点的空壳；Task 8/9/16 引入并在此记录。Token 当前与 sessionGeneration 并行存在，Task 8/9 逐步收编。
+  - 全部 10 组回归退出码 0；客户端 compileJava 通过；RunMicRedirector/RunManagerTests 编译清单已加入新类。
 - **Priority**: high
 - **Depends On**: Task 6
 - **Description**:
