@@ -8,7 +8,9 @@ import de.maxhenkel.voicechat.api.events.ClientSoundEvent;
  * 将 PCM 经 SVC 客户端编码器编码为 Opus 后直发玩家自己的 TS 客户端，并取消
  * SVC 发往 MC 服务器的原始发送（服务端仅收到空停止包，无语音内容）。
  *
- * <p>TS 会话未连接时不接管 —— SVC 原生路径照常工作（优雅降级）。</p>
+ * <p>TS 路由被选中期间事件先取消再处理：编码/发送异常、空编码、会话在检查间隙
+ * 断开等任何失败都只丢帧并报告，绝不放行 SVC（防止同一句话送达两个网络）。
+ * TS 未被选中时不接管 —— SVC 原生路径照常工作（优雅降级）。</p>
  */
 public final class MicRedirector {
 
@@ -19,21 +21,25 @@ public final class MicRedirector {
     }
 
     public static void onMicSound(ClientSoundEvent event) {
-        if (!TsVoiceManager.isSessionConnected()) {
+        if (!com.tsvoice.client.audio.MicRouteGate.tsSelected()) {
             return; // 不接管：SVC 原生路径
         }
+        event.cancel(); // TS 已选中：先关闭 SVC 路径，后续失败不得改变归属
         short[] pcm = event.getRawAudio();
         if (pcm == null || pcm.length == 0) {
             return;
         }
+        if (!TsVoiceManager.isSessionConnected()) {
+            return; // 会话未就绪（等待/重连）：帧已消费并丢弃
+        }
         try {
             byte[] opus = encoder().encode(pcm);
-            if (opus != null && opus.length > 0 && TsVoiceManager.sendMic(opus)) {
-                if (!firstFrameLogged) {
-                    firstFrameLogged = true;
-                    TeamspeakSvcClient.LOGGER.info("[teamspeak-svc] MC->TS audio path ACTIVE (first mic frame sent to TS)");
-                }
-                event.cancel(); // 抑制发往 MC 服务器（改道 TS）
+            if (opus == null || opus.length == 0) {
+                return;
+            }
+            if (TsVoiceManager.sendMic(opus) && !firstFrameLogged) {
+                firstFrameLogged = true;
+                TeamspeakSvcClient.LOGGER.info("[teamspeak-svc] MC->TS audio path ACTIVE (first mic frame sent to TS)");
             }
         } catch (Exception e) {
             TeamspeakSvcClient.LOGGER.warn("[teamspeak-svc] mic redirect failed: {}", e.getMessage());

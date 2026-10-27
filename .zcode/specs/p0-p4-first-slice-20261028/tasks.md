@@ -3,7 +3,12 @@
 > 约定：前缀 C=W/teamspeak-svc/src/main/java/com/tsvoice/client，B=W/teamspeak&svcbridge/src/main/java/com/svcb/tsbridge，P=W/ts3voice-core/src/main/java/com/tsvoice/protocol。客户端/旧桥离线 harness 位于 review/（javac+替身+ps1 runner，CI 调用）；core 测试为无 JUnit main 入口。每阶段完成后独立 git 提交。
 
 ## Task 1: 基线留存与既有回归绿基线
-- **Status**: `in_progress`
+- **Status**: `completed`
+- **Completion Evidence**:
+  - git init -b main 完成；.gitignore 追加排除 `/teamspeak&svcbridge.zip`（751MB）、`/voicechat-discord-main/`（641MB 参考仓库）、`/tsbridge-standby/`（jar）、`/review/build-fixes/`（453MB 生成物）；初始提交 `ac4039c`（1164 文件，pack 16MiB），`git status` 干净。
+  - 关键文件 SHA-256 与评估一致（TsVoiceManager `811c228c…`、ClientIdentityService `4fb3a208…`、MicRedirector `cdbce4ef…`、BridgeMembershipService `44c42cb3…`、SVC jar `189605fd…`）。
+  - core：`gradlew clean test`（Gradle 9.5.1，含 protocolTest 108 项）BUILD SUCCESSFUL，EXIT=0。注：工作区路径含 `&`，cmd 直调 gradlew.bat 会截断路径，须用 PowerShell 引用调用（已记录）。
+  - 既有 5 组 harness 回归全部通过（RunProtocol/RunMapper/RunTests/RunManagerTests/RunServerChecks，退出码均 0），即 65 项具名断言 + RSA/握手检查绿基线。
 - **Priority**: high
 - **Depends On**: None
 - **Description**:

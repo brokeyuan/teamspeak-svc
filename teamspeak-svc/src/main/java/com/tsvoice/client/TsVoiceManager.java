@@ -224,10 +224,22 @@ public final class TsVoiceManager {
         return value == null || value.isEmpty() ? null : value;
     }
 
+    /**
+     * 麦克风路由归属：存在生效 TS 配置且未被用户禁用即选中 TS。
+     * 等待 SVC/重连期间帧被消费丢弃（P1 由协调器的 route 快照取代此简化判定）。
+     */
+    private static void refreshRouteOwnership() {
+        com.tsvoice.client.audio.MicRouteGate.setOwner(
+                activeConfig != null && !userDisabled
+                        ? com.tsvoice.client.audio.MicRouteGate.Owner.TS
+                        : com.tsvoice.client.audio.MicRouteGate.Owner.SVC_NATIVE);
+    }
+
     /** 重新评估激活：配置变化触发会话重建，无配置则休眠。 */
     static synchronized void evaluateActivation() {
         SessionConfig resolved = resolveSessionConfig();
         activeConfig = resolved;
+        refreshRouteOwnership();
         if (userDisabled) {
             stopSession();
             state = State.DORMANT;
@@ -275,6 +287,7 @@ public final class TsVoiceManager {
 
     public static void manualDisconnect() {
         userDisabled = true;
+        refreshRouteOwnership();
         stopSession();
         state = State.DORMANT;
     }
