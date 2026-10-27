@@ -50,7 +50,11 @@ public final class IdentityProofService {
     private static KeyPair issuerKeyPair;
     private static final Map<UUID, Pending> pending = new ConcurrentHashMap<>();
     private static final Map<String, IssuedClaim> issued = new ConcurrentHashMap<>();
-    private static final java.util.concurrent.atomic.AtomicLong revisions = new java.util.concurrent.atomic.AtomicLong(1);
+    /**
+     * revision 计数：同一签发公钥跨进程重启单调（预留块持久化，崩溃跳过不复用）。
+     * null 表示存储不可用 —— 身份提升暂停，语音保持 Ghost。
+     */
+    private static volatile IdentityRevisionStore revisionStore;
 
     private IdentityProofService() {
     }
@@ -59,6 +63,14 @@ public final class IdentityProofService {
         issuerKeyPair = IdentitySigningKeys.loadOrGenerate(
                 net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir()
                         .resolve("tsbridge").resolve("identity-signing-keypair.txt"));
+        try {
+            revisionStore = new IdentityRevisionStore(new IdentityRevisionStore.FilePersistence(
+                    net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir()
+                            .resolve("tsbridge").resolve("identity-revision.txt")));
+        } catch (RuntimeException e) {
+            revisionStore = null;
+            TsBridgeMod.LOGGER.error("[tsbridge] identity revision store unavailable — identity elevation paused", e);
+        }
 
         PayloadTypeRegistry.clientboundPlay().register(IdentityPayloads.IdentityChallenge.TYPE,
                 IdentityPayloads.IdentityChallenge.CODEC);
@@ -123,7 +135,19 @@ public final class IdentityProofService {
             return;
         }
         String claimKey = claimKey(entry.serverUid(), proof.tsClientUid());
-        long revision = revisions.incrementAndGet();
+        if (revisionStore == null) {
+            TsBridgeMod.LOGGER.error("[tsbridge] identity revision store unavailable — identity elevation paused");
+            player.sendSystemMessage(Component.translatable("tsbridge.identity.failed"));
+            return;
+        }
+        long revision;
+        try {
+            revision = revisionStore.allocate();
+        } catch (IdentityRevisionStore.RevisionAllocationException e) {
+            TsBridgeMod.LOGGER.error("[tsbridge] identity revision allocation failed — elevation paused", e);
+            player.sendSystemMessage(Component.translatable("tsbridge.identity.failed"));
+            return;
+        }
         SignedPlayerClaim claim = SignedPlayerClaim.issue(issuerKeyPair, player.getUUID(),
                 entry.serverUid(), proof.tsClientUid(), revision, now, now + CLAIM_TTL_SECONDS);
         IssuedClaim issuedClaim = new IssuedClaim(claim, issuerKeyPair.getPublic().getEncoded());
@@ -162,14 +186,30 @@ public final class IdentityProofService {
             removed.add(mapEntry.getValue());
             return true;
         });
-        long revision = removed.isEmpty() ? revisions.get() : revisions.incrementAndGet();
-        var payload = new IdentityPayloads.ClaimRevoked(
-                removed.isEmpty() ? "" : ServerTrustDirectory.claimKey(removed.getFirst().claim()), revision);
         if (removed.isEmpty()) {
             return;
         }
         MinecraftServer server = TsBridgeMod.mcServer;
-        if (server != null) {
+        if (server == null) {
+            return;
+        }
+        // 按条目逐一广播：每个已签发声明一条 ClaimRevoked，客户端墓碑覆盖全部映射，
+        // 不能只发同一 MC UUID 的第一条。
+        for (IssuedClaim entry : removed) {
+            long revision;
+            if (revisionStore != null) {
+                try {
+                    revision = revisionStore.allocate();
+                } catch (IdentityRevisionStore.RevisionAllocationException e) {
+                    // 分配失败：以声明自身 revision 作墓碑，仍阻断该声明的重放。
+                    TsBridgeMod.LOGGER.error("[tsbridge] revocation revision allocation failed — using claim revision", e);
+                    revision = entry.claim().revision();
+                }
+            } else {
+                revision = entry.claim().revision();
+            }
+            var payload = new IdentityPayloads.ClaimRevoked(
+                    ServerTrustDirectory.claimKey(entry.claim()), revision);
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                 ServerPlayNetworking.send(player, payload);
             }

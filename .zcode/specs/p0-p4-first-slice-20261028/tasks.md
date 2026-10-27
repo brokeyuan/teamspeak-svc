@@ -75,7 +75,13 @@
   - `rule` TR-4.2: 修复后回归全绿；secret/凭据不进入日志断言通过。
 
 ## Task 5: 签发端 IdentityRevisionStore 与逐条撤销广播
-- **Status**: `pending`
+- **Status**: `completed`
+- **Completion Evidence**:
+  - 失败证据（旧代码）：RunIdentityIssuing.ps1 首次运行 2 项 FAIL——"revocation broadcasts one payload per issued claim (got 1)"、"revocation payloads cover distinct claims"（撤销多声明玩家只广播第一条）。
+  - 修复后全绿：IdentityIssuingRegression 6/6（签发 revision≥2、逐条撤销广播、墓碑高于全部已签发、撤销后重新证明 revision 超越墓碑）；IdentityRevisionStoreRegression 8/8（首号=2 且单调、重启跳过整个预留块、持久化失败抛 RevisionAllocationException 且恢复后不回退、跨 4 次重启长链严格单调、文件持久化往返）。
+  - core：PT/IdentityTrustRegression 15 项通过，接入 Gradle `identityTrustTest`（test 依赖它）；`gradlew clean test` = 108 protocol + 15 identity trust 全部通过。
+  - 实现：新增 B/identity/IdentityRevisionStore.java（预留计数块 RESERVE_BLOCK=100；FilePersistence 单行 long 原子写；损坏/不可读抛出而非返回 0——宁可暂停提升不可复用编号）；IdentityProofService 移除 AtomicLong(1)，签发与撤销都经 store.allocate()，分配失败暂停提升（语音 Ghost），撤销按条目逐一广播、分配失败时以声明自身 revision 作墓碑。
+  - 其余 8 组回归退出码全 0；旧桥 `gradlew compileJava` 通过。
 - **Priority**: high
 - **Depends On**: Task 1
 - **Description**:
