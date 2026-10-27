@@ -157,6 +157,7 @@
   - 计划偏差说明：独立 TsPlaybackRegistry 类未创建——其所有权账本以 ClientStateReflector.ownedChannels 承载（与 ownedStates 对称），避免与既有 Ghost 生命周期并行维护两套注册表；P2 前端适配接管播放生命周期时再评估是否独立成类。同 UUID 重连 retire→新建路径由测试覆盖（序号重置 + remove/reconnect 场景）。
   - 迁移边界：旧 "ts-ghost-" 音量缓存不迁移（plan P1 要求"可确定 serverUID 对应关系时复制一次"，当前无可靠来源，留待 P3 书签/凭据引入 serverUID 持久化时处理）；per-player 镜像桥的 UUID 互认需服务端同步迁移（旧桥显式适配，未在本切片改动）。
   - 全部 12 组回归退出码 0；客户端 compileJava 通过。
+  - **P1 收口（CI 等价全量）**：ci.yml 接入 RunSessionIsolation/RunTransportShutdown/RunStableVolume；本地全量 = core `clean test`（108+15）+ 客户端 `clean build` + 旧桥 `clean build` + 12 组 harness 回归，退出码全 0。P1 验收对照：控制平面唯一决策（BackendCoordinator token/路由快照）；旧回调隔离 0 影响（SessionIsolationTest）；阻塞可关闭（TransportShutdownTest 95ms/1ms/0ms）；稳定 UUID 与所有权（StableVolumeTest）；SVC 断连不再销毁 TS（onSvcDisconnected 解耦）。真实网络/设备条件项未执行，标"未验证"。
 - **Priority**: high
 - **Depends On**: Task 7
 - **Description**:

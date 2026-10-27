@@ -55,6 +55,9 @@ jobs:
       - name: Transport shutdown regressions (P1/F09)
         shell: pwsh
         run: ./review/p1-transport/RunTransportShutdown.ps1
+      - name: Stable participant volume regressions (P1)
+        shell: pwsh
+        run: ./review/p1-playback/RunStableVolume.ps1
       - name: Server regressions
         shell: pwsh
         run: ./review/server-fixes/RunServerChecks.ps1
