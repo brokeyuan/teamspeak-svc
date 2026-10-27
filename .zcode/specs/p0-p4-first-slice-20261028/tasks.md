@@ -149,7 +149,14 @@
   - `rule` TR-8.2: 有界队列溢出丢最旧并计数；序号回绕/重复/乱序既有断言不倒退。
 
 ## Task 9: P1 媒体归属——稳定 UUID 与播放注册表
-- **Status**: `pending`
+- **Status**: `completed`
+- **Completion Evidence**:
+  - 失败证据（旧代码）：RunStableVolume.ps1 内嵌 old-behavior probe（git 取 HEAD 版源码编译）复现 2 项旧缺陷——"old derivation is not authority-scoped"（UUID 不含 serverUID，跨服同 uid 共享音量键）、"old close removed the NEW stream channel by UUID alone"（无条件按 UUID 关闭，旧流清理可杀新流通道）。
+  - 修复后全绿：10/10 PASS——v2 派生确定性/权威隔离/clid 无关、注入注册于稳定 UUID、序号重置不换通道对象、remove 按 owned handle 精确关闭、重连同 UUID 重建、外部/过期句柄关闭为 no-op、切服后同 uid 隔离。
+  - 实现：TsAudioInjector.participantUuidFor(authority, uid) = nameUUIDFromBytes("tsvoice-participant-v2 "+authority+" "+uid)（不含 session/streamEpoch）；GhostAudio 增加 ownedChannel 快照（首次注入成功后经 ClientStateReflector.ownedAudioChannel 快照并 registerOwnedChannel）；ClientStateReflector.closeAudioChannel(UUID, expectedOwned) 改为 channels.remove(uuid, expectedOwned) 两参语义——句柄不符不关闭；onTsFrame 增加 authority 重载（旧签名委托 null→"unknown"，兼容现有 CI 测试）；TsVoiceManager.handleVoiceFrame 传 source.getVirtualServerUid()。
+  - 计划偏差说明：独立 TsPlaybackRegistry 类未创建——其所有权账本以 ClientStateReflector.ownedChannels 承载（与 ownedStates 对称），避免与既有 Ghost 生命周期并行维护两套注册表；P2 前端适配接管播放生命周期时再评估是否独立成类。同 UUID 重连 retire→新建路径由测试覆盖（序号重置 + remove/reconnect 场景）。
+  - 迁移边界：旧 "ts-ghost-" 音量缓存不迁移（plan P1 要求"可确定 serverUID 对应关系时复制一次"，当前无可靠来源，留待 P3 书签/凭据引入 serverUID 持久化时处理）；per-player 镜像桥的 UUID 互认需服务端同步迁移（旧桥显式适配，未在本切片改动）。
+  - 全部 12 组回归退出码 0；客户端 compileJava 通过。
 - **Priority**: high
 - **Depends On**: Task 7
 - **Description**:

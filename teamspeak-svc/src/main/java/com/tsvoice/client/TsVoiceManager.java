@@ -684,6 +684,7 @@ public final class TsVoiceManager {
         // claim can map a TS user to an MC player; everyone else is a normal Ghost.
         java.util.UUID mcUuid = ClientIdentityService.getVerifiedMcUuid(
                 source.getVirtualServerUid(), uid);
-        TsAudioInjector.onTsFrame(uid, nickname, mcUuid, frame.sequence(), frame.codec(), frame.opus());
+        TsAudioInjector.onTsFrame(source.getVirtualServerUid(), uid, nickname, mcUuid,
+                frame.sequence(), frame.codec(), frame.opus());
     }
 }

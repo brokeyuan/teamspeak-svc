@@ -37,6 +37,8 @@ public final class ClientStateReflector {
     private static final Map<UUID, String> activeGhosts = new ConcurrentHashMap<>();
     /** 只拥有自己实际放入 states 的对象；原生状态替换它后即失去所有权。 */
     private static final Map<UUID, Object> ownedStates = new ConcurrentHashMap<>();
+    /** TS 播放通道所有权：旧流清理只允许关闭自己注册的通道对象（防杀新流）。 */
+    private static final Map<UUID, Object> ownedChannels = new ConcurrentHashMap<>();
     /** SVC states 键快照（主线程每 tick 原子替换；供 TS 网络线程安全判定同服玩家）。 */
     private static volatile Set<UUID> knownStateIds = Set.of();
 
@@ -170,12 +172,15 @@ public final class ClientStateReflector {
     }
 
     /**
-     * Closes and removes the SVC {@code AudioChannel} owned by a TS Ghost. This is
-     * intentionally separate from PlayerState removal: SVC's own close helper only
-     * removes its map entry, leaving decoder/jitter/speaker threads alive.
+     * Closes the SVC {@code AudioChannel} owned by a TS Ghost stream. The caller
+     * must pass the channel object it registered ({@link #registerOwnedChannel});
+     * the close only takes effect while that exact object is still the current
+     * channel, so a stale cleanup can never kill a newer stream's channel. This
+     * is intentionally separate from PlayerState removal: SVC's own close helper
+     * only removes its map entry, leaving decoder/jitter/speaker threads alive.
      */
-    public static void closeAudioChannel(UUID channelId) {
-        if (channelId == null) {
+    public static void closeAudioChannel(UUID channelId, Object expectedOwned) {
+        if (channelId == null || expectedOwned == null) {
             return;
         }
         onClientThread(() -> {
@@ -192,15 +197,41 @@ public final class ClientStateReflector {
                     return;
                 }
                 synchronized (channels) {
-                    Object channel = channels.remove(channelId);
-                    if (channel != null) {
-                        channel.getClass().getMethod("closeAndKill").invoke(channel);
+                    if (channels.remove(channelId, expectedOwned)) {
+                        expectedOwned.getClass().getMethod("closeAndKill").invoke(expectedOwned);
+                        ownedChannels.remove(channelId, expectedOwned);
                     }
                 }
             } catch (Throwable e) {
                 TeamspeakSvcClient.LOGGER.debug("[teamspeak-svc] close SVC audio channel failed: {}", e.toString());
             }
         });
+    }
+
+    /** Registers the channel object a TS stream owns (snapshot after first injection). */
+    public static void registerOwnedChannel(UUID channelId, Object channel) {
+        if (channelId != null && channel != null) {
+            ownedChannels.put(channelId, channel);
+        }
+    }
+
+    /** Read-only snapshot of the SVC audio channel currently registered for a UUID. */
+    public static Object ownedAudioChannel(UUID channelId) {
+        try {
+            Object client = Class.forName("de.maxhenkel.voicechat.voice.client.ClientManager")
+                    .getMethod("getClient").invoke(null);
+            if (client == null) {
+                return null;
+            }
+            @SuppressWarnings("unchecked")
+            Map<UUID, Object> channels = (Map<UUID, Object>) client.getClass()
+                    .getMethod("getAudioChannels").invoke(client);
+            synchronized (channels) {
+                return channels.get(channelId);
+            }
+        } catch (Throwable e) {
+            return null;
+        }
     }
 
     /** 移除本地 Ghost 状态。 */
