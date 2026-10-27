@@ -1,0 +1,13 @@
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS password unavailable never creates or joins public fallback after timeout
+PASS password unavailable blocks voice
+PASS wrong-parent global match is never reused
+PASS unavailable group target blocks voice
+PASS unconfirmed channel move blocks voice
+PASS confirmed matching target permits voice
+PASS live group change blocks immediately before mapper tick
+PASS main channel receives separate channel password
+PASS manual mirror waits for authoritative target info without beacon
+PASS long-name mirror locates exact original TS target

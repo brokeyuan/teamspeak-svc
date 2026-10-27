@@ -1,0 +1,42 @@
+plugins {
+    id 'maven-publish'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+base {
+    archivesName = archives_base_name
+}
+version = project(':api').version
+group = maven_group
+
+processResources {
+    filesMatching('fabric.mod.json') {
+        expand 'api_version': version
+    }
+}
+
+publishing {
+    publications {
+        voiceChatApi(MavenPublication) {
+            artifactId archives_base_name
+            artifact(jar) {
+                builtBy build
+                classifier 'fabric-stub'
+            }
+        }
+    }
+    repositories {
+        maven {
+            name = 'henkelmax.public'
+            url = 'https://maven.maxhenkel.de/repository/public'
+            credentials {
+                username System.getenv('MAVEN_USERNAME')
+                password System.getenv('MAVEN_PASSWORD')
+            }
+        }
+    }
+}

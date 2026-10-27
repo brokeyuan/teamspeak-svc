@@ -1,0 +1,37 @@
+# Java / Gradle
+.gradle/
+build/
+out/
+*.class
+
+# Local runtime and generated artifacts
+run/
+logs/
+*.log
+*.log.gz
+
+# Native/native caches unpacked at runtime
+config/teamspeak-svc/native/
+
+# Never commit real identities or credentials
+identity.txt
+identities/
+identity-signing-keypair.txt
+identity-signing-keypair.txt.tmp
+config/tsbridge/identity.txt
+config/tsbridge/identities/
+
+# Local test server contains world data and potentially real credentials
+testserver/
+!testserver/README.md
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+
+# Large reference/generated material not part of product source
+/teamspeak&svcbridge.zip
+/voicechat-discord-main/
+/tsbridge-standby/
+/review/build-fixes/

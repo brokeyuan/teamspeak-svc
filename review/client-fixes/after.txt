@@ -1,0 +1,17 @@
+ע: C:\Users\Administrator\Documents\Workspace\Brokeyuan\mods\teamspeak&svcbridge\teamspeak-svc\src\main\java\com\tsvoice\client\ts3voice\Ts3Crypt.javaʹ�û򸲸����ѹ�ʱ�� API��
+ע: �й���ϸ��Ϣ, ��ʹ�� -Xlint:deprecation ���±��롣
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS SVC instance replacement uses current client even before cleanup
+PASS SVC reconnect uses current client after cleanup
+PASS visibility sync preserves native PlayerState identity
+PASS TS cleanup preserves native PlayerState
+PASS reflector refuses to overwrite a native PlayerState
+PASS reflector refuses to delete a state it does not own
+PASS injected cross-server state is not classified as a native player
+PASS group refresh does not modify native replacement of a ghost
+PASS cleanup preserves native replacement of a previous ghost
+PASS same-channel ungrouped TS user stays visible
+PASS cleanup removes owned TS ghost
+PASS incoming audio reaches new SVC client only

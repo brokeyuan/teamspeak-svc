@@ -1,0 +1,18 @@
+ע: review\server-fixes\ServerRegression.javaʹ����δ�����򲻰�ȫ�Ĳ�����
+ע: �й���ϸ��Ϣ, ��ʹ�� -Xlint:unchecked ���±��롣
+FAIL failed query cleans connect: java.lang.AssertionError: uncommitted query must close
+FAIL failed query cleans login: java.lang.AssertionError: uncommitted query must close
+FAIL failed query cleans select: java.lang.AssertionError: uncommitted query must close
+FAIL failed query cleans nickname: java.lang.AssertionError: uncommitted query must close
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS successful query stays open until disconnect
+FAIL offline player cannot commit newly connected client: java.lang.AssertionError: offline connection must close instead of publish
+FAIL stopped tunnel closes established socket: java.net.SocketTimeoutException: Read timed out
+FAIL unknown reflected membership is empty: java.lang.AssertionError: reflection failure must never mean everyone
+FAIL microphone uses current packet group, not stale membership cache: java.lang.AssertionError: only current bridge-group packet may forward, including immediately after leaving
+FAIL restart-only reload is rejected without partial update: java.lang.AssertionError: restart fields must reject reload
+PASS supported reload updates runtime policy
+Exception in thread "main" java.lang.AssertionError: 9 server regressions failed
+	at ServerRegression.main(ServerRegression.java:94)

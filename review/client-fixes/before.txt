@@ -1,0 +1,19 @@
+ע: C:\Users\Administrator\Documents\Workspace\Brokeyuan\mods\teamspeak&svcbridge\teamspeak-svc\src\main\java\com\tsvoice\client\ts3voice\Ts3Crypt.javaʹ�û򸲸����ѹ�ʱ�� API��
+ע: �й���ϸ��Ϣ, ��ʹ�� -Xlint:deprecation ���±��롣
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+FAIL SVC instance replacement uses current client even before cleanup
+FAIL SVC reconnect uses current client after cleanup
+FAIL visibility sync preserves native PlayerState identity
+FAIL TS cleanup preserves native PlayerState
+FAIL reflector refuses to overwrite a native PlayerState
+FAIL reflector refuses to delete a state it does not own
+FAIL injected cross-server state is not classified as a native player
+FAIL group refresh does not modify native replacement of a ghost
+FAIL cleanup preserves native replacement of a previous ghost
+FAIL same-channel ungrouped TS user stays visible
+PASS cleanup removes owned TS ghost
+FAIL incoming audio reaches new SVC client only
+Exception in thread "main" java.lang.AssertionError: 11 client regression checks failed
+	at com.tsvoice.client.ts3voice.ClientStateTests.main(ClientStateTests.java:66)

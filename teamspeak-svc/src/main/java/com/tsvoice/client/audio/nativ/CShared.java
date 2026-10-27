@@ -1,0 +1,51 @@
+//--------------------------------------------------------------------------
+// Ported from SVC-Extra (https://github.com/liuyuexiaoyu1/SVC-Extra), GPLv3.
+// Which incorporates code from Channel (https://github.com/USS-Shenzhou/Channel).
+//--------------------------------------------------------------------------
+/* Channel mod by USS_Shenzhou -- GPL-3.0 */
+package com.tsvoice.client.audio.nativ;
+import java.lang.invoke.*;
+import java.lang.foreign.*;
+import java.util.*;
+import java.util.stream.*;
+import static java.lang.foreign.ValueLayout.*;
+public class CShared {
+    CShared() {
+    }
+    public static final OfBoolean C_BOOL = (OfBoolean) Linker.nativeLinker().canonicalLayouts().get("bool");
+    public static final OfByte C_CHAR =(OfByte)Linker.nativeLinker().canonicalLayouts().get("char");
+    public static final OfShort C_SHORT = (OfShort) Linker.nativeLinker().canonicalLayouts().get("short");
+    public static final OfInt C_INT = (OfInt) Linker.nativeLinker().canonicalLayouts().get("int");
+    public static final OfLong C_LONG_LONG = (OfLong) Linker.nativeLinker().canonicalLayouts().get("long long");
+    public static final OfFloat C_FLOAT = (OfFloat) Linker.nativeLinker().canonicalLayouts().get("float");
+    public static final OfDouble C_DOUBLE = (OfDouble) Linker.nativeLinker().canonicalLayouts().get("double");
+    public static final AddressLayout C_POINTER = ((AddressLayout) Linker.nativeLinker().canonicalLayouts().get("void*"))
+            .withTargetLayout(MemoryLayout.sequenceLayout(Long.MAX_VALUE, C_CHAR));
+    static final boolean TRACE_DOWNCALLS = Boolean.getBoolean("jextract.trace.downcalls");
+    static void traceDowncall(String name, Object... args) {
+         String traceArgs = Arrays.stream(args)
+                       .map(Object::toString)
+                       .collect(Collectors.joining(", "));
+         System.out.printf("%s(%s)\n", name, traceArgs);
+    }
+    static MethodHandle upcallHandle(Class<?> fi, String name, FunctionDescriptor fdesc) {
+        try {
+            return MethodHandles.lookup().findVirtual(fi, name, fdesc.toMethodType());
+        } catch (ReflectiveOperationException ex) {
+            throw new AssertionError(ex);
+        }
+    }
+    static MemoryLayout align(MemoryLayout layout, long align) {
+        return switch (layout) {
+            case PaddingLayout p -> p;
+            case ValueLayout v -> v.withByteAlignment(align);
+            case GroupLayout g -> {
+                MemoryLayout[] alignedMembers = g.memberLayouts().stream()
+                        .map(m -> align(m, align)).toArray(MemoryLayout[]::new);
+                yield g instanceof StructLayout ?
+                        MemoryLayout.structLayout(alignedMembers) : MemoryLayout.unionLayout(alignedMembers);
+            }
+            case SequenceLayout s -> MemoryLayout.sequenceLayout(s.elementCount(), align(s.elementLayout(), align));
+        };
+    }
+}

@@ -1,0 +1,25 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/C:/Users/Administrator/.gradle/wrapper/dists/gradle-9.5.1-bin/iq79hdu3mqx29lgffhp8bfmx/gradle-9.5.1/lib/native-platform-0.22-milestone-29.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+D:\ServerFile\Workspace\Fabric mod\voicechat\teamspeak&svcbridge\src\main\java\com\svcb\tsbridge\pairing\PairingManager.java:197: 错误: PairingManager.TsPairingListener不是抽象的, 并且未覆盖TS3Listener中的抽象方法onChannelMoved(ChannelMovedEvent)
+    private final class TsPairingListener implements TS3Listener {
+                  ^
+1 个错误
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':compileJava' (registered by plugin class 'org.gradle.api.plugins.JavaBasePlugin').
+> Compilation failed; see the compiler output below.
+  D:\ServerFile\Workspace\Fabric mod\voicechat\teamspeak&svcbridge\src\main\java\com\svcb\tsbridge\pairing\PairingManager.java:197: 错误: PairingManager.TsPairingListener不是抽象的, 并且未覆盖TS3Listener中的抽象方法onChannelMoved(ChannelMovedEvent)
+      private final class TsPairingListener implements TS3Listener {
+                    ^
+  1 个错误
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+BUILD FAILED in 14s

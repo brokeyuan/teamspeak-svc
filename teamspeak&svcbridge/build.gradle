@@ -1,0 +1,80 @@
+plugins {
+    id 'net.fabricmc.fabric-loom' version "${fabric_loom_version}"
+}
+
+version = "${mod_version}+${minecraft_version}"
+group = "${maven_group}"
+
+base {
+    archivesName = project.archives_base_name
+}
+
+repositories {
+    mavenCentral()
+    maven {
+        name = 'FabricMC'
+        url = 'https://maven.fabricmc.net/'
+    }
+    maven {
+        name = 'MaxHenkel'
+        url = 'https://maven.maxhenkel.de/repository/public'
+    }
+    maven {
+        name = 'JitPack'
+        url = 'https://jitpack.io'
+    }
+}
+
+dependencies {
+    implementation 'com.tsvoice:ts3voice-core:0.1.0'
+    include 'com.tsvoice:ts3voice-core:0.1.0'
+
+    minecraft "com.mojang:minecraft:${minecraft_version}"
+    // Minecraft 26.2 是未混淆版本，不需要 mappings 配置
+
+    implementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
+
+    // fabric-permissions-api-v0（权限校验，jar-in-jar 打包）
+    implementation "me.lucko:fabric-permissions-api:${fabric_permissions_api_version}"
+    include "me.lucko:fabric-permissions-api:${fabric_permissions_api_version}"
+
+    // Simple Voice Chat API（仅编译期；运行期由 voicechat mod 提供）
+    compileOnly "de.maxhenkel.voicechat:voicechat-api:${voicechat_api_version}"
+
+    // TeamSpeak ServerQuery 客户端（jar-in-jar 打包）
+    implementation "com.github.theholywaffle:teamspeak3-api:${teamspeak3_api_version}"
+    include "com.github.theholywaffle:teamspeak3-api:${teamspeak3_api_version}"
+
+    // Java-WebSocket（被 @Deprecated Ts3AudioBotTransport 使用；该类仍作为回退方案保留，
+    // 故必须 include，否则运行时 NoClassDefFoundError 会击穿启动链的 catch(Exception)）
+    implementation "org.java-websocket:Java-WebSocket:${java_websocket_version}"
+    include "org.java-websocket:Java-WebSocket:${java_websocket_version}"
+
+    // BouncyCastle（原生 TS3 语音客户端：AES-EAX 加密 + P-256 ECDH/ECDSA + DER 编码）
+    implementation "org.bouncycastle:bcprov-jdk18on:${bouncycastle_version}"
+    include "org.bouncycastle:bcprov-jdk18on:${bouncycastle_version}"
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(Integer.parseInt(java_version))
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = Integer.parseInt(java_version)
+}
+
+processResources {
+    inputs.property "version", project.version
+
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
+    }
+}
+
+jar {
+    // Protocol diagnostics require a real TS server and must not ship in releases.
+    exclude 'com/svcb/tsbridge/ts3voice/Ts3VoiceSelfTest*.class'
+}

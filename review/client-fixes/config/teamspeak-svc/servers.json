@@ -1,0 +1,12 @@
+{
+  "trust-once": {},
+  "trust-remember": {
+    "trustedBeaconHost": "beacon-b",
+    "trustedBeaconPort": 9987
+  },
+  "test-mc": {
+    "host": "manual",
+    "serverPassword": "",
+    "channelPassword": ""
+  }
+}

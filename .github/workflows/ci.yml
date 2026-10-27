@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Test shared protocol module
+        working-directory: ./ts3voice-core
+        run: ../teamspeak-svc/gradlew.bat clean test --no-daemon
+      - name: Build client
+        working-directory: ./teamspeak-svc
+        run: ./gradlew.bat clean build --no-daemon
+      - name: Build server
+        working-directory: ./teamspeak&svcbridge
+        run: ./gradlew.bat clean build --no-daemon
+      - name: Client protocol and RSA regressions
+        shell: pwsh
+        run: ./review/channel-fixes/RunProtocol.ps1
+      - name: Client group mapper regressions
+        shell: pwsh
+        run: ./review/channel-fixes/RunMapper.ps1
+      - name: Client state regressions
+        shell: pwsh
+        run: ./review/client-fixes/RunTests.ps1
+      - name: Client manager regressions
+        shell: pwsh
+        run: ./review/client-fixes/RunManagerTests.ps1
+      - name: Server regressions
+        shell: pwsh
+        run: ./review/server-fixes/RunServerChecks.ps1
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mod-jars
+          path: |
+            teamspeak-svc/build/libs/*.jar
+            teamspeak&svcbridge/build/libs/*.jar
+          if-no-files-found: warn

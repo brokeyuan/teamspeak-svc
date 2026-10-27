@@ -1,0 +1,2 @@
+package com.svcb.tsbridge.ts3voice;
+public class Ts3Identity {public static Ts3Identity load(java.nio.file.Path p){return new Ts3Identity();}public static Ts3Identity generate(int l,long t){return new Ts3Identity();}public void save(java.nio.file.Path p){}public String getClientUid(){return "test-uid";}}
