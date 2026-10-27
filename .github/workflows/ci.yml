@@ -52,6 +52,9 @@ jobs:
       - name: Session isolation regressions (P1/F03)
         shell: pwsh
         run: ./review/p1-isolation/RunSessionIsolation.ps1
+      - name: Transport shutdown regressions (P1/F09)
+        shell: pwsh
+        run: ./review/p1-transport/RunTransportShutdown.ps1
       - name: Server regressions
         shell: pwsh
         run: ./review/server-fixes/RunServerChecks.ps1

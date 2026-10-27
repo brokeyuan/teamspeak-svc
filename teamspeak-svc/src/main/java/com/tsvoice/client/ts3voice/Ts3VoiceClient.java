@@ -28,6 +28,7 @@ public final class Ts3VoiceClient {
 
     /** TS3 Opus 编解码器 id。 */
     public static final int CODEC_OPUS_VOICE = 4;
+    /** Opus Music（立体声/音乐模式）：入站放行，其声道/帧长兼容性由使用方实测。 */
     public static final int CODEC_OPUS_MUSIC = 5;
 
     /** 客户端版本常量（源：TSLib TsVersion.gen.cs VER_WIN_3_5_3）。 */
@@ -54,6 +55,8 @@ public final class Ts3VoiceClient {
     private final AtomicReference<String> failReason = new AtomicReference<>();
     private final CountDownLatch connectLatch = new CountDownLatch(1);
     private final AtomicInteger voiceCounter = new AtomicInteger(0);
+    /** 已告警过的不支持入站 codec（每 codec 告警一次）。 */
+    private final java.util.Set<Integer> unsupportedCodecs = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private volatile Runnable onDisconnectedExternal;
 
     /** clid → 该客户端信息（uid/nick），来自 cliententerview / clientlist。 */
@@ -549,9 +552,18 @@ public final class Ts3VoiceClient {
         int sequence = ((packet.data[0] & 0xFF) << 8) | (packet.data[1] & 0xFF);
         int clid = ((packet.data[2] & 0xFF) << 8) | (packet.data[3] & 0xFF);
         int codec = packet.data[4] & 0xFF;
+        voiceCounter.incrementAndGet();
+        // 入站边界拒绝不支持的 codec（F11）：每 codec 告警一次，丢弃该帧但
+        // 不影响其他用户；Opus Music 的声道/帧长兼容性由使用方另行实测。
+        if (codec != CODEC_OPUS_VOICE && codec != CODEC_OPUS_MUSIC) {
+            if (unsupportedCodecs.add(codec)) {
+                LOG.warn("[teamspeak-svc] dropping voice frames with unsupported codec {} (sender clid {})",
+                        codec, clid);
+            }
+            return;
+        }
         byte[] opus = new byte[packet.data.length - 5];
         System.arraycopy(packet.data, 5, opus, 0, opus.length);
-        voiceCounter.incrementAndGet();
         Consumer<TsVoiceIn> listener = voiceListener.get();
         if (listener != null) {
             try {

@@ -129,7 +129,13 @@
   - `rule` TR-7.2: RouteSnapshot 为不可变快照；SVC 连接变化只更新 SvcBackendAdapter，不销毁 TS 会话（测试断言）。
 
 ## Task 8: P1 连接健壮性——阻塞关闭与有界队列（F09/F11 发送侧）
-- **Status**: `pending`
+- **Status**: `completed`
+- **Completion Evidence**:
+  - 失败证据（旧代码）：RunTransportShutdown.ps1 首次运行 4 项 FAIL——无队列（dropped=0，发送线程在 addOutgoingPacket 内持 sendLock 阻塞于 transport.send）、stop() 5s 未返回（等待 sendLock）、发送线程不退出、非 Opus codec（1）直通监听器。
+  - 修复后全绿：8/8 PASS——确定性阻塞 Transport 下队列丢最旧（dropped=44）且采集线程入队不阻塞、阻塞写下 stop() 95ms 内返回、真实 TCP 黑洞下 stop() 1ms、并发 send+close 0ms 无死锁、仅 Opus 帧到达监听器。
+  - 实现：Ts3Connection 新增独立写线程 + 有界队列（语音 ≤5 帧、年龄 120ms 丢最旧计数 droppedVoiceFrames()；控制命令独立 ≤32，满则抛错不静默）；sendLock 内只做计数/加密/入队，transport.send 由写线程执行；stop() 先 closed=true + transport.close()（不取 sendLock，唤醒阻塞写）再以 2s deadline join 写/收/重发线程；新增 Ts3Connection(Ts3Crypt, TsTransport) 注入构造器；TcpTransport 支持系统属性 tsbridge.tunnel.secret 回退（测试与 P6 铺垫）；Ts3VoiceClient 入站边界拒绝非 Opus codec（每 codec 告警一次，F11 入站侧）。序号分配/ACK/窗口逻辑未动（仍在 sendLock 内串行）。
+  - 语义变化说明：命令发送从同步变异步入队——传输层错误不再同步抛给 sendCommand 调用方，经连接超时/写线程失败路径上报；clientdisconnect 命令在 stop() 关闭前尽力发出（健康连接通常来得及，黑洞连接放弃发送优先保证关闭）。
+  - 全部 11 组回归退出码 0；客户端 compileJava 通过；core test（108+15）通过。
 - **Priority**: high
 - **Depends On**: Task 7
 - **Description**:

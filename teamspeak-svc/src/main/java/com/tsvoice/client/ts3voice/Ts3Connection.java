@@ -46,6 +46,38 @@ public final class Ts3Connection {
     private volatile boolean closed = false;
     private int clientNid = 0;
 
+    /**
+     * 出站写线程与有界队列（F09）：sendLock 内只做计数/加密/入队（快），
+     * transport.send 由独立写线程执行 —— TCP 写阻塞不卡采集线程，也不卡
+     * stop()（stop 先关底层 Socket 唤醒阻塞写）。语音队列有界且丢最旧，
+     * 超过 120ms 的帧直接丢弃；控制命令独立队列不受语音挤占。
+     */
+    private static final int VOICE_QUEUE_CAPACITY = 5;
+    private static final int CONTROL_QUEUE_CAPACITY = 32;
+    private static final long MAX_VOICE_AGE_NANOS = 120_000_000L;
+    private final java.util.concurrent.ArrayBlockingQueue<OutgoingFrame> voiceQueue =
+            new java.util.concurrent.ArrayBlockingQueue<>(VOICE_QUEUE_CAPACITY);
+    private final java.util.concurrent.ArrayBlockingQueue<byte[]> controlQueue =
+            new java.util.concurrent.ArrayBlockingQueue<>(CONTROL_QUEUE_CAPACITY);
+    private final java.util.concurrent.atomic.AtomicLong droppedVoiceFramesCounter =
+            new java.util.concurrent.atomic.AtomicLong(0);
+    private Thread writerThread;
+
+    private static final class OutgoingFrame {
+        final byte[] data;
+        final long enqueuedNanos;
+
+        OutgoingFrame(byte[] data, long enqueuedNanos) {
+            this.data = data;
+            this.enqueuedNanos = enqueuedNanos;
+        }
+    }
+
+    /** 已丢弃（超龄/溢出）的语音帧数，诊断用。 */
+    public long droppedVoiceFrames() {
+        return droppedVoiceFramesCounter.get();
+    }
+
     private final int[] packetCounter = new int[Ts3Crypt.PACKET_TYPE_KINDS];
     private final long[] generationCounter = new long[Ts3Crypt.PACKET_TYPE_KINDS];
 
@@ -90,8 +122,13 @@ public final class Ts3Connection {
 
     /** @param tcp true = TCP 隧道传输（UDP 受限网络），false = 原生 UDP。 */
     public Ts3Connection(Ts3Crypt crypt, boolean tcp) {
+        this(crypt, tcp ? new TcpTransport() : new TsTransport.UdpTransport());
+    }
+
+    /** 注入传输层（测试与 P6 独立隧道使用）；协议逻辑与传输无关。 */
+    public Ts3Connection(Ts3Crypt crypt, TsTransport transport) {
         this.crypt = crypt;
-        this.transport = tcp ? new TcpTransport() : new TsTransport.UdpTransport();
+        this.transport = transport;
     }
 
     public void setOnDisconnected(Runnable callback) {
@@ -109,9 +146,12 @@ public final class Ts3Connection {
     }
 
     /**
-     * 启动连接：绑定 socket、发送 init0、启动接收与重发线程。
+     * 启动连接：绑定 socket、发送 init0、启动接收/重发/写线程。
      */
     public void connect(InetAddress address, int port) throws Ts3VoiceException {
+        writerThread = new Thread(this::writerLoop, "teamspeak-svc-voice-writer");
+        writerThread.setDaemon(true);
+        writerThread.start();
         synchronized (sendLock) {
             try {
                 transport.connect(address, port);
@@ -138,10 +178,27 @@ public final class Ts3Connection {
         resendThread.start();
     }
 
+    /**
+     * 关闭连接：先原子失效并直接关闭底层 Socket（唤醒阻塞中的读/写），全程
+     * 不获取 sendLock —— 即使对端停止读导致写线程阻塞，本调用也在限时内返回。
+     * 随后以 deadline join 后台线程；超时线程为 daemon，不阻塞退出。
+     */
     public void stop() {
         closed = true;
-        synchronized (sendLock) {
-            transport.close();
+        transport.close();
+        joinQuietly(writerThread);
+        joinQuietly(recvThread);
+        joinQuietly(resendThread);
+    }
+
+    private void joinQuietly(Thread thread) {
+        if (thread == null || thread == Thread.currentThread()) {
+            return;
+        }
+        try {
+            thread.join(2_000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -208,7 +265,7 @@ public final class Ts3Connection {
         }
 
         crypt.encrypt(packet);
-        sendRaw(packet);
+        sendRaw(packet, type);
     }
 
     private void incPacketCounter(PacketType type) {
@@ -219,11 +276,75 @@ public final class Ts3Connection {
         }
     }
 
-    private void sendRaw(Ts3Packet packet) throws Ts3VoiceException {
-        try {
-            transport.send(packet.raw);
-        } catch (Exception e) {
-            throw new Ts3VoiceException("Transport send failed: " + e.getMessage(), e);
+    private void sendRaw(Ts3Packet packet, PacketType type) throws Ts3VoiceException {
+        // 入队而非直接发送（F09）：写线程负责 transport.send；队列满时语音丢最旧、
+        // 控制命令抛错（调用方可见），绝不静默无界积压。
+        if (type == PacketType.VOICE) {
+            OutgoingFrame frame = new OutgoingFrame(packet.raw, System.nanoTime());
+            while (!voiceQueue.offer(frame)) {
+                if (voiceQueue.poll() == null) {
+                    continue; // 队列瞬间被并发清空：重试 offer
+                }
+                droppedVoiceFramesCounter.incrementAndGet();
+            }
+            return;
+        }
+        if (!controlQueue.offer(packet.raw)) {
+            throw new Ts3VoiceException("Control command queue full (" + CONTROL_QUEUE_CAPACITY + ")");
+        }
+    }
+
+    private void writerLoop() {
+        while (!closed) {
+            byte[] control;
+            try {
+                control = controlQueue.poll();
+            } catch (Exception e) {
+                if (!closed) {
+                    Ts3VoiceClient.LOG.debug("[teamspeak-svc] writer failed: {}", e.getMessage());
+                    handleStop();
+                }
+                return;
+            }
+            if (control != null) {
+                try {
+                    transport.send(control);
+                } catch (Exception e) {
+                    if (!closed) {
+                        Ts3VoiceClient.LOG.debug("[teamspeak-svc] writer send failed: {}", e.getMessage());
+                        handleStop();
+                    }
+                    return;
+                }
+                continue;
+            }
+            OutgoingFrame frame;
+            do {
+                try {
+                    frame = voiceQueue.poll(5, java.util.concurrent.TimeUnit.MILLISECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    if (closed) {
+                        return;
+                    }
+                    frame = null;
+                }
+                if (frame != null && System.nanoTime() - frame.enqueuedNanos > MAX_VOICE_AGE_NANOS) {
+                    droppedVoiceFramesCounter.incrementAndGet();
+                    frame = null;
+                }
+            } while (frame == null && !voiceQueue.isEmpty());
+            if (frame != null) {
+                try {
+                    transport.send(frame.data);
+                } catch (Exception e) {
+                    if (!closed) {
+                        Ts3VoiceClient.LOG.debug("[teamspeak-svc] writer send failed: {}", e.getMessage());
+                        handleStop();
+                    }
+                    return;
+                }
+            }
         }
     }
 
@@ -400,7 +521,7 @@ public final class Ts3Connection {
                         currentRto = Math.min(currentRto * 2, MAX_RETRY_INTERVAL_MS);
                         try {
                             crypt.encrypt(op.packet);
-                            sendRaw(op.packet);
+                            sendRaw(op.packet, PacketType.COMMAND);
                         } catch (Exception e) {
                             Ts3VoiceClient.LOG.debug("[teamspeak-svc] resend failed: {}", e.getMessage());
                         }
