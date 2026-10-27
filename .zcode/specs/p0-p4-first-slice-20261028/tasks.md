@@ -20,7 +20,14 @@
   - `rule` TR-1.2: 5 组既有回归 + core protocolTest 在未修改源码上全部通过（证据：各 runner 退出码与输出摘要）。
 
 ## Task 2: F02 麦克风路由修复（失败测试先行）
-- **Status**: `pending`
+- **Status**: `completed`
+- **Completion Evidence**:
+  - TR-2.1（旧代码失败证据）：RunMicRedirector.ps1 首次运行输出 9 项 FAIL（waiting 未连接泄漏 / encoder 创建失败 / null 与空编码 / 检查间隙断线 / 发送失败 / PTT 持续期间逐帧泄漏 / healthy path）并以 `Mic redirect regression failed` 退出；对照组（"no TS selection"）旧代码即 PASS。
+  - TR-2.2（修复后全绿）：10/10 PASS；5 组既有回归（RunTests/RunManagerTests/RunMapper/RunProtocol/RunServerChecks）退出码全 0；`gradlew compileJava` 通过。RunManagerTests.ps1 编译清单已加入 MicRouteGate.java。
+  - 实现：新增 C/audio/MicRouteGate.java（Owner.SVC_NATIVE/TS，volatile）；MicRedirector 改为"TS 选中 → 先 cancel → 就绪检查 → 失败仅报告"；TsVoiceManager.evaluateActivation/manualDisconnect 经 refreshRouteOwnership() 维护归属（activeConfig!=null && !userDisabled → TS）。onSvcDisconnected 不改归属：配置仍在时 TS 保持选中，SVC 恢复时麦克风不会泄漏。
+  - 边界说明：TS 选中但未就绪期间，原本由 SVC 原生路径承载的语音现在被消费丢弃（fail-closed，符合计划 §1.3 mic 规则与 D04"运行中失效先静音"）；恢复 SVC 原生需手动断开 TS 或清除配置。UI 通知属 P4。
+  - 测试代理注意：SVC API `ClientSoundEvent.cancel()` 返回 boolean（代理须返回 TRUE）；`MicRedirector.encoder` 为静态缓存，测试用例间用反射重置。
+  - 提交：c3b9164。
 - **Priority**: high
 - **Depends On**: Task 1
 - **Description**:
@@ -32,7 +39,12 @@
   - `rule` TR-2.2: 修复后 MicRedirectorRegression 全绿，且 ManagerTests/ClientStateTests 无倒退。
 
 ## Task 3: F06 成员快照修复（失败测试先行）
-- **Status**: `pending`
+- **Status**: `completed`
+- **Completion Evidence**:
+  - TR-3.1（旧代码失败证据）：RunBridgeMembership.ps1 首次运行 3 项 FAIL——"UNKNOWN keeps last snapshot filtered to the requested group"、"UNKNOWN never includes members of another group"、"UNKNOWN keeps other groups filtered as well"（UNKNOWN 返回全部 key，群 A 目标含群 B 成员）。
+  - TR-3.2（修复后全绿）：16/16 PASS，含 UNKNOWN 按群过滤、6s 过期后一律为空（UNKNOWN 与 authoritative 皆然）、republish 刷新 TTL、authoritative EMPTY、群组切换、reset；RunServerChecks.ps1 退出码 0（无倒退）；旧桥 `gradlew compileJava` 通过。
+  - 实现：BridgeMembershipService 增加 sampledAtNanos（publish 时刷新）与 SNAPSHOT_TTL_NANOS=5s（BeaconSender 2s 轮询的容错上限）；getBridgeGroupMembers 的 UNKNOWN 分支改为按请求群过滤最后快照，过期（sampling=0 或超 TTL）一律返回空；availability() 对过期快照返回 UNKNOWN。BeaconSender 采样节奏未改。
+  - 提交：见 git log（P0/F06）。
 - **Priority**: high
 - **Depends On**: Task 1
 - **Description**:
