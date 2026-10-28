@@ -316,7 +316,9 @@
   - `rule` TR-17.2: 服务端工程若未验证构建，交付记录含"构建未验证"标注与原因。
 
 ## Task 18: 切片收口——证据包与诚实标注
-- **Status**: `pending`
+- **Status**: `completed`
+- **Completion Evidence**:
+  - （原条目的完成由下方"Task 18 增补"段承载——该段是 Review R1 整改后的权威记录，含 RunAll 原始输出；状态合并于本行。）
 - **Priority**: medium
 - **Depends On**: Task 17
 - **Description**:
