@@ -29,6 +29,10 @@ if (Test-Path "$base/oldsrc/OldBehaviorProbe.java") {
 
 & javac -encoding UTF-8 -cp 'review/lib/*;ts3voice-core/build/classes/java/main' -d "$base/classes" @protocol `
     'teamspeak-svc/src/main/java/com/tsvoice/client/Ts3FileTransfer.java' 'teamspeak-svc/src/main/java/com/tsvoice/client/Ts3FileTransferBridge.java' 'teamspeak-svc/src/main/java/com/tsvoice/client/ConfigFileUtil.java' `
+    'teamspeak-svc/src/main/java/com/tsvoice/client/connection/VoiceState.java' `
+    'teamspeak-svc/src/main/java/com/tsvoice/client/connection/BackendCoordinator.java' `
+    'teamspeak-svc/src/main/java/com/tsvoice/client/connection/SelectionPolicy.java' `
+    'teamspeak-svc/src/main/java/com/tsvoice/client/TsPlaybackRegistry.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/client/ClientStateReflector.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/client/TsAudioInjector.java' `
     (Get-ChildItem -LiteralPath "$base/stubs" -Recurse -Filter '*.java' | Select-Object -ExpandProperty FullName) `

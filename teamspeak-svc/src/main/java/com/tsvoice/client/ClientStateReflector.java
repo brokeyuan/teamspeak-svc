@@ -208,6 +208,72 @@ public final class ClientStateReflector {
         });
     }
 
+    /**
+     * T07/R10：有界后台退役 —— 在独立守护线程等待客户端线程完成通道移除与关闭，
+     * 绝不让调用线程（MC 主线程/UI）持 channels 锁等待 closeAndKill。超时记录失败
+     * 并保留通道交给 SVC 生命周期；registry 的 exact-match 守卫禁止把旧活动解码器
+     * 重交给新流。
+     */
+    public static void retireAudioChannel(UUID channelId, Object expectedOwned) {
+        if (channelId == null || expectedOwned == null) {
+            return;
+        }
+        java.util.concurrent.CompletableFuture<Void> done = new java.util.concurrent.CompletableFuture<>();
+        onClientThread(() -> {
+            try {
+                Object client = Class.forName("de.maxhenkel.voicechat.voice.client.ClientManager")
+                        .getMethod("getClient").invoke(null);
+                if (client == null) {
+                    return;
+                }
+                @SuppressWarnings("unchecked")
+                Map<UUID, Object> channels = (Map<UUID, Object>) client.getClass()
+                        .getMethod("getAudioChannels").invoke(client);
+                if (channels == null) {
+                    return;
+                }
+                synchronized (channels) {
+                    if (channels.remove(channelId, expectedOwned)) {
+                        expectedOwned.getClass().getMethod("closeAndKill").invoke(expectedOwned);
+                        ownedChannels.remove(channelId, expectedOwned);
+                    }
+                }
+            } catch (Throwable e) {
+                TeamspeakSvcClient.LOGGER.debug("[teamspeak-svc] retire SVC audio channel failed: {}", e.toString());
+            } finally {
+                done.complete(null);
+            }
+        });
+        RETIRE_WATCHDOG.schedule(() -> {
+            if (!done.isDone()) {
+                done.complete(null);
+                TeamspeakSvcClient.LOGGER.warn(
+                        "[teamspeak-svc] audio channel retire exceeded 5s (channel left to SVC lifecycle): {}", channelId);
+            }
+        }, 5, java.util.concurrent.TimeUnit.SECONDS);
+        RETIRE_EXECUTOR.execute(() -> {
+            try {
+                done.get(6, java.util.concurrent.TimeUnit.SECONDS);
+            } catch (Exception e) {
+                TeamspeakSvcClient.LOGGER.debug("[teamspeak-svc] retire wait failed: {}", e.getMessage());
+            }
+        });
+    }
+
+    private static final java.util.concurrent.ScheduledExecutorService RETIRE_WATCHDOG =
+            java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "teamspeak-svc-retire-watchdog");
+                t.setDaemon(true);
+                return t;
+            });
+
+    private static final java.util.concurrent.ExecutorService RETIRE_EXECUTOR =
+            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "teamspeak-svc-retire");
+                t.setDaemon(true);
+                return t;
+            });
+
     /** Registers the channel object a TS stream owns (snapshot after first injection). */
     public static void registerOwnedChannel(UUID channelId, Object channel) {
         if (channelId != null && channel != null) {

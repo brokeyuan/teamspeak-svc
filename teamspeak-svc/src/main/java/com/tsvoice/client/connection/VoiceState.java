@@ -51,6 +51,14 @@ public final class VoiceState {
     public record McContext(long contextEpoch, String serverAddress) {
     }
 
+    /** TS 参与者稳定身份（T07/R10）：serverUID+TS UID，与 clid/会话/身份升降级无关。 */
+    public record ParticipantKey(String serverUid, String tsUid) {
+    }
+
+    /** 播放流代际（T07/R10）：同一参与者的每段流有唯一 epoch，旧清理不得删除新流。 */
+    public record StreamKey(ParticipantKey participant, long streamEpoch) {
+    }
+
     /**
      * 回调绑定（T04/R07）：异步任务捕获其来源会话、MC 上下文与来源 client，
      * 排队后执行前复核 —— 旧会话/旧上下文任务不得解释或写入新状态。

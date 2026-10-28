@@ -70,7 +70,8 @@ public class StableParticipantVolumeTest {
                 "sequence reset keeps the same channel object");
 
         // Remove with the owned handle: the exact channel closes.
-        TsAudioInjector.remove("uid-x");
+        // (T07: removal is keyed by the full participant identity.)
+        TsAudioInjector.remove(new com.tsvoice.client.connection.VoiceState.ParticipantKey("srv-A", "uid-x"));
         check(!channels().containsKey(a1), "owned close removes and closes the channel");
         check(!ClientStateReflector.activeGhosts().containsKey(a1), "ghost state removed");
 

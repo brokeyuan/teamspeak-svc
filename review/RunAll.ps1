@@ -24,6 +24,7 @@ $suites = @(
     'review/p3-config/RunBookmarkConfig.ps1',
     'review/route-lifecycle/RunRouteLifecycle.ps1',
     'review/session-consumption/RunSessionConsumption.ps1',
+    'review/playback-ownership/RunPlaybackOwnership.ps1',
     'review/p3-channel/RunCommandTracker.ps1',
     'review/p4-discovery/RunFallbackPolicy.ps1',
     'review/server-fixes/RunServerChecks.ps1'

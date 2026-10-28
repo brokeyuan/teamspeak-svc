@@ -1,72 +1,76 @@
 package com.tsvoice.client;
 
+import com.tsvoice.client.connection.VoiceState;
 import com.tsvoice.client.ts3voice.Ts3VoiceClient;
+import de.maxhenkel.voicechat.api.Group;
 import de.maxhenkel.voicechat.api.VoicechatClientApi;
 
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * TS→MC 音频注入：把 TS 的编码 Opus 包按 SVC 的 {@code SoundPacket} 注入
- * {@code ClientVoicechat.processSoundPacket}，让 SVC 自己的 AudioChannel 完成：
- * 抖动缓冲/乱序重排、Opus FEC/PLC 丢包补偿、解码、音量与说话指示。
+ * TS 下行注入（T07/R10 重构）：ghosts/sequences 的键统一为
+ * {@link VoiceState.ParticipantKey}(serverUID, TS UID)；所有 TS 播放通道 UUID
+ * 一律派生自参与者身份 —— 即使该 TS 用户携带可信 MC UUID 也<b>绝不</b>复用原生
+ * SVC 玩家的解码/音量通道（MC UUID 只作名字/皮肤展示关联）。
  *
- * <p>不使用 {@code ClientStaticAudioChannel.play(short[])}：API 通道会构造
- * sequence=-1 的裸 PCM 包，AudioChannel 直接写扬声器，绕过上述所有补偿
- * （这是 TS 声音发闷/断音的根本原因）。</p>
- *
- * <p>TS 语音包内的 16 位序号是发送者维度的，这里展开为单调 long（处理回绕），
- * 作为 SVC 的 sequenceNumber 使用。</p>
+ * <p>身份升降级（未知 ↔ 可信 MC）只改显示名与皮肤，不换通道 —— 个人音量在
+ * 重连与升降级间保持稳定。每段流持有 {@link VoiceState.StreamKey}（streamEpoch），
+ * 释放经 {@link TsPlaybackRegistry} 的 exact-match 守卫与有界后台退役执行。</p>
  */
 public final class TsAudioInjector {
 
-    /** tsUid → 注入上下文。 */
-    private static final Map<String, GhostAudio> ghosts = new ConcurrentHashMap<>();
-    /** tsUid → [lastRaw16, unwrapped]。仅 TS 接收线程访问。 */
-    private static final Map<String, long[]> sequences = new ConcurrentHashMap<>();
+    private static final Map<VoiceState.ParticipantKey, GhostAudio> ghosts = new ConcurrentHashMap<>();
+    private static final Map<VoiceState.ParticipantKey, long[]> sequences = new ConcurrentHashMap<>();
+    /** 每个参与者的流代际：ghost 重建（离开/回归）递增，驱动 StreamKey。 */
+    private static final Map<VoiceState.ParticipantKey, AtomicLong> streamEpochs =
+            new ConcurrentHashMap<>();
+    /** 音量一次性迁移标记（旧可信 MC 键 → 参与者键；每参与者最多一次）。 */
+    private static final java.util.Set<UUID> VOLUME_MIGRATED = ConcurrentHashMap.newKeySet();
 
     private record GhostAudio(UUID channelUuid, String displayName, UUID mcUuid, boolean ownsState,
-                              Object ownedChannel) {
-        GhostAudio withName(String name) {
-            return new GhostAudio(channelUuid, name, mcUuid, ownsState, ownedChannel);
+                              Object ownedChannel, VoiceState.StreamKey streamKey) {
+        GhostAudio withName(String newName) {
+            return new GhostAudio(channelUuid, newName, mcUuid, ownsState, ownedChannel, streamKey);
         }
 
         GhostAudio withOwnedChannel(Object channel) {
-            return new GhostAudio(channelUuid, displayName, mcUuid, ownsState, channel);
+            return new GhostAudio(channelUuid, displayName, mcUuid, ownsState, channel, streamKey);
+        }
+
+        GhostAudio withIdentity(String newName, UUID newMcUuid) {
+            return new GhostAudio(channelUuid, newName, newMcUuid, ownsState, ownedChannel, streamKey);
         }
     }
 
-    // ---- SVC 内部包注入（反射；SVC 2.6.x 签名稳定） ----
-    private static volatile boolean reflectionReady = false;
-    private static boolean reflectionFailed = false;
-    private static Method processSoundPacket;
-    private static Constructor<?> groupCtor;
-    private static volatile boolean injectErrorLogged = false;
-    private static volatile boolean clientNullLogged = false;
+    private static final AtomicLong injectedFrames = new AtomicLong(0);
     private static volatile boolean codecWarned = false;
-    /** 成功注入 SVC 播放管线的帧数（诊断用）。 */
-    private static final java.util.concurrent.atomic.AtomicLong injectedFrames =
-            new java.util.concurrent.atomic.AtomicLong();
+    private static volatile boolean firstTsFrameLogged = false;
+    private static volatile boolean clientNullLogged = false;
+    private static volatile boolean injectErrorLogged = false;
+    private static volatile boolean volumeMigrationUnavailableLogged = false;
+
+    private static Method processSoundPacket;
+    private static java.lang.reflect.Constructor<?> groupCtor;
+    private static volatile boolean reflectionReady = false;
+    private static volatile boolean reflectionFailed = false;
 
     private TsAudioInjector() {
     }
 
     /**
-     * 由 TS uid 派生稳定参与者 UUID（P1 v2 方案）：按 serverUID 划分命名空间，
-     * 与 clid/会话代际无关 —— 重连/换 clid 后个人音量与说话高亮保持稳定，
-     * 不同 TS 服务器的相同 uid 互不串音量。旧全局 "ts-ghost-" 方案废弃
-     * （其音量缓存不迁移；per-player 镜像桥的对应服务端适配单独迁移）。
+     * 由 TS uid 派生稳定参与者 UUID：按 serverUID 划分命名空间，与 clid/会话代际/
+     * 身份升降级无关 —— 重连/换 clid/可信 MC 关联变化后个人音量与说话高亮保持稳定，
+     * 不同 TS 服务器的相同 uid 互不串音量。
      */
     public static UUID participantUuidFor(String authority, String tsUniqueId) {
         String scope = authority == null || authority.isBlank() ? "unknown" : authority;
         return UUID.nameUUIDFromBytes(("tsvoice-participant-v2\0" + scope + "\0" + tsUniqueId)
                 .getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
-
-    private static volatile boolean firstTsFrameLogged = false;
 
     /** 兼容入口（无权威上下文；新调用方应使用带 serverUid 的重载）。 */
     public static void onTsFrame(String tsUniqueId, String nickname, java.util.UUID mcUuid,
@@ -92,24 +96,24 @@ public final class TsAudioInjector {
         if (api == null) {
             return;
         }
-        GhostAudio ghost = ghosts.computeIfAbsent(tsUniqueId, id -> createGhost(api, authority, id, nickname, mcUuid));
+        VoiceState.ParticipantKey key = new VoiceState.ParticipantKey(authority, tsUniqueId);
+        GhostAudio ghost = ghosts.computeIfAbsent(key, k -> createGhost(api, k, nickname, mcUuid));
         if (ghost == null) {
             return;
         }
-        // MC UUID 可能晚于第一帧语音到达：把先建的派生 Ghost 迁移到真实玩家 UUID
+        // MC UUID 可能晚于第一帧语音到达：身份升级只改显示名/皮肤 —— 通道与音量键不变。
         if (ghost.mcUuid() == null && mcUuid != null) {
-            ghost = migrateGhost(authority, tsUniqueId, ghost, mcUuid, nickname, api);
+            ghost = upgradeIdentity(api, key, ghost, mcUuid, nickname);
             if (ghost == null) {
                 return;
             }
         }
-        // 昵称变化时刷新显示名（仅注入态：同服玩家名字以原生为准）
-        String displayName = ghost.mcUuid() == null ? "[TS] " + stripMcPrefix(nickname) : nickname;
-        if (nickname != null && !nickname.isBlank() && !displayName.equals(ghost.displayName())
-                && ghost.ownsState()
-                && ClientStateReflector.activeGhosts().containsKey(ghost.channelUuid())) {
+        // 昵称变化时刷新显示名（ghost 状态始终由本扩展拥有）
+        String displayName = ghost.mcUuid() == null ? "[TS] " + stripMcPrefix(nickname)
+                : (nickname != null && !nickname.isBlank() ? nickname : ghost.displayName());
+        if (nickname != null && !nickname.isBlank() && !displayName.equals(ghost.displayName())) {
             GhostAudio renamed = ghost.withName(displayName);
-            ghosts.put(tsUniqueId, renamed);
+            ghosts.put(key, renamed);
             ClientStateReflector.injectGhost(renamed.channelUuid(), renamed.displayName(), api, null);
             ghost = renamed;
         }
@@ -118,31 +122,64 @@ public final class TsAudioInjector {
             codecWarned = true;
             TeamspeakSvcClient.LOGGER.warn("[teamspeak-svc] Unexpected TS codec {} (expected 4=voice / 5=music)", codec);
         }
-        Sequence sequence = unwrapSequence(tsUniqueId, sequence16);
+        Sequence sequence = unwrapSequence(key, sequence16);
         if (sequence.resetMarker() >= 0) {
             // 发送者重连导致序号回退：先注入空包重置 SVC 解码器/缓冲（marker > 旧序号）
-            ghost = injectSoundPacket(tsUniqueId, ghost, sequence.resetMarker(), EMPTY);
+            ghost = injectSoundPacket(key, ghost, sequence.resetMarker(), EMPTY);
         }
         // TS 音频统一等响度（与 TS 客户端一致；不做距离衰减，避免远距离/跨维度静音）
-        injectSoundPacket(tsUniqueId, ghost, sequence.value(), opusData);
+        injectSoundPacket(key, ghost, sequence.value(), opusData);
     }
 
-    /** 第一帧到达时 MC UUID 未知 → 先用派生 Ghost；UUID 同步后迁移到真实玩家。 */
-    private static GhostAudio migrateGhost(String authority, String tsUniqueId, GhostAudio old,
-                                           java.util.UUID mcUuid, String nickname, VoicechatClientApi api) {
-        GhostAudio fresh = createGhost(api, authority, tsUniqueId, nickname, mcUuid);
-        if (fresh == null) {
-            return old;
+    /** 身份升级（可信 MC 关联到达）：原通道原 key 原地更新显示与皮肤，音量不重置。 */
+    private static GhostAudio upgradeIdentity(VoicechatClientApi api, VoiceState.ParticipantKey key,
+                                              GhostAudio old, java.util.UUID mcUuid, String nickname) {
+        String displayName = nickname != null && !nickname.isBlank() ? nickname : old.displayName();
+        GhostAudio upgraded = old.withIdentity(displayName, mcUuid);
+        try {
+            GhostSkins.register(old.channelUuid(), mcUuid, nickname);
+        } catch (Exception e) {
+            TeamspeakSvcClient.LOGGER.debug("[teamspeak-svc] ghost skin registration failed: {}", e.getMessage());
         }
-        if (old.ownsState() && !old.channelUuid().equals(fresh.channelUuid())) {
-            ClientStateReflector.closeAudioChannel(old.channelUuid(), old.ownedChannel());
-            ClientStateReflector.removeGhost(old.channelUuid());
-            GhostSkins.unregister(old.channelUuid());
+        ghosts.put(key, upgraded);
+        ClientStateReflector.injectGhost(old.channelUuid(), displayName, api, null);
+        ClientStateReflector.updateUsernameCache(old.channelUuid(), displayName);
+        migrateVolumeOnce(mcUuid, old.channelUuid());
+        TeamspeakSvcClient.LOGGER.info("[teamspeak-svc] TS identity upgraded to MC UUID {} (channel/volume unchanged)",
+                mcUuid);
+        return upgraded;
+    }
+
+    /**
+     * 旧可信 MC 音量的一次性迁移（T07）：把原生 SVC 音量缓存中该 MC UUID 的个人
+     * 音量复制到参与者键，最多一次并记录来源。SVC 音量配置 ABI 未在真实环境核对前
+     * 为尽力而为；失败只记录，不影响音频。
+     */
+    private static void migrateVolumeOnce(UUID mcUuid, UUID participant) {
+        if (mcUuid == null || !VOLUME_MIGRATED.add(participant)) {
+            return;
         }
-        ghosts.put(tsUniqueId, fresh);
-        TeamspeakSvcClient.LOGGER.info("[teamspeak-svc] Ghost migrated to MC UUID {} ({})",
-                mcUuid, fresh.displayName());
-        return fresh;
+        try {
+            Object config = Class.forName("de.maxhenkel.voicechat.voice.client.ClientManager")
+                    .getMethod("getConfig").invoke(null);
+            Object volumes = config.getClass().getMethod("getVolumes").invoke(config);
+            @SuppressWarnings("unchecked")
+            Map<UUID, Double> volumeMap = (Map<UUID, Double>) volumes;
+            Double previous = volumeMap != null ? volumeMap.get(mcUuid) : null;
+            if (previous != null && volumeMap != null) {
+                volumeMap.put(participant, previous);
+                TeamspeakSvcClient.LOGGER.info(
+                        "[teamspeak-svc] personal volume migrated {} -> {} (source: trusted MC mapping, one-time)",
+                        mcUuid, participant);
+            }
+        } catch (Throwable t) {
+            if (!volumeMigrationUnavailableLogged) {
+                volumeMigrationUnavailableLogged = true;
+                TeamspeakSvcClient.LOGGER.info(
+                        "[teamspeak-svc] per-player volume migration unavailable (SVC config ABI not verified): {}",
+                        t.toString());
+            }
+        }
     }
 
     private static String stripMcPrefix(String nickname) {
@@ -162,8 +199,8 @@ public final class TsAudioInjector {
      * 若检测到发送者重连（序号大幅回退），重置基准并在 resetMarker 返回一个
      * 大于旧序号的标记（供调用方注入空包重置 SVC 通道）。
      */
-    private static Sequence unwrapSequence(String tsUniqueId, int raw16) {
-        long[] st = sequences.computeIfAbsent(tsUniqueId, k -> new long[]{-1L, -1L});
+    private static Sequence unwrapSequence(VoiceState.ParticipantKey key, int raw16) {
+        long[] st = sequences.computeIfAbsent(key, k -> new long[]{-1L, -1L});
         long raw = raw16 & 0xFFFFL;
         if (st[1] < 0) {
             st[0] = raw;
@@ -172,16 +209,11 @@ public final class TsAudioInjector {
         }
         long delta = raw - st[0];
         if (delta < -32768) {
-            delta += 65536;
-        } else if (delta > 32768) {
-            delta -= 65536;
-        }
-        if (delta < -1000) {
-            // 发送者重连/流重置：旧 SVC AudioChannel 的 lastSequence 很高
-            long marker = st[1] + 1;
+            // 发送者重连：重置基准，注入大于旧序号的空包让 SVC 重置解码器
+            long marker = st[1] + 0x10000L;
             st[0] = raw;
-            st[1] = raw;
-            return new Sequence(raw, marker);
+            st[1] = marker;
+            return new Sequence(marker, marker);
         }
         long candidate = st[1] + delta;
         if (candidate > st[1]) {
@@ -191,40 +223,32 @@ public final class TsAudioInjector {
         return new Sequence(candidate, -1L);
     }
 
-    private static GhostAudio createGhost(VoicechatClientApi api, String authority, String tsUniqueId,
+    /** 每段播放流持有唯一 StreamKey：ghost 重建（离开/回归）递增 streamEpoch。 */
+    private static VoiceState.StreamKey streamKeyFor(VoiceState.ParticipantKey key) {
+        long epoch = streamEpochs.computeIfAbsent(key, k -> new AtomicLong(0)).incrementAndGet();
+        return new VoiceState.StreamKey(key, epoch);
+    }
+
+    private static GhostAudio createGhost(VoicechatClientApi api, VoiceState.ParticipantKey key,
                                           String nickname, java.util.UUID mcUuid) {
         try {
-            // 三分流：同服 mod 玩家（真实 UUID，不注入状态）/
-            // 跨服 mod 玩家（真实 UUID，注入为普通玩家）/
-            // 纯 TS 用户（按 serverUID 划分的稳定参与者 UUID，注入 [TS] Ghost）
-            UUID channelUuid;
-            String displayName;
-            boolean injectState;
-            boolean sameServer = mcUuid != null
-                    && (ClientStateReflector.hasLocalState(mcUuid)
-                    || OnlinePlayers.isOnline(mcUuid));
-            if (mcUuid != null) {
-                channelUuid = mcUuid;
-                injectState = !sameServer;
-                displayName = nickname != null && !nickname.isBlank() ? nickname : mcUuid.toString();
-            } else {
-                channelUuid = participantUuidFor(authority, tsUniqueId);
-                injectState = true;
-                displayName = "[TS] " + (nickname != null && !nickname.isBlank()
-                        ? stripMcPrefix(nickname) : tsUniqueId);
-            }
-            // 皮肤：跨服玩家注册真实皮肤管线；同服玩家交给 SVC 原生；TS 用户走内置皮兜底
-            if (mcUuid != null && !sameServer) {
-                GhostSkins.register(channelUuid, mcUuid, nickname);
-            }
-            if (injectState) {
-                ClientStateReflector.injectGhost(channelUuid, displayName, api, null);
-            }
+            // 通道一律派生自参与者身份（T07/R10）：TS 音频不占用原生 MC 玩家通道，
+            // 同 MC UUID 的多个 TS 身份互不合并。MC UUID 只影响名字与皮肤。
+            UUID channelUuid = participantUuidFor(key.serverUid(), key.tsUid());
+            String displayName = mcUuid != null
+                    ? (nickname != null && !nickname.isBlank() ? nickname : mcUuid.toString())
+                    : "[TS] " + (nickname != null && !nickname.isBlank()
+                    ? stripMcPrefix(nickname) : key.tsUid());
+            GhostSkins.register(channelUuid, mcUuid, nickname);
+            ClientStateReflector.injectGhost(channelUuid, displayName, api, null);
             ClientStateReflector.updateUsernameCache(channelUuid, displayName);
-            TeamspeakSvcClient.LOGGER.info("[teamspeak-svc] TS audio channel for '{}' ({}{}, {})",
-                    displayName, tsUniqueId, sameServer ? ", same-server player" : "",
-                    mcUuid != null ? "cross-server player" : "TS user");
-            return new GhostAudio(channelUuid, displayName, mcUuid, injectState, null);
+            if (mcUuid != null) {
+                migrateVolumeOnce(mcUuid, channelUuid);
+            }
+            TeamspeakSvcClient.LOGGER.info("[teamspeak-svc] TS audio channel for '{}' (participant {}, {})",
+                    displayName, channelUuid, mcUuid != null ? "MC-linked display" : "TS user");
+            return new GhostAudio(channelUuid, displayName, mcUuid, true, null,
+                    streamKeyFor(key));
         } catch (Exception e) {
             TeamspeakSvcClient.LOGGER.warn("[teamspeak-svc] Failed to init ghost audio: {}", e.getMessage());
             return null;
@@ -265,8 +289,9 @@ public final class TsAudioInjector {
         }
     }
 
-    /** 注入一帧；首次成功后快照 SVC 通道对象作为本流的所有权凭据。 */
-    private static GhostAudio injectSoundPacket(String tsUniqueId, GhostAudio ghost, long sequence, byte[] opus) {
+    /** 注入一帧；首次成功后快照 SVC 通道对象作为本流的所有权凭据并登记到注册表。 */
+    private static GhostAudio injectSoundPacket(VoiceState.ParticipantKey key, GhostAudio ghost,
+                                                long sequence, byte[] opus) {
         if (!ensureReflection()) {
             return ghost;
         }
@@ -279,16 +304,17 @@ public final class TsAudioInjector {
             return ghost;
         }
         try {
-            UUID sender = ghost.mcUuid() != null ? ghost.mcUuid() : ghost.channelUuid();
-            Object packet = groupCtor.newInstance(ghost.channelUuid(), sender, opus, sequence, (String) null);
+            Object packet = groupCtor.newInstance(ghost.channelUuid(), ghost.channelUuid(),
+                    opus, sequence, (String) null);
             processSoundPacket.invoke(client, packet);
             injectedFrames.incrementAndGet();
             if (ghost.ownedChannel() == null) {
                 Object channel = ClientStateReflector.ownedAudioChannel(ghost.channelUuid());
                 if (channel != null) {
                     GhostAudio owned = ghost.withOwnedChannel(channel);
-                    ghosts.put(tsUniqueId, owned);
+                    ghosts.put(key, owned);
                     ClientStateReflector.registerOwnedChannel(ghost.channelUuid(), channel);
+                    TsPlaybackRegistry.register(owned.streamKey(), owned.channelUuid(), channel);
                     return owned;
                 }
             }
@@ -315,22 +341,18 @@ public final class TsAudioInjector {
         java.util.Map<String, UUID> groupsByName = ClientStateReflector.clientGroupsByName();
         UUID myGroup = null;
         try {
-            de.maxhenkel.voicechat.api.Group g = api.getGroup();
+            Group g = api.getGroup();
             myGroup = g != null ? g.getId() : null;
         } catch (Throwable ignored) {
         }
         int myChannel = client.getMyChannelId();
 
-        for (Map.Entry<String, GhostAudio> e : ghosts.entrySet()) {
-            String tsUid = e.getKey();
+        for (Map.Entry<VoiceState.ParticipantKey, GhostAudio> e : ghosts.entrySet()) {
+            String tsUid = e.getKey().tsUid();
             GhostAudio ghost = e.getValue();
-            // 同服玩家的 PlayerState 属于 SVC；其 TS 频道变化不能覆盖该状态。
-            if (!ghost.ownsState()) {
-                continue;
-            }
-            int clid = client.getClidOfUid(tsUid);
             UUID ghostUuid = ghost.channelUuid();
 
+            int clid = client.getClidOfUid(tsUid);
             if (clid < 0) {
                 // 不在服务器：隐藏
                 if (ClientStateReflector.activeGhosts().containsKey(ghostUuid)) {
@@ -362,19 +384,22 @@ public final class TsAudioInjector {
         }
     }
 
-    /** TS 用户离开频道/会话断开时释放其注入状态。 */
-    public static void remove(String tsUniqueId) {
-        GhostAudio ghost = ghosts.remove(tsUniqueId);
-        sequences.remove(tsUniqueId);
+    /** TS 用户离开频道/会话断开时释放其注入状态（exact-match 退役，不删除新流）。 */
+    public static void remove(VoiceState.ParticipantKey key) {
+        GhostAudio ghost = ghosts.remove(key);
+        sequences.remove(key);
         if (ghost == null) {
             return;
         }
         if (ghost.ownsState()) {
-            ClientStateReflector.closeAudioChannel(ghost.channelUuid(), ghost.ownedChannel());
+            // 通道对象只在确为本流所有时关闭（registry exact-match 守卫）；
+            // ghost 状态与皮肤始终随参与者移除。
+            TsPlaybackRegistry.retire(ghost.streamKey(), ghost.channelUuid());
             ClientStateReflector.removeGhost(ghost.channelUuid());
             GhostSkins.unregister(ghost.channelUuid());
         }
-        TeamspeakSvcClient.LOGGER.debug("[teamspeak-svc] Ghost released ({})", tsUniqueId);
+        TeamspeakSvcClient.LOGGER.debug("[teamspeak-svc] Ghost released ({}/{})",
+                key.serverUid(), key.tsUid());
     }
 
     /** 成功注入 SVC 播放管线的帧数（诊断用）。 */
@@ -384,20 +409,20 @@ public final class TsAudioInjector {
 
     /** 会话断开时释放全部 Ghost。 */
     public static void removeAll() {
-        for (String id : ghosts.keySet().toArray(new String[0])) {
-            remove(id);
+        for (VoiceState.ParticipantKey key : ghosts.keySet().toArray(new VoiceState.ParticipantKey[0])) {
+            remove(key);
         }
         sequences.clear();
+        TsPlaybackRegistry.clear();
     }
 
     /**
      * 与 TS 频道成员对账：移除已不在服务器的 Ghost（幂等，由群组映射周期调用）。
      */
     public static void reconcile(Ts3VoiceClient client) {
-        for (String tsUid : ghosts.keySet().toArray(new String[0])) {
-            boolean stillOnServer = client.hasUid(tsUid);
-            if (!stillOnServer) {
-                remove(tsUid);
+        for (VoiceState.ParticipantKey key : ghosts.keySet().toArray(new VoiceState.ParticipantKey[0])) {
+            if (!client.hasUid(key.tsUid())) {
+                remove(key);
             }
         }
     }
