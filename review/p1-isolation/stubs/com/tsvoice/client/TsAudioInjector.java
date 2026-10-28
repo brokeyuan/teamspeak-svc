@@ -8,7 +8,7 @@ public class TsAudioInjector {
     public static final List<String> FRAMES = new ArrayList<>();
     public static final List<String> SYNC = new ArrayList<>();
 
-    public static void onTsFrame(String tsUniqueId, String nickname, java.util.UUID mcUuid,
+    public static void onTsFrame(String authority, String tsUniqueId, String nickname, java.util.UUID mcUuid,
                                  int sequence, int codec, byte[] opus) {
         FRAMES.add(tsUniqueId);
     }

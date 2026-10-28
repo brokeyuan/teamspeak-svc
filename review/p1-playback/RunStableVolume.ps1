@@ -17,7 +17,7 @@ if (Test-Path "$base/oldsrc/OldBehaviorProbe.java") {
     # authority-less UUID scheme and unconditional channel close.
     $oldSources = Get-ChildItem -LiteralPath "$base/oldsrc" -Filter '*.java' | Select-Object -ExpandProperty FullName
     & javac -encoding UTF-8 -cp 'review/lib/*;ts3voice-core/build/classes/java/main' -d "$base/oldclasses" @protocol `
-        'teamspeak-svc/src/main/java/com/tsvoice/client/ConfigFileUtil.java' `
+        'teamspeak-svc/src/main/java/com/tsvoice/client/Ts3FileTransfer.java' 'teamspeak-svc/src/main/java/com/tsvoice/client/Ts3FileTransferBridge.java' 'teamspeak-svc/src/main/java/com/tsvoice/client/ConfigFileUtil.java' `
         @oldSources `
         (Get-ChildItem -LiteralPath "$base/stubs" -Recurse -Filter '*.java' | Select-Object -ExpandProperty FullName)
     if ($LASTEXITCODE -ne 0) { throw 'Old-behavior probe compilation failed' }
@@ -28,7 +28,7 @@ if (Test-Path "$base/oldsrc/OldBehaviorProbe.java") {
 }
 
 & javac -encoding UTF-8 -cp 'review/lib/*;ts3voice-core/build/classes/java/main' -d "$base/classes" @protocol `
-    'teamspeak-svc/src/main/java/com/tsvoice/client/ConfigFileUtil.java' `
+    'teamspeak-svc/src/main/java/com/tsvoice/client/Ts3FileTransfer.java' 'teamspeak-svc/src/main/java/com/tsvoice/client/Ts3FileTransferBridge.java' 'teamspeak-svc/src/main/java/com/tsvoice/client/ConfigFileUtil.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/client/ClientStateReflector.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/client/TsAudioInjector.java' `
     (Get-ChildItem -LiteralPath "$base/stubs" -Recurse -Filter '*.java' | Select-Object -ExpandProperty FullName) `

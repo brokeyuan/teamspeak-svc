@@ -91,8 +91,8 @@ $client = 'teamspeak-svc/src/main/java/com/tsvoice/client'
 # The connection control-plane classes are part of the fix; tolerate their absence
 # when proving the old code fails.
 $prod = @("$client/TsVoiceManager.java", "$client/audio/MicRouteGate.java", "$client/connection/VoiceState.java",
-    "$client/connection/BackendCoordinator.java",,
-    "$client/config/TsBookmarkStore.java", "$client/config/EndpointCredentialStore.java" "$client/backend/SvcBackendAdapter.java",
+    "$client/connection/BackendCoordinator.java",
+    "$client/config/TsBookmarkStore.java", "$client/config/EndpointCredentialStore.java", "$client/backend/SvcBackendAdapter.java",
     "$client/ModConfig.java", "$client/ServerConfigStore.java", "$client/ConfigFileUtil.java") |
     Where-Object { Test-Path $_ }
 & javac -encoding UTF-8 -cp 'review/lib/*' -d "$base/classes" @prod @sources "$base/SessionIsolationTest.java"

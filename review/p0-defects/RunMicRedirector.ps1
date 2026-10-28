@@ -33,7 +33,7 @@ public class TsAudioInjector {
  public static void removeAll(){}
  public static void reconcile(com.tsvoice.client.ts3voice.Ts3VoiceClient c){}
  public static void syncAllGhostVisibility(com.tsvoice.client.ts3voice.Ts3VoiceClient c){}
- public static void onTsFrame(String uid,String nick,java.util.UUID uuid,int seq,int codec,byte[] opus){}
+ public static void onTsFrame(String authority,String uid,String nick,java.util.UUID uuid,int seq,int codec,byte[] opus){}
 }
 '@
     'com/tsvoice/client/ClientIdentityService.java' = @'
@@ -144,8 +144,8 @@ $sources = foreach ($item in $stubs.GetEnumerator()) {
 }
 $client = 'teamspeak-svc/src/main/java/com/tsvoice/client'
 # MicRouteGate is part of the fix; tolerate its absence when proving the old code fails.
-$prod = @("$client/TsVoiceManager.java", "$client/MicRedirector.java", "$client/audio/MicRouteGate.java", "$client/connection/VoiceState.java", "$client/connection/BackendCoordinator.java",,
-    "$client/config/TsBookmarkStore.java", "$client/config/EndpointCredentialStore.java" "$client/backend/SvcBackendAdapter.java",
+$prod = @("$client/TsVoiceManager.java", "$client/MicRedirector.java", "$client/audio/MicRouteGate.java", "$client/connection/VoiceState.java", "$client/connection/BackendCoordinator.java",
+    "$client/config/TsBookmarkStore.java", "$client/config/EndpointCredentialStore.java", "$client/backend/SvcBackendAdapter.java",
     "$client/ModConfig.java", "$client/ServerConfigStore.java", "$client/ConfigFileUtil.java") | Where-Object { Test-Path $_ }
 & javac -encoding UTF-8 -cp 'review/lib/*' -d "$base/classes" @prod @sources "$base/MicRedirectorRegression.java"
 if ($LASTEXITCODE -ne 0) { throw 'Mic redirect regression compilation failed' }

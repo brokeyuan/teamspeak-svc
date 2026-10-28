@@ -250,6 +250,15 @@
   - ci.yml 已含 RunBookmarkConfig（P3/F08，Task 11 提交时接入）与 RunCommandTracker（P3/F10+命令关联，Task 12 提交时接入）。
   - 本地 CI 等价全量：core `clean test`（108+15）+ 客户端/旧桥 `clean build` + 15 组 harness 回归退出码全 0（Task 13 提交前复跑确认）。
   - P3 阶段提交：6000b62（书签/凭据）、68d6edb（命令关联/频道快照/分模式）、本提交（F10）。
+
+## Task 18 增补（Review R1 整改后完成）
+- **Status**: `completed`
+- **Completion Evidence**:
+  - **Review R1（fail）发现的 2 项 actionable 均已整改**：
+    - I-1（9/16 harness 失败）：RunMicRedirector/RunSessionIsolation 数组语法、RunManagerTests/RunMicRedirector/RunSessionIsolation stub 8 参 onTsFrame、RunProtocol/RunClientIdentity/RunTransportShutdown/RunStableVolume/RunTests 编译清单补 Ts3FileTransfer(+Bridge)、ClientStateTests 升级 participantUuidFor、RunMapper 内嵌 stub 补 hasExplicitBookmarkIntent；Ts3FileTransfer 日志解耦入口类（独立 slf4j Logger，消除 harness 编译依赖）。
+    - I-2（证据矛盾）：新增 review/RunAll.ps1 一键 CI 等价验证（修复 3 个环境陷阱：`&` 路径 Set-Location 静默失败→root 由 $PSScriptRoot 推导、Start-Process 退出码传递→marker 文件判定、汇总误用 $LASTEXITCODE→$failed 计数）；DELIVERY-EVIDENCE.md 更正为如实记录 R1 发现与整改过程，附原始 PASS/FAIL 输出。
+  - **整改后 RunAll 实测输出（原始，未手抄）**：17 步全 PASS（16 组 harness + core test），`CI-EQUIVALENT RESULT: PASS`，退出码 0。
+  - 未验证清单（P2 U1-U6、P3/P4 真实环境项）维持不变。
 - **Priority**: medium
 - **Depends On**: Tasks 12,13
 - **Description**:
@@ -295,7 +304,7 @@
   - **voice-capabilities-fabric 构建成功**（BUILD SUCCESSFUL，产出 voice-capabilities-fabric-0.1.0+26.3.jar）：CapabilityMod（S2C capabilities_v1 / C2S capabilities_hello_v1 注册、hello 解码 nonce 绑定回复、畸形 hello 告警丢弃、未配置不回复）+ CapabilityConfig（gson 配置，kind/host/port/TTL 严格验证，非法配置降级无候选）。仅依赖 Fabric + ts3voice-core（includeBuild + jar-in-jar include）。
   - **构建修复记录**：CapabilityWire 曾因文件目录与 package 声明不一致落入主包——修正为 com.tsvoice.protocol.capability 子包（客户端 golden 测试同步修 import）；Fabric registry 方法名统一为 clientboundPlay/serverboundPlay（与既有 mod 一致）。
   - **TR-17.2**：构建已验证（非"构建未验证"）；**运行时未验证**——真实 MC 服务器加载、hello/announce 往返、客户端消费公告未执行（需真实服务器环境），标注"运行时未验证"。
-  - **CI 收口**：ci.yml 增加 discovery 回归（RunFallbackPolicy.ps1）与 voice-capabilities-fabric 构建；本地 CI 等价全量在 Task 18 复跑。
+  - **CI 收口**：ci.yml 增加 discovery 回归（RunFallbackPolicy.ps1）与 voice-capabilities-fabric 构建。
 - **Priority**: medium
 - **Depends On**: Task 16
 - **Description**:

@@ -28,13 +28,47 @@ spec：`.zcode/specs/p0-p4-first-slice-20261028/spec.md`；任务与逐项证据
 
 ## 最终全量验证（CI 等价命令）
 
+**一键入口：`review/RunAll.ps1`**（汇总 16 组 harness 回归 + core 测试，PASS/FAIL 逐行输出，任何失败即退出码 1；粘贴原始输出作为证据，不手抄声明）。
+
+最近一次完整运行（Review R1 整改后，提交于 remediation 提交）：
+
+```
+PASS review/channel-fixes/RunProtocol.ps1
+PASS review/channel-fixes/RunMapper.ps1
+PASS review/client-fixes/RunTests.ps1
+PASS review/client-fixes/RunManagerTests.ps1
+PASS review/p0-defects/RunMicRedirector.ps1
+PASS review/p0-defects/RunClientIdentity.ps1
+PASS review/p0-defects/RunBridgeMembership.ps1
+PASS review/p0-defects/RunIdentityIssuing.ps1
+PASS review/p1-isolation/RunSessionIsolation.ps1
+PASS review/p1-transport/RunTransportShutdown.ps1
+PASS review/p1-playback/RunStableVolume.ps1
+PASS review/p2-frontend/RunFrontend.ps1
+PASS review/p3-config/RunBookmarkConfig.ps1
+PASS review/p3-channel/RunCommandTracker.ps1
+PASS review/p4-discovery/RunFallbackPolicy.ps1
+PASS review/server-fixes/RunServerChecks.ps1
+PASS core test (ts3voice-core clean test)
+CI-EQUIVALENT RESULT: PASS (all suites + core test green)
+```
+
 | 步骤 | 命令 | 结果 |
 |---|---|---|
 | core 测试 | `cd ts3voice-core && ../teamspeak-svc/gradlew.bat clean test` | ✅ 108 protocol + 15 identity trust + 22 capability wire |
 | 客户端构建 | `cd teamspeak-svc && ./gradlew.bat clean build` | ✅ |
 | 旧桥构建 | `cd teamspeak&svcbridge && ./gradlew.bat clean build` | ✅ |
 | 能力服务端构建 | `cd voice-capabilities-fabric && ./gradlew.bat clean build` | ✅（0.1.0+26.3.jar） |
-| 16 组 harness 回归 | review/*/Run*.ps1（列表见 ci.yml） | ✅ 退出码全 0 |
+
+### Review R1 整改记录（诚实标注）
+
+R1 实测发现 9/16 组回归在 HEAD 失败（3 组由 6000b62/66b7db8 引入的 runner 破损：PowerShell 数组语法、编译清单缺 Ts3FileTransfer/Ts3FileTransferBridge、stub onTsFrame 6 参签名过期、ClientStateTests 仍用 ghostUuidFor），与本文件早先"退出码全 0"的声明矛盾——该声明当时不成立，已按以下整改后复跑：
+
+1. RunMicRedirector/RunSessionIsolation 数组语法修复；RunManagerTests/RunMicRedirector/RunSessionIsolation stub onTsFrame 升级 8 参（authority 前缀）。
+2. Ts3FileTransfer.java/Ts3FileTransferBridge.java 加入 RunProtocol/RunClientIdentity/RunTransportShutdown/RunStableVolume/RunTests 编译清单。
+3. ClientStateTests 改用 participantUuidFor（v2 API）；RunMapper 内嵌 TsVoiceManager stub 补 hasExplicitBookmarkIntent。
+4. Ts3FileTransfer 日志与入口类解耦（独立 slf4j Logger——消除了 harness 对 TeamspeakSvcClient 的编译依赖，亦为更干净的设计）。
+5. 新增 review/RunAll.ps1 一键 CI 等价验证；RunAll 自身修复了三个环境陷阱：工作区路径含 `&` 时 Set-Location/子进程调用被截断（root 改由 $PSScriptRoot 推导）、Start-Process 退出码传递（core 步骤改 marker 文件判定）、汇总误用 $LASTEXITCODE（改 $failed 计数）。
 
 ## 兼容范围（收窄声明）
 

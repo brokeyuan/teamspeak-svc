@@ -1,6 +1,8 @@
 package com.tsvoice.client;
 
 import com.tsvoice.client.ts3voice.Ts3VoiceClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -27,6 +29,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * <p>需要服务器授予 {@code i_ft_file_upload_power}；被拒时返回 FAILED（error 行）。</p>
  */
 public final class Ts3FileTransfer {
+
+    private static final Logger LOG = LoggerFactory.getLogger("teamspeak-svc-ft");
 
     public enum Result {
         /** The bytes were written and the server closed the data socket cleanly. */
@@ -116,7 +120,7 @@ public final class Ts3FileTransfer {
                 ftKey = request.ftKeyFuture.get(FT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
                 port = request.portFuture.get(1, TimeUnit.SECONDS);
             } catch (TimeoutException e) {
-                TeamspeakSvcClient.LOGGER.warn("[teamspeak-svc] ftinitupload no reply (permission i_ft_file_upload_power granted?)");
+                LOG.warn("[teamspeak-svc] ftinitupload no reply (permission i_ft_file_upload_power granted?)");
                 return Result.UNKNOWN;
             }
             return transferData(host, ftKey, port, data);
@@ -124,7 +128,7 @@ public final class Ts3FileTransfer {
             Thread.currentThread().interrupt();
             return Result.FAILED;
         } catch (Exception e) {
-            TeamspeakSvcClient.LOGGER.warn("[teamspeak-svc] File transfer init failed: {}", e.getMessage());
+            LOG.warn("[teamspeak-svc] File transfer init failed: {}", e.getMessage());
             return Result.FAILED;
         } finally {
             IN_FLIGHT.remove(ftId, request);
@@ -147,7 +151,7 @@ public final class Ts3FileTransfer {
         } catch (SocketTimeoutException e) {
             return Result.UNKNOWN;
         } catch (Exception e) {
-            TeamspeakSvcClient.LOGGER.warn("[teamspeak-svc] File transfer failed: {}", e.getMessage());
+            LOG.warn("[teamspeak-svc] File transfer failed: {}", e.getMessage());
             return Result.FAILED;
         }
     }

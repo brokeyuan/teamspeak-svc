@@ -99,7 +99,7 @@ $core = Get-ChildItem -LiteralPath 'ts3voice-core/src/main/java/com/tsvoice/prot
 $ts3voice = Get-ChildItem -LiteralPath 'teamspeak-svc/src/main/java/com/tsvoice/client/ts3voice' -Filter '*.java' |
     Where-Object { $_.Name -notin @('Ts3VoiceSelfTest.java', 'Ts3ChannelTest.java') } | Select-Object -ExpandProperty FullName
 & javac -encoding UTF-8 -cp 'review/lib/*' -d "$base/classes" @core @ts3voice @sources `
-    'teamspeak-svc/src/main/java/com/tsvoice/client/ConfigFileUtil.java' `
+    'teamspeak-svc/src/main/java/com/tsvoice/client/Ts3FileTransfer.java' 'teamspeak-svc/src/main/java/com/tsvoice/client/Ts3FileTransferBridge.java' 'teamspeak-svc/src/main/java/com/tsvoice/client/ConfigFileUtil.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/client/ClientIdentityService.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/client/net/identity/IdentityPayloads.java' `
     "$base/ClientIdentityServiceRegression.java"

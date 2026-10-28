@@ -76,6 +76,9 @@ jobs:
       - name: Server regressions
         shell: pwsh
         run: ./review/server-fixes/RunServerChecks.ps1
+      - name: CI-equivalent full verification (review/RunAll.ps1)
+        shell: pwsh
+        run: ./review/RunAll.ps1
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4

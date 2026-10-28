@@ -37,7 +37,7 @@ public class GroupChannelMapper {public static boolean ready;public static void 
 '@
 'com/tsvoice/client/TsAudioInjector.java'=@'
 package com.tsvoice.client;
-public class TsAudioInjector {public static void removeAll(){}public static void reconcile(com.tsvoice.client.ts3voice.Ts3VoiceClient c){}public static void syncAllGhostVisibility(com.tsvoice.client.ts3voice.Ts3VoiceClient c){}public static void onTsFrame(String uid,String nick,java.util.UUID uuid,int seq,int codec,byte[] opus){}}
+public class TsAudioInjector {public static void removeAll(){}public static void reconcile(com.tsvoice.client.ts3voice.Ts3VoiceClient c){}public static void syncAllGhostVisibility(com.tsvoice.client.ts3voice.Ts3VoiceClient c){}public static void onTsFrame(String authority,String uid,String nick,java.util.UUID uuid,int seq,int codec,byte[] opus){}}
 '@
 'com/tsvoice/client/AvatarPipeline.java'=@'
 package com.tsvoice.client;

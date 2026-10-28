@@ -56,9 +56,9 @@ public class ClientStateTests {
         check(ClientManager.states.states.get(crossId)==arrived,"cleanup preserves native replacement of a previous ghost");
 
         group=null;
-        TsAudioInjector.onTsFrame("remote","Player",null,1,4,new byte[]{1});
+        TsAudioInjector.onTsFrame("fixture-server","remote","Player",null,1,4,new byte[]{1});
         TsAudioInjector.syncAllGhostVisibility(c);
-        UUID ghost=TsAudioInjector.ghostUuidFor("remote");
+        UUID ghost=TsAudioInjector.participantUuidFor("fixture-server","remote");
         check(ClientStateReflector.activeGhosts().containsKey(ghost),"same-channel ungrouped TS user stays visible");
         ClientVoicechat.AudioChannel ownedChannel=second.audioChannels.get(ghost);
         check(ownedChannel!=null && !ownedChannel.closed,"owned TS audio channel is active");
