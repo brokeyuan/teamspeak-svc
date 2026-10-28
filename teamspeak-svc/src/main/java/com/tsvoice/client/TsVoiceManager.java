@@ -72,6 +72,8 @@ public final class TsVoiceManager {
     private static volatile java.util.function.Consumer<BeaconPayload> untrustedBeaconListener;
     private static volatile SessionConfig activeConfig;        // 当前生效配置
     private static volatile SessionConfig lastAppliedConfig;  // 以完整配置比较，避免密码哈希碰撞
+    /** 显式书签意图（manualConnect(bookmarkId) 设置）：优先于本服公告（含 server-bridge）。 */
+    private static volatile String explicitBookmarkId;
 
     private TsVoiceManager() {
     }
@@ -177,6 +179,25 @@ public final class TsVoiceManager {
         ServerConfigStore.Entry entry = ServerConfigStore.get(currentAddress);
         boolean enabled = entry.enabled == null || entry.enabled;
 
+        // 显式书签意图（P3）：手动书签优先于本服公告 —— server-bridge 信标只能
+        // 休眠自动路径，不能覆盖显式连接。换服不清除意图（D05）。
+        com.tsvoice.client.config.TsBookmarkStore.Bookmark bookmark =
+                com.tsvoice.client.config.TsBookmarkStore.get(explicitBookmarkId);
+        if (bookmark != null) {
+            Integer port = bookmark.port();
+            var credential = com.tsvoice.client.config.EndpointCredentialStore.get(
+                    bookmark.host(), port);
+            boolean tcp = "tcp".equalsIgnoreCase(bookmark.transportPolicy());
+            return new SessionConfig(bookmark.host(), bookmark.effectivePort(),
+                    bookmark.channel() != null ? bookmark.channel() : "Minecraft", "manual", tcp,
+                    credential != null ? credential.serverPassword() : null,
+                    credential != null ? credential.channelPassword() : null);
+        }
+        if (explicitBookmarkId != null) {
+            // 书签已被删除：清除意图，回落常规解析
+            explicitBookmarkId = null;
+        }
+
         // 服务器声明走服务端桥（tsbridge bridge 模式）时：语音由 SVC 原生 + 服务端桥负责，
         // 本 mod 直连会造成同名双客户端/回声 —— 客户端休眠
         if (beacon != null && "server-bridge".equalsIgnoreCase(beacon.backendMode())) {
@@ -209,10 +230,17 @@ public final class TsVoiceManager {
                     beacon.channel(), "server", tcp, password, channelPassword);
         }
         if (enabled && entry.host != null && !entry.host.isBlank()) {
+            // F08：全局密码只属于全局 endpoint —— 其他手动 host 密码为空时保持为空
+            // （连接时由 TS 服务器提示），绝不跨 endpoint 继承。
+            boolean sameAsGlobal = global != null && global.isConfigured()
+                    && com.tsvoice.client.config.EndpointCredentialStore.normalizeEndpoint(
+                            entry.host, entry.port).equals(
+                            com.tsvoice.client.config.EndpointCredentialStore.normalizeEndpoint(
+                                    global.tsHost, global.tsVoicePort));
             password = configuredPassword(entry.serverPassword,
-                    global != null ? global.serverPassword : null);
+                    sameAsGlobal ? (global != null ? global.serverPassword : null) : null);
             channelPassword = configuredPassword(entry.channelPassword,
-                    global != null ? global.channelPassword : null);
+                    sameAsGlobal ? (global != null ? global.channelPassword : null) : null);
             // 手动连其他 TS 服务器：host/port 直接填（TCP 时=隧道地址与端口）
             boolean tcp = "tcp".equalsIgnoreCase(entry.transport) || (entry.transport == null && wantTcp);
             return new SessionConfig(entry.host,
@@ -322,8 +350,36 @@ public final class TsVoiceManager {
         startSession();
     }
 
+    /**
+     * 按书签建立显式连接意图（P3）：立即解析书签配置并启动会话；不受本服公告
+     * （含 server-bridge 休眠规则）与 autoConnect 影响。书签/凭据缺失时报可操作错误。
+     */
+    public static void manualConnect(String bookmarkId) {
+        userDisabled = false;
+        com.tsvoice.client.config.TsBookmarkStore.Bookmark bookmark =
+                com.tsvoice.client.config.TsBookmarkStore.get(bookmarkId);
+        if (bookmark == null) {
+            lastError = "bookmark not found: " + bookmarkId;
+            state = State.ERROR;
+            return;
+        }
+        explicitBookmarkId = bookmarkId;
+        evaluateActivation();
+        if (activeConfig == null) {
+            lastError = "bookmark cannot be resolved: " + bookmarkId;
+            state = State.ERROR;
+            return;
+        }
+        if (!svcConnected) {
+            state = State.WAITING_SVC;
+            return;
+        }
+        startSession();
+    }
+
     public static void manualDisconnect() {
         userDisabled = true;
+        explicitBookmarkId = null;
         refreshRouteOwnership();
         stopSession();
         state = State.DORMANT;

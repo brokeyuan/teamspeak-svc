@@ -1,0 +1,11 @@
+[
+  {
+    "id": "bm-6385dc14-b7a5-428a-9b64-e65d15b751b3",
+    "label": "Community TS",
+    "host": "ts-bm.local",
+    "port": 9987,
+    "channel": "Lobby",
+    "transportPolicy": "tcp",
+    "autoConnect": false
+  }
+]

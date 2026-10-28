@@ -1,0 +1,9 @@
+{
+  "p3-other-server": {},
+  "p3-bookmarks": {
+    "host": "global.example.com",
+    "port": 9987,
+    "trustedBeaconHost": "bridge.local",
+    "trustedBeaconPort": 9987
+  }
+}

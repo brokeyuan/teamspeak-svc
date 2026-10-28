@@ -191,7 +191,13 @@
   - `rule` TR-10.2: 未验证清单完整（每项含环境要求与复现步骤），无"已支持"声明。
 
 ## Task 11: P3 书签与凭据隔离（F08）
-- **Status**: `pending`
+- **Status**: `completed`
+- **Completion Evidence**:
+  - **失败证据（F08 旧路径半边）**：仅回退 sameAsGlobal hunk 运行 RunBookmarkConfig.ps1 → 恰好 1 项失败（line 142，"unrelated manual host does not inherit the global endpoint password"）——不同手动 host 密码为空时继承全局其他 TS 密码；修复后该项通过且"全局 endpoint 本身仍继承"保留。书签能力（manualConnect(bookmarkId)）为新增能力，无旧代码等价物。
+  - **测试（RunBookmarkConfig.ps1，25/25 PASS）**：EndpointCredentialsTest 13 项——规范化（大小写/尾点/默认端口折叠、端口与别名隔离）、精确空格保留、revision 递增、显式清除、toString 脱敏、持久化往返、迁移仅限精确 endpoint/不覆盖/不扩散/空值跳过；BookmarkMigrationTest 12 项——server-bridge 信标休眠自动路径（对照）、显式书签覆盖信标（TR-11.2）、凭据来自隔离存储、意图跨 MC 换服保留（D05）、迟到信标不覆盖、manualDisconnect 清除意图、未知书签报可操作错误、旧全局凭据迁移、既有凭据不被迁移覆盖。
+  - **实现**：新增 C/config/TsBookmarkStore.java（schema v2，bookmarks.json 原子写、损坏条目跳过）与 C/config/EndpointCredentialStore.java（normalizeEndpoint=小写去尾点+端口；Credential.toString 脱敏；revision；migrateFrom 仅精确匹配且绝不覆盖）；TsVoiceManager 增加显式书签意图（manualConnect(bookmarkId)/manualDisconnect 清除/换服保留），resolveSessionConfig 书签分支优先于 server-bridge 休眠规则；F08 旧路径修复（全局密码仅在 entry 与全局 endpoint 规范化一致时继承）；credentialRevision 语义由 revision 字段承载（会话层重连触发在 Task 12 的会话配置比较中生效——lastAppliedConfig 已含密码值，变更自然触发重建）。
+  - **边界**：凭据存私有文件（endpoint-credentials.json，ConfigFileUtil 原子写+POSIX 600），系统密钥库未获批（计划 P3 允许）；书签 UI 屏幕属 Task 12；迁移为复制非删除（旧配置原样保留，可回滚）。
+  - 全部 14 组回归退出码 0；客户端 compileJava 通过；RunManagerTests/RunMicRedirector/RunSessionIsolation 编译清单已加入 config 类。
 - **Priority**: medium
 - **Depends On**: Task 10
 - **Description**:
