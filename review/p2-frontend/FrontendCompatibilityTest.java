@@ -21,10 +21,11 @@ public class FrontendCompatibilityTest {
         Svc2625FrontendAdapter adapter = Svc2625FrontendAdapter.instance();
 
         // The stub world models the 2.6.25 ABI (MicThread 3-arg ctor,
-        // ClientVoicechat.processSoundPacket, Fabric lifecycle events present).
+        // AudioChannel direct ownership — the N2/D01 playback path — and Fabric
+        // lifecycle events present).
         FrontendCapabilities capabilities = adapter.inspect();
         check(capabilities.micThreadUsable(), "MicThread 3-arg constructor probe succeeds (ABI match)");
-        check(capabilities.playbackInjectionUsable(), "processSoundPacket probe succeeds (ABI match)");
+        check(capabilities.playbackInjectionUsable(), "AudioChannel direct-ownership probe succeeds (ABI match)");
         check(capabilities.clientStoppingHookPresent(), "CLIENT_STOPPING lifecycle events probe succeeds");
         check(capabilities.tsUsable() && capabilities.missingCriticalHooks().isEmpty(),
                 "no critical hooks missing on a 2.6.25-shaped runtime");
@@ -35,7 +36,8 @@ public class FrontendCompatibilityTest {
         java.lang.reflect.Field capsField = Svc2625FrontendAdapter.class.getDeclaredField("lastCapabilities");
         capsField.setAccessible(true);
         FrontendCapabilities broken = new FrontendCapabilities(false, false, false,
-                List.of("MicThread constructor: NoClassDefFoundError", "processSoundPacket: NoSuchMethodException"),
+                List.of("MicThread constructor: NoClassDefFoundError",
+                        "AudioChannel direct ownership: NoSuchMethodException"),
                 List.of("CLIENT_STOPPING lifecycle events: ClassNotFoundException"));
         capsField.set(adapter, broken);
         check(adapter.acquire(new com.tsvoice.client.connection.VoiceState.SessionToken(1)) == null,

@@ -68,6 +68,15 @@ public final class TsVoiceManager {
         com.tsvoice.client.frontend.FrontendLease lease = frontendLease;
         return lease != null && !lease.isClosed();
     }
+
+    /**
+     * 持有的租约是否带有存活采集源（N2/D02 诊断：区分"持有租约"与"mic 存活" ——
+     * D02 探针中两者曾长期背离）。
+     */
+    public static boolean frontendMicAlive() {
+        com.tsvoice.client.frontend.FrontendLease lease = frontendLease;
+        return lease != null && lease.micAlive();
+    }
     /** 前端自检失败：关键 SVC hook 缺失，TS 整体禁用（原版 SVC 不受影响）。 */
     private static volatile boolean frontendUnavailable = false;
     private static volatile String lastError = "";
@@ -174,16 +183,23 @@ public final class TsVoiceManager {
     public static void onSvcConnected() {
         svcConnected = true;
         com.tsvoice.client.backend.SvcBackendAdapter.onSvcConnected();
+        // N2/D02 前端交接（建立侧）：若会话正持有自有隔离租约而原生 mic 已上线，
+        // 关闭自有租约并立即重取（将借用原生 mic），避免双采集。
+        com.tsvoice.client.frontend.Svc2625FrontendAdapter.instance().onSvcConnected();
+        reacquireFrontendLeaseIfNeeded();
         evaluateActivation();
     }
 
     /**
      * SVC 客户端断开。P1 起只更新适配器与状态显示，不再销毁 TS 会话 ——
      * TS 路由被选中期间麦克风保持消费（不泄漏回 SVC），TS 重连循环继续。
+     * N2/D02 前端交接（断开侧）：借用原生 mic 随 SVC 断开死亡 —— 前端断连钩子
+     * 关闭受影响租约，会话循环按修复后的顺序（先释放再创建）重取隔离 mic。
      */
     public static void onSvcDisconnected() {
         svcConnected = false;
         com.tsvoice.client.backend.SvcBackendAdapter.onSvcDisconnected();
+        com.tsvoice.client.frontend.Svc2625FrontendAdapter.instance().onSvcDisconnected();
         if (activeConfig == null && !sessionRunning) {
             state = State.DORMANT;
         }
@@ -505,6 +521,26 @@ public final class TsVoiceManager {
         }
     }
 
+    /**
+     * 借用/自有交接（N2/D02）：会话持有自有隔离 mic 且 SVC 原生 mic 已可用时，
+     * 关闭自有租约并立即重取为借用原生 mic —— 单一采集所有者不变，来源随 SVC
+     * 生命周期切换。幂等：交接完成后租约为借用，检查直接跳过。
+     */
+    private static synchronized void handoffIsolatedLeaseToNativeMic() {
+        if (!sessionRunning) {
+            return;
+        }
+        com.tsvoice.client.frontend.FrontendLease lease = frontendLease;
+        if (lease == null || lease.isClosed() || lease.isBorrowedFromNativeSvc()) {
+            return;
+        }
+        if (!com.tsvoice.client.frontend.Svc2625FrontendAdapter.instance().nativeMicAvailable()) {
+            return;
+        }
+        lease.close();
+        reacquireFrontendLeaseIfNeeded();
+    }
+
     private static synchronized void stopSession() {
         sessionGeneration++;
         sessionRunning = false;
@@ -615,6 +651,9 @@ public final class TsVoiceManager {
                     if (now - lastGroupCheck >= 2_000L) {
                         lastGroupCheck = now;
                         try {
+                            // N2/D02：原生 mic 的启动可能晚于 SVC 连接事件 —— 会话
+                            // 周期复核借用/自有交接，保证同一时刻只有一个采集源。
+                            handoffIsolatedLeaseToNativeMic();
                             // 频道确认对账（含书签初始目标解析）先于 legacy 映射；
                             // 两者都只提交目标/观察，许可仍由协调器发布。
                             com.tsvoice.client.connection.TsChannelRoute.tick(c);

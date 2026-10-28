@@ -1,5 +1,7 @@
 package de.maxhenkel.voicechat.voice.client;
 public class ClientVoicechat {
+ private final SoundManager soundManager = new SoundManager();
+ public SoundManager getSoundManager(){return soundManager;}
  public void processSoundPacket(de.maxhenkel.voicechat.voice.common.SoundPacket packet){
   de.maxhenkel.voicechat.voice.client.ClientVoicechat.registered.add(packet);
  }

@@ -20,25 +20,28 @@ public class ClientStateTests {
                 (p,m,a)->m.getName().equals("getId")?groupId:null);
         TeamspeakSvcClient.api=(VoicechatClientApi)Proxy.newProxyInstance(VoicechatClientApi.class.getClassLoader(),
                 new Class[]{VoicechatClientApi.class},(p,m,a)->m.getName().equals("getGroup")?group:null);
-        // T08c: the injection entry lives on the frontend adapter and resolves the
-        // CURRENT SVC client on every frame.
+        // T08c/N2: the injection entry lives on the frontend adapter; each owned
+        // playback channel binds to the SVC client instance it was created against
+        // and is recreated when that instance is replaced (reconnect).
         var adapter=com.tsvoice.client.frontend.Svc2625FrontendAdapter.instance();
         java.util.UUID ch=java.util.UUID.randomUUID();
         ClientVoicechat first=new ClientVoicechat(), second=new ClientVoicechat();
         ClientManager.current=first;
-        adapter.play(new com.tsvoice.client.connection.VoiceState.StreamKey(
-                new com.tsvoice.client.connection.VoiceState.ParticipantKey("s","u"),1),ch,new byte[]{1},1);
-        check(first.frames==1,"SVC instance replacement uses current client even before cleanup");
+        var streamKey=new com.tsvoice.client.connection.VoiceState.StreamKey(
+                new com.tsvoice.client.connection.VoiceState.ParticipantKey("s","u"),1);
+        check(adapter.play(streamKey,ch,new byte[]{1},1),
+                "play() enqueues on the owned playback channel");
+        check(adapter.playbackOwnerClient(ch)==first,
+                "SVC instance replacement: the channel binds to the current client");
         ClientManager.current=second;
-        adapter.play(new com.tsvoice.client.connection.VoiceState.StreamKey(
-                new com.tsvoice.client.connection.VoiceState.ParticipantKey("s","u"),1),ch,new byte[]{1},2);
-        check(second.frames==1 && first.frames==1,"SVC reconnect uses current client after cleanup");
-        first.frames=0; second.frames=0; // reset shared counters for the later sections
+        check(adapter.play(streamKey,ch,new byte[]{1},2),
+                "play() still delivers after the SVC client instance is replaced");
+        check(adapter.playbackOwnerClient(ch)==second,
+                "SVC reconnect rebinds playback to the current client (stale channel recreated)");
         TsAudioInjector.removeAll();
         ClientManager.current=second;
-        adapter.play(new com.tsvoice.client.connection.VoiceState.StreamKey(
-                new com.tsvoice.client.connection.VoiceState.ParticipantKey("s","u"),1),ch,new byte[]{1},3);
-        check(second.frames==1 && first.frames==0,
+        check(adapter.play(streamKey,ch,new byte[]{1},3)
+                        && adapter.playbackOwnerClient(ch)==second,
                 "SVC reconnect uses current client after cleanup (counters were reset)");
 
         Ts3VoiceClient c=new Ts3VoiceClient(Ts3Identity.generate(0,1),"review","");
@@ -73,12 +76,13 @@ public class ClientStateTests {
         TsAudioInjector.syncAllGhostVisibility(c);
         UUID ghost=TsAudioInjector.participantUuidFor("fixture-server","remote");
         check(ClientStateReflector.activeGhosts().containsKey(ghost),"same-channel ungrouped TS user stays visible");
-        ClientVoicechat.AudioChannel ownedChannel=second.audioChannels.get(ghost);
-        check(ownedChannel!=null && !ownedChannel.closed,"owned TS audio channel is active");
+        Object ownedChannel=ClientStateReflector.ownedAudioChannel(ghost);
+        check(ownedChannel!=null && ((Thread)ownedChannel).isAlive(),
+                "owned TS audio channel is active");
         TsAudioInjector.removeAll();
         check(!ClientManager.states.states.containsKey(ghost),"cleanup removes owned TS ghost");
-        check(ownedChannel.closed && !second.audioChannels.containsKey(ghost),"cleanup closes owned TS audio channel");
-        check(second.frames>0 && first.frames==0,"incoming audio reaches new SVC client only");
+        check(ClientStateReflector.ownedAudioChannel(ghost)==null,"cleanup closes owned TS audio channel");
+        check(adapter.playbackOwnerClient(ghost)==null,"retired channel no longer bound to any SVC client");
         if(failures!=0)throw new AssertionError(failures+" client regression checks failed");
     }
 }

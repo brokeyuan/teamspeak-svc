@@ -1,5 +1,7 @@
 package de.maxhenkel.voicechat.voice.client;
 public class ClientVoicechat {
+ private final SoundManager soundManager = new SoundManager();
+ public SoundManager getSoundManager(){return soundManager;}
  public int frames;
  public final java.util.Map<java.util.UUID,AudioChannel> audioChannels=new java.util.HashMap<>();
  public void processSoundPacket(de.maxhenkel.voicechat.voice.common.SoundPacket packet){

@@ -44,6 +44,11 @@ public final class TsPlaybackRegistry {
         }
         ACTIVE.remove(channelUuid, entry);
         if (entry.ownedChannel() != null) {
+            // N2/D01：本扩展自有的独立播放通道不在 SVC 的 audioChannels 表中，
+            // 由适配器直接退役；SVC 表内的对象仍走反射路径，二者按对象身份
+            // 各自关闭，互不越权。
+            com.tsvoice.client.frontend.Svc2625FrontendAdapter.instance()
+                    .retirePlaybackChannel(channelUuid);
             ClientStateReflector.retireAudioChannel(channelUuid, entry.ownedChannel());
         }
         ClientStateReflector.removeGhost(channelUuid);

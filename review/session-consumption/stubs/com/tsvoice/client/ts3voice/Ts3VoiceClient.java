@@ -60,6 +60,11 @@ public class Ts3VoiceClient {
   if(throwOnJoin){throw new RuntimeException("server rejected move");}
   joinCalls++;lastJoinCid=cid;lastJoinPassword=channelPassword;
  }
+ public record MoveResult(boolean succeeded,Integer errorCode,String errorMessage){}
+ public java.util.concurrent.CompletableFuture<MoveResult> moveChannelAsync(int cid,String channelPassword,long timeoutMillis){
+  joinCalls++;lastJoinCid=cid;lastJoinPassword=channelPassword;
+  return java.util.concurrent.CompletableFuture.completedFuture(new MoveResult(true,null,null));
+ }
  public void createChannel(String name,int parent,String password){}
  public void findChannel(String name){}
  public void simulateSelfMove(int cid){

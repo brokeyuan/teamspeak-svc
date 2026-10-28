@@ -259,7 +259,13 @@ public final class TsAudioInjector {
         }
         injectedFrames.incrementAndGet();
         if (ghost.ownedChannel() == null) {
-            Object channel = ClientStateReflector.ownedAudioChannel(ghost.channelUuid());
+            // N2/D01：独立播放通道由前端适配器直接拥有；SVC 表内通道（历史路径）
+            // 仍经反射快照。两者都登记同一所有权链（registry retire 双路关闭）。
+            Object channel = com.tsvoice.client.frontend.Svc2625FrontendAdapter.instance()
+                    .ownedPlaybackChannel(ghost.channelUuid());
+            if (channel == null) {
+                channel = ClientStateReflector.ownedAudioChannel(ghost.channelUuid());
+            }
             if (channel != null) {
                 GhostAudio owned = ghost.withOwnedChannel(channel);
                 ghosts.put(key, owned);

@@ -72,7 +72,8 @@ public class StableParticipantVolumeTest {
         // Remove with the owned handle: the exact channel closes.
         // (T07: removal is keyed by the full participant identity.)
         TsAudioInjector.remove(new com.tsvoice.client.connection.VoiceState.ParticipantKey("srv-A", "uid-x"));
-        check(!channels().containsKey(a1), "owned close removes and closes the channel");
+        check(ClientStateReflector.ownedAudioChannel(a1) == null,
+                "owned close removes and closes the channel");
         check(!ClientStateReflector.activeGhosts().containsKey(a1), "ghost state removed");
 
         // Reconnect after removal: a fresh channel under the same stable UUID.
@@ -84,7 +85,7 @@ public class StableParticipantVolumeTest {
 
         // Ownership guard: closing with a wrong or stale handle is a no-op.
         ClientStateReflector.closeAudioChannel(a1, new Object());
-        check(channels().containsKey(a1) && ClientStateReflector.ownedAudioChannel(a1) == channel2,
+        check(ClientStateReflector.ownedAudioChannel(a1) == channel2,
                 "close with a foreign handle never kills the live channel");
         // Stale-cleanup race: the old channel object re-inserted, cleanup must not
         // remove the NEW channel object registered for the same UUID.
@@ -92,7 +93,8 @@ public class StableParticipantVolumeTest {
         check(ClientStateReflector.ownedAudioChannel(a1) == channel2,
                 "stale cleanup with the old channel handle cannot remove the new channel");
         ClientStateReflector.closeAudioChannel(a1, channel2);
-        check(!channels().containsKey(a1), "close with the correct owned handle removes the channel");
+        check(ClientStateReflector.ownedAudioChannel(a1) == null,
+                "close with the correct owned handle removes the channel");
 
         // Authority isolation end to end (a server switch clears the session's
         // ghosts first, exactly as TsVoiceManager.stopSession does).

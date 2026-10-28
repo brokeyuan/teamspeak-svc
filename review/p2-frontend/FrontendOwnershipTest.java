@@ -70,8 +70,9 @@ public class FrontendOwnershipTest {
     public static void main(String[] args) throws Exception {
         VoiceState.SessionToken token = new VoiceState.SessionToken(1);
 
-        // Single ownership: the second acquire is rejected and its just-created
-        // mic handle is closed again (no device double-open).
+        // Single ownership: the second acquire is rejected WITHOUT touching the
+        // device at all (N2/D02: the healthy lease is detected before any mic
+        // resource is created, so a rejection cannot churn the input device).
         FakeMicSource source1 = new FakeMicSource();
         Svc2625FrontendAdapter adapter = adapterWithUsableCaps(source1);
         FrontendLease lease1 = adapter.acquire(token);
@@ -79,8 +80,8 @@ public class FrontendOwnershipTest {
         check(lease1.isBorrowedFromNativeSvc() == false, "no native mic: lease created an isolated mic");
         FrontendLease rejected = adapter.acquire(new VoiceState.SessionToken(2));
         check(rejected == null, "second acquire is rejected while one lease is active");
-        check(source1.created == 2 && source1.closedHandles.contains("isolated-1"),
-                "the rejected acquire's mic handle is closed immediately");
+        check(source1.created == 1,
+                "the rejected acquire never creates a mic resource (no device churn)");
         check(lease1.micAlive(), "the active lease is unaffected by the rejected acquire");
 
         // Close is idempotent and frees ownership.

@@ -183,6 +183,10 @@ public final class ClientStateReflector {
         if (channelId == null || expectedOwned == null) {
             return;
         }
+        // N2/D01：对象身份匹配的自有播放通道由适配器直接退役；SVC 表内对象
+        // 仍走下方反射路径（remove+closeAndKill 均按身份守卫）。
+        com.tsvoice.client.frontend.Svc2625FrontendAdapter.instance()
+                .retirePlaybackChannelIf(channelId, expectedOwned);
         onClientThread(() -> {
             try {
                 Object client = Class.forName("de.maxhenkel.voicechat.voice.client.ClientManager")
@@ -283,6 +287,13 @@ public final class ClientStateReflector {
 
     /** Read-only snapshot of the SVC audio channel currently registered for a UUID. */
     public static Object ownedAudioChannel(UUID channelId) {
+        // N2/D01：独立播放通道由前端适配器直接拥有 —— 优先从适配器快照；
+        // SVC 表内通道（原生/历史路径）仍走反射查询。
+        Object adapterOwned = com.tsvoice.client.frontend.Svc2625FrontendAdapter.instance()
+                .ownedPlaybackChannel(channelId);
+        if (adapterOwned != null) {
+            return adapterOwned;
+        }
         try {
             Object client = Class.forName("de.maxhenkel.voicechat.voice.client.ClientManager")
                     .getMethod("getClient").invoke(null);
