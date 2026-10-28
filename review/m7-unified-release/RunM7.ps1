@@ -24,9 +24,17 @@ $jar = Get-ChildItem 'teamspeak-svc/build/libs' -Filter 'teamspeak-svc-*.jar' -E
 if ($null -eq $jar) {
     # Clean checkout: build the artifact first (gradle no-ops on an up-to-date tree)
     Write-Output 'artifact: none found - running gradlew build'
-    $buildEnv = 'Set-Location -LiteralPath "$root	eamspeak-svc"; $env:JAVA_HOME = (Get-ChildItem "C:\Program Files\Java" -Directory | Where-Object { $_.Name -like "jdk-*" } | Sort-Object Name -Descending | Select-Object -First 1).FullName; & .\gradlew.bat build --no-daemon'
-    & powershell -NoProfile -ExecutionPolicy Bypass -Command $buildEnv
-    if ($LASTEXITCODE -ne 0) { throw 'gradlew build failed during M7 artifact preparation' }
+    Push-Location "$root	eamspeak-svc"
+    try {
+        $env:JAVA_HOME = (Get-ChildItem 'C:\Program Files\Java' -Directory |
+            Where-Object { $_.Name -like 'jdk-*' } | Sort-Object Name -Descending |
+            Select-Object -First 1).FullName
+        & .\gradlew.bat build --no-daemon
+        $buildExit = $LASTEXITCODE
+    } finally {
+        Pop-Location
+    }
+    if ($buildExit -ne 0) { throw 'gradlew build failed during M7 artifact preparation' }
     $jar = Get-ChildItem 'teamspeak-svc/build/libs' -Filter 'teamspeak-svc-*.jar' -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -notmatch 'sources' } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
     if ($null -eq $jar) { throw 'gradlew build produced no jar' }
