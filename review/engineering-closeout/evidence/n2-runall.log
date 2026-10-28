@@ -1,0 +1,116 @@
+RUNALL env: JAVA_HOME=C:\Program Files\Java\jdk-25.0.4.1
+PASS ts3voice-core clean test (gradle)
+PASS review/channel-fixes/RunProtocol.ps1
+PASS review/channel-fixes/RunMapper.ps1
+FAIL review/client-fixes/RunTests.ps1 (exit 1)
+--- last 12 stdout lines (C:\Users\ADMINI~1\AppData\Local\Temp\2\tsvoice-ci-logs\client-fixes__Tests.log) ---
+  FAIL SVC reconnect uses current client after cleanup
+  FAIL SVC reconnect uses current client after cleanup (counters were reset)
+  PASS visibility sync preserves native PlayerState identity
+  PASS TS cleanup preserves native PlayerState
+  PASS reflector refuses to overwrite a native PlayerState
+  PASS reflector refuses to delete a state it does not own
+  PASS injected cross-server state is not classified as a native player
+  PASS group refresh does not modify native replacement of a ghost
+  PASS cleanup preserves native replacement of a previous ghost
+  PASS same-channel ungrouped TS user stays visible
+  FAIL owned TS audio channel is active
+  PASS cleanup removes owned TS ghost
+--- last 6 stderr lines (C:\Users\ADMINI~1\AppData\Local\Temp\2\tsvoice-ci-logs\client-fixes__Tests.err.log) ---
+  :94 ×Ö·û: 25
+  + if($LASTEXITCODE -ne 0){throw 'Client regression failed'}
+  +                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      + CategoryInfo          : OperationStopped: (Client regression failed:String) [], RuntimeException
+      + FullyQualifiedErrorId : Client regression failed
+   
+PASS review/client-fixes/RunManagerTests.ps1
+PASS review/p0-defects/RunMicRedirector.ps1
+PASS review/p0-defects/RunClientIdentity.ps1
+PASS review/p0-defects/RunBridgeMembership.ps1
+PASS review/p0-defects/RunIdentityIssuing.ps1
+FAIL review/p1-isolation/RunSessionIsolation.ps1 (exit 1)
+--- last 12 stdout lines (C:\Users\ADMINI~1\AppData\Local\Temp\2\tsvoice-ci-logs\p1-isolation__SessionIsolation.log) ---
+--- last 6 stderr lines (C:\Users\ADMINI~1\AppData\Local\Temp\2\tsvoice-ci-logs\p1-isolation__SessionIsolation.err.log) ---
+  olation.ps1:106 ×Ö·û: 28
+  + ... ($LASTEXITCODE -ne 0) { throw 'Session isolation regression failed' }
+  +                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      + CategoryInfo          : OperationStopped: (Session isolation regression failed:String) [], RuntimeException
+      + FullyQualifiedErrorId : Session isolation regression failed
+   
+PASS review/p1-transport/RunTransportShutdown.ps1
+FAIL review/p1-playback/RunStableVolume.ps1 (exit 1)
+--- last 12 stdout lines (C:\Users\ADMINI~1\AppData\Local\Temp\2\tsvoice-ci-logs\p1-playback__StableVolume.log) ---
+  PASS UUID uses the documented tsvoice-participant-v2 derivation
+  PASS ghost registers under the stable participant UUID
+  FAIL first injection registers the SVC channel object
+  PASS sequence reset keeps the same channel object
+  PASS owned close removes and closes the channel
+  PASS ghost state removed
+  PASS reconnect re-registers under the same stable UUID (volume persists)
+  FAIL new stream owns a new channel object
+  FAIL close with a foreign handle never kills the live channel
+  PASS stale cleanup with the old channel handle cannot remove the new channel
+  PASS close with the correct owned handle removes the channel
+  PASS same uid on another server injects under an isolated UUID
+--- last 6 stderr lines (C:\Users\ADMINI~1\AppData\Local\Temp\2\tsvoice-ci-logs\p1-playback__StableVolume.err.log) ---
+  me.ps1:46 ×Ö·û: 28
+  + ... ITCODE -ne 0) { throw 'Stable participant volume regression failed' }
+  +                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      + CategoryInfo          : OperationStopped: (Stable particip...gression failed:String) [], RuntimeException
+      + FullyQualifiedErrorId : Stable participant volume regression failed
+   
+FAIL review/p2-frontend/RunFrontend.ps1 (exit 1)
+--- last 12 stdout lines (C:\Users\ADMINI~1\AppData\Local\Temp\2\tsvoice-ci-logs\p2-frontend__Frontend.log) ---
+  PASS first acquire owns a live mic
+  PASS no native mic: lease created an isolated mic
+  PASS second acquire is rejected while one lease is active
+  FAIL the rejected acquire's mic handle is closed immediately
+  PASS the active lease is unaffected by the rejected acquire
+  PASS lease closed
+  PASS close releases the owned mic
+  PASS re-acquire after close succeeds
+  PASS native mic present: lease borrows instead of creating
+  PASS svc disconnect closes the lease but never closes the borrowed native mic
+  PASS coordinator can re-acquire after svc disconnect
+  PASS critical hook failure disables acquisition (FRONTEND_UNAVAILABLE)
+--- last 6 stderr lines (C:\Users\ADMINI~1\AppData\Local\Temp\2\tsvoice-ci-logs\p2-frontend__Frontend.err.log) ---
+  s1:22 ×Ö·û: 28
+  + ... $LASTEXITCODE -ne 0) { throw 'Frontend ownership regression failed' }
+  +                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      + CategoryInfo          : OperationStopped: (Frontend ownership regression failed:String) [], RuntimeException
+      + FullyQualifiedErrorId : Frontend ownership regression failed
+   
+PASS review/p3-config/RunBookmarkConfig.ps1
+FAIL review/route-lifecycle/RunRouteLifecycle.ps1 (exit 1)
+--- last 12 stdout lines (C:\Users\ADMINI~1\AppData\Local\Temp\2\tsvoice-ci-logs\route-lifecycle__RouteLifecycle.log) ---
+  PASS A: no TS config: SVC native microphone path untouched
+  FAIL B: configured server reaches CONNECTING
+  PASS B: session and route not ready while connecting
+  PASS B: frame consumed while TS connecting (no SVC leak)
+  FAIL C: session reaches CONNECTED
+  FAIL C: the session holds a frontend mic lease (T08b, no SVC server required)
+--- last 6 stderr lines (C:\Users\ADMINI~1\AppData\Local\Temp\2\tsvoice-ci-logs\route-lifecycle__RouteLifecycle.err.log) ---
+  ifecycle.ps1:217 ×Ö·û: 28
+  + ... f ($LASTEXITCODE -ne 0) { throw 'Route lifecycle regression failed' }
+  +                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      + CategoryInfo          : OperationStopped: (Route lifecycle regression failed:String) [], RuntimeException
+      + FullyQualifiedErrorId : Route lifecycle regression failed
+   
+FAIL review/session-consumption/RunSessionConsumption.ps1 (exit 1)
+--- last 12 stdout lines (C:\Users\ADMINI~1\AppData\Local\Temp\2\tsvoice-ci-logs\session-consumption__SessionConsumption.log) ---
+  FAIL C1: session A connects
+--- last 6 stderr lines (C:\Users\ADMINI~1\AppData\Local\Temp\2\tsvoice-ci-logs\session-consumption__SessionConsumption.err.log) ---
+  ssionConsumption.ps1:240 ×Ö·û: 28
+  + ... LASTEXITCODE -ne 0) { throw 'Session consumption regression failed' }
+  +                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      + CategoryInfo          : OperationStopped: (Session consumption regression failed:String) [], RuntimeException
+      + FullyQualifiedErrorId : Session consumption regression failed
+   
+PASS review/playback-ownership/RunPlaybackOwnership.ps1
+PASS review/standalone-frontend/RunStandaloneFrontend.ps1
+PASS review/p3-channel/RunCommandTracker.ps1
+PASS review/p4-discovery/RunFallbackPolicy.ps1
+PASS review/server-fixes/RunServerChecks.ps1
+PASS review/upload-confirmation/RunUploadConfirmation.ps1
+CI-EQUIVALENT RESULT: FAIL (6 failed: review/client-fixes/RunTests.ps1, review/p1-isolation/RunSessionIsolation.ps1, review/p1-playback/RunStableVolume.ps1, review/p2-frontend/RunFrontend.ps1, review/route-lifecycle/RunRouteLifecycle.ps1, review/session-consumption/RunSessionConsumption.ps1)
+Full per-suite logs: C:\Users\ADMINI~1\AppData\Local\Temp\2\tsvoice-ci-logs
