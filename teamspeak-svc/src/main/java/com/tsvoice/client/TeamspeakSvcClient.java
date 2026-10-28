@@ -81,6 +81,35 @@ public class TeamspeakSvcClient implements ClientModInitializer {
                     ClientStateReflector.tickSnapshot();
                 });
 
+        // 前端自检（P2）：关键 SVC hook 缺失 → 禁用 TS 并明确告警；可选失败只禁功能。
+        // 不用 defaultRequire=0 掩盖关键路径失效；未接管时原版 SVC 照常可用。
+        com.tsvoice.client.frontend.FrontendCapabilities capabilities =
+                com.tsvoice.client.frontend.Svc2625FrontendAdapter.instance().inspect();
+        if (capabilities.tsUsable()) {
+            LOGGER.info("[teamspeak-svc] Frontend self-check passed (mic={}, playback={}, clientStopping={})",
+                    capabilities.micThreadUsable(), capabilities.playbackInjectionUsable(),
+                    capabilities.clientStoppingHookPresent());
+        } else {
+            LOGGER.error("[teamspeak-svc] TS DISABLED — frontend self-check failed: {} (vanilla SVC stays available)",
+                    capabilities.missingCriticalHooks());
+        }
+        TsVoiceManager.setFrontendUnavailable(!capabilities.tsUsable());
+
+        // 退出前资源编排：停 TS、关 mic 租约与音频管线（CLIENT_STOPPING）。
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents.CLIENT_STOPPING.register(
+                client -> {
+                    try {
+                        TsVoiceManager.manualDisconnect();
+                    } catch (Throwable t) {
+                        LOGGER.debug("[teamspeak-svc] client-stopping TS teardown: {}", t.getMessage());
+                    }
+                    try {
+                        com.tsvoice.client.audio.AudioPipeline.shutdown();
+                    } catch (Throwable t) {
+                        LOGGER.debug("[teamspeak-svc] client-stopping audio teardown: {}", t.getMessage());
+                    }
+                });
+
         // payload 类型注册（S2C 接收）
         ClientIdentityService.register();
         PayloadTypeRegistry.clientboundPlay().register(BeaconPayload.TYPE, BeaconPayload.CODEC);

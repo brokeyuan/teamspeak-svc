@@ -23,6 +23,14 @@ public class WebRtcNative {
 
     private final AudioProcessing apm;
     private final AudioProcessingStreamConfig cfg;
+    /** 连续处理失败计数；成功复位。超过阈值判定实例不健康（P2 健康状态）。 */
+    private int consecutiveFailures;
+    private volatile boolean unhealthy;
+
+    /** 实例是否仍可正常降噪（持续失败后返回 false，调用方应释放并回退）。 */
+    public boolean isHealthy() {
+        return !unhealthy;
+    }
 
     public WebRtcNative(int nsLevel, boolean echoCancel) {
         loadNativeOnce();
@@ -64,8 +72,20 @@ public class WebRtcNative {
                 ByteBuffer.wrap(out).order(ByteOrder.LITTLE_ENDIAN)
                         .asShortBuffer().get(audio, off, frameSize);
             } catch (Throwable e) {
-                com.tsvoice.client.TeamspeakSvcClient.LOGGER.error("webrtc process failed at {}", off, e);
+                consecutiveFailures++;
+                if (consecutiveFailures >= 50 && !unhealthy) {
+                    unhealthy = true;
+                    com.tsvoice.client.TeamspeakSvcClient.LOGGER.error(
+                            "WebRTC NS marked unhealthy after {} consecutive failures — SVC native NS will take over",
+                            consecutiveFailures, e);
+                } else if (!unhealthy) {
+                    com.tsvoice.client.TeamspeakSvcClient.LOGGER.debug("webrtc process failed at {}: {}",
+                            off, e.getMessage());
+                }
             }
+        }
+        if (total > 0 && !unhealthy) {
+            consecutiveFailures = 0;
         }
     }
 

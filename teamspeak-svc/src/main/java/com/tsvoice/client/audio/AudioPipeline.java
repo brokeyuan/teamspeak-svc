@@ -45,7 +45,8 @@ public class AudioPipeline {
             try {
                 nvidia = new NvidiaDenoiser(sampleRate);
                 LOGGER.info("[teamspeak-svc] NVIDIA AI denoiser initialized");
-            } catch (Exception e) {
+            } catch (Throwable e) {
+                // native 初始化失败（含 LinkageError/UnsatisfiedLinkError）必须降级而非击穿 init
                 LOGGER.warn("[teamspeak-svc] NVIDIA AI init failed (RTX/Broadcast installed?): {}", e.getMessage());
                 nvidiaUnavailableNotice();
             }
@@ -58,13 +59,13 @@ public class AudioPipeline {
                     webrtc = new WebRtcNative(level, false);
                     LOGGER.info("[teamspeak-svc] WebRTC NS initialized, level={}", level);
                 }
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 LOGGER.warn("[teamspeak-svc] WebRTC NS init failed: {}", e.getMessage());
             }
         }
         try {
             agc = new AgcProcessor(sampleRate);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             LOGGER.warn("[teamspeak-svc] AGC init failed: {}", e.getMessage());
         }
         isInitialized = true;
@@ -202,7 +203,15 @@ public class AudioPipeline {
             }
         } else if (isWebRtcNsMode(TsAudio.denoiseMode)) {
             if (webrtc != null) {
-                webrtc.process(audio, sampleRate);
+                if (webrtc.isHealthy()) {
+                    webrtc.process(audio, sampleRate);
+                } else {
+                    // 持续失败（native 异常/设备变化）：丢弃实例，isNsActive 随之
+                    // 返回 false，SVC 原生降噪自动接管，而不是持续静默无降噪。
+                    LOGGER.warn("[teamspeak-svc] WebRTC NS unhealthy after repeated failures — releasing (SVC native NS takes over)");
+                    try { webrtc.close(); } catch (Throwable ignored) {}
+                    webrtc = null;
+                }
             }
         }
         if (TsAudio.agcEnabled && agc != null) {

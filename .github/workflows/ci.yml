@@ -58,6 +58,9 @@ jobs:
       - name: Stable participant volume regressions (P1)
         shell: pwsh
         run: ./review/p1-playback/RunStableVolume.ps1
+      - name: Frontend adapter regressions (P2)
+        shell: pwsh
+        run: ./review/p2-frontend/RunFrontend.ps1
       - name: Server regressions
         shell: pwsh
         run: ./review/server-fixes/RunServerChecks.ps1

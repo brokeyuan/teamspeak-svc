@@ -171,7 +171,14 @@
   - `rule` TR-9.2: 切换后旧帧收发计数为 0；未确认 route 期间 SVC 非空上传为 0；ClientStateTests 无倒退。
 
 ## Task 10: P2 独立前端适配层与自检
-- **Status**: `pending`
+- **Status**: `completed`
+- **Completion Evidence**:
+  - **ABI 台账（javap，libs 实际 JAR 2.6.25）**：MicThread 三参构造器在 run 循环（offset 62/141）与 sendAudioPacket（offset 454-466）均显式判空 connection——null 连接=采集/PTT/激活照常、仅跳过发送（比评估文档更进一步的字节码级证实）；ClientVoicechat.getMicThread()/closeMicThread() 可借用原生 mic；AudioChannel 四参构造器仅保存 InitializationData 不解引用（26.2 参考源码 3 参的 ABI 差异记录在案）；processSoundPacket 无连接直接返回（收包门槛仍在，评估 §3.1 一致）。
+  - **替身级测试（RunFrontend.ps1，19/19 PASS）**：FrontendOwnershipTest 12 项——单一 mic 所有权（第二次 acquire 拒绝且其新建句柄立即关闭）、close 幂等、SVC 断开只关闭自有 mic（借用的原生 mic 归还 SVC 生命周期不关闭）、重新申请成功、关键 hook 缺失时 acquire 拒绝（FRONTEND_UNAVAILABLE）；FrontendCompatibilityTest 7 项——inspect 探针命中 2.6.25 ABI 描述符、关键/可选 hook 分列、缓存失效后 acquire 拒绝、inspect 按真实 classpath 重新评估。
+  - **实现**：新增 C/frontend/{FrontendCapabilities,SvcFrontendAdapter,FrontendLease,Svc2625FrontendAdapter}.java；TsVoiceManager.setFrontendUnavailable 门控（evaluateActivation/refreshRouteOwnership/stopSession）；TeamspeakSvcClient 启动自检 + CLIENT_STOPPING 资源编排（manualDisconnect + AudioPipeline.shutdown）；AudioPipeline native 初始化 catch (Exception)→catch (Throwable)（LinkageError 降级不击穿 init）；WebRtcNative 连续失败 ≥50 次标记 unhealthy，AudioPipeline 释放实例让 isNsActive 回落（SVC 原生降噪接管）。
+  - **TR-10.2 未验证清单**：review/p2-frontend/UNVERIFIED.md——U1 无 SVC 双向通话、U2 独立播放通道（AudioChannel 直建的 run() null-InitializationData 安全性未核，**已知缺口：processSoundPacket 无连接时返回，注入路径无 SVC 时无声音**——P2 停线条件适用）、U3 mic 所有权交接、U4 hook 自检失败、U5 退出编排、U6 设备热切换，全部标注环境与复现步骤，无"已支持"声明。
+  - **计划偏差说明**：mixin hooks（ClientVoicechatFrontendMixin 等）未创建——自检与租约逻辑无需新增 mixin 即可验证；独立播放入口的实现取决于 U2 真机验证结果，按停线条件不预设。FrontendLease.play/onRoute 签名待 U2 落地时补充。
+  - 全部 13 组回归退出码 0；客户端 `clean build` 通过。
 - **Priority**: high
 - **Depends On**: Task 9
 - **Description**:

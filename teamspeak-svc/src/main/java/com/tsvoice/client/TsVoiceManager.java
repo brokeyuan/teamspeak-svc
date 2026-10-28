@@ -56,6 +56,8 @@ public final class TsVoiceManager {
             new com.tsvoice.client.connection.VoiceState.SessionToken(0);
     /** 用户手动断开：在换服或再次手动连接前抑制自动激活。 */
     private static volatile boolean userDisabled = false;
+    /** 前端自检失败：关键 SVC hook 缺失，TS 整体禁用（原版 SVC 不受影响）。 */
+    private static volatile boolean frontendUnavailable = false;
     private static volatile String lastError = "";
     private static final AtomicLong voiceCounter = new AtomicLong(0);
     /** 成功发往 TS 的麦克风帧数（诊断用）。 */
@@ -227,6 +229,26 @@ public final class TsVoiceManager {
         return null;
     }
 
+    /**
+     * 前端自检结果（P2）：关键 SVC hook 缺失时 TS 整体禁用并停止现有会话；
+     * 原版 SVC 在未接管时仍可用。恢复只能经重新自检（游戏重启），不做静默半可用。
+     */
+    public static void setFrontendUnavailable(boolean unavailable) {
+        frontendUnavailable = unavailable;
+        if (unavailable) {
+            stopSession();
+            if (activeConfig != null) {
+                state = State.ERROR;
+                lastError = "TS frontend unavailable (SVC hook self-check failed)";
+            }
+        }
+        refreshRouteOwnership();
+    }
+
+    public static boolean isFrontendUnavailable() {
+        return frontendUnavailable;
+    }
+
     /** null 表示继承；空值明确清除。非空密码保留空格，不进行 trim。 */
     private static String configuredPassword(String override, String fallback) {
         String value = override != null ? override : fallback;
@@ -239,7 +261,7 @@ public final class TsVoiceManager {
      */
     private static void refreshRouteOwnership() {
         com.tsvoice.client.audio.MicRouteGate.setOwner(
-                activeConfig != null && !userDisabled
+                activeConfig != null && !userDisabled && !frontendUnavailable
                         ? com.tsvoice.client.audio.MicRouteGate.Owner.TS
                         : com.tsvoice.client.audio.MicRouteGate.Owner.SVC_NATIVE);
     }
@@ -252,6 +274,12 @@ public final class TsVoiceManager {
         if (userDisabled) {
             stopSession();
             state = State.DORMANT;
+            return;
+        }
+        if (frontendUnavailable) {
+            stopSession();
+            state = State.ERROR;
+            lastError = "TS frontend unavailable (SVC hook self-check failed)";
             return;
         }
         if (resolved == null) {
