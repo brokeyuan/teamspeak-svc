@@ -1,6 +1,6 @@
 package com.tsvoice.client.connection;
 
-import com.tsvoice.protocol.CapabilityWire;
+import com.tsvoice.protocol.capability.CapabilityWire;
 
 import java.util.List;
 import java.util.function.LongSupplier;
