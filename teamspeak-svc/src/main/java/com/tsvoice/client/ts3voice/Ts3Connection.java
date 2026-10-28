@@ -66,10 +66,13 @@ public final class Ts3Connection {
     private static final class OutgoingFrame {
         final byte[] data;
         final long enqueuedNanos;
+        /** 出站语音帧绑定的路由代际（R08/T03）；非语音帧忽略。 */
+        final long routeEpoch;
 
-        OutgoingFrame(byte[] data, long enqueuedNanos) {
+        OutgoingFrame(byte[] data, long enqueuedNanos, long routeEpoch) {
             this.data = data;
             this.enqueuedNanos = enqueuedNanos;
+            this.routeEpoch = routeEpoch;
         }
     }
 
@@ -77,6 +80,17 @@ public final class Ts3Connection {
     public long droppedVoiceFrames() {
         return droppedVoiceFramesCounter.get();
     }
+
+    /**
+     * 当前有效语音路由代际（R08/T03）：writer 在最终写出点复核。返回
+     * {@code Long.MIN_VALUE} 表示当前无有效路由（全部语音帧丢弃，fail-closed）。
+     * 由会话层接线到协调器快照，本类不感知会话。
+     */
+    public void setVoiceRouteEpochSupplier(java.util.function.LongSupplier supplier) {
+        this.voiceRouteEpochSupplier = supplier == null ? () -> Long.MIN_VALUE : supplier;
+    }
+
+    private volatile java.util.function.LongSupplier voiceRouteEpochSupplier = () -> Long.MIN_VALUE;
 
     private final int[] packetCounter = new int[Ts3Crypt.PACKET_TYPE_KINDS];
     private final long[] generationCounter = new long[Ts3Crypt.PACKET_TYPE_KINDS];
@@ -212,6 +226,14 @@ public final class Ts3Connection {
      * 发送一个协议载荷（自动处理计数、加密、分片、ack 登记）。
      */
     public void addOutgoingPacket(byte[] data, PacketType type) throws Ts3VoiceException {
+        addOutgoingPacket(data, type, Long.MIN_VALUE);
+    }
+
+    /**
+     * 语音帧携带路由代际入队（R08/T03）：writer 在写出点与当前有效代际复核，
+     * 不匹配即丢弃 —— 频道移动后旧频道帧不再发出。控制命令使用无代际重载。
+     */
+    public void addOutgoingPacket(byte[] data, PacketType type, long routeEpoch) throws Ts3VoiceException {
         synchronized (sendLock) {
             if (closed) {
                 throw new Ts3VoiceException("Connection closed");
@@ -223,11 +245,16 @@ public final class Ts3Connection {
                 }
                 throw new Ts3VoiceException("Packet too big (" + data.length + "), fragmentation not supported");
             }
-            sendOutgoingData(data, type, 0);
+            sendOutgoingData(data, type, 0, routeEpoch);
         }
     }
 
-    private void sendOutgoingData(byte[] data, PacketType type, int extraFlags) throws Ts3VoiceException {
+    /** 请求换频道等许可撤销后清空排队中的旧代际语音帧（已取出帧由 writer 复核覆盖）。 */
+    public void clearQueuedVoice() {
+        voiceQueue.clear();
+    }
+
+    private void sendOutgoingData(byte[] data, PacketType type, int extraFlags, long routeEpoch) throws Ts3VoiceException {
         int id;
         long gen;
         if (type != PacketType.INIT1) {
@@ -265,7 +292,7 @@ public final class Ts3Connection {
         }
 
         crypt.encrypt(packet);
-        sendRaw(packet, type);
+        sendRaw(packet, type, routeEpoch);
     }
 
     private void incPacketCounter(PacketType type) {
@@ -276,11 +303,11 @@ public final class Ts3Connection {
         }
     }
 
-    private void sendRaw(Ts3Packet packet, PacketType type) throws Ts3VoiceException {
+    private void sendRaw(Ts3Packet packet, PacketType type, long routeEpoch) throws Ts3VoiceException {
         // 入队而非直接发送（F09）：写线程负责 transport.send；队列满时语音丢最旧、
         // 控制命令抛错（调用方可见），绝不静默无界积压。
         if (type == PacketType.VOICE) {
-            OutgoingFrame frame = new OutgoingFrame(packet.raw, System.nanoTime());
+            OutgoingFrame frame = new OutgoingFrame(packet.raw, System.nanoTime(), routeEpoch);
             while (!voiceQueue.offer(frame)) {
                 if (voiceQueue.poll() == null) {
                     continue; // 队列瞬间被并发清空：重试 offer
@@ -330,6 +357,12 @@ public final class Ts3Connection {
                     frame = null;
                 }
                 if (frame != null && System.nanoTime() - frame.enqueuedNanos > MAX_VOICE_AGE_NANOS) {
+                    droppedVoiceFramesCounter.incrementAndGet();
+                    frame = null;
+                }
+                // 最终写出点复核（R08/T03）：帧的频道代际必须等于当前有效路由代际；
+                // 频道移动/许可撤销后旧代际帧（含已出队未写出的帧）一律丢弃。
+                if (frame != null && frame.routeEpoch != voiceRouteEpochSupplier.getAsLong()) {
                     droppedVoiceFramesCounter.incrementAndGet();
                     frame = null;
                 }
@@ -521,7 +554,7 @@ public final class Ts3Connection {
                         currentRto = Math.min(currentRto * 2, MAX_RETRY_INTERVAL_MS);
                         try {
                             crypt.encrypt(op.packet);
-                            sendRaw(op.packet, PacketType.COMMAND);
+                            sendRaw(op.packet, PacketType.COMMAND, Long.MIN_VALUE);
                         } catch (Exception e) {
                             Ts3VoiceClient.LOG.debug("[teamspeak-svc] resend failed: {}", e.getMessage());
                         }

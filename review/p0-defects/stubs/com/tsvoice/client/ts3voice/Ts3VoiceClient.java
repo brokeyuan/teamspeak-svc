@@ -27,7 +27,10 @@ public class Ts3VoiceClient {
  public void joinChannel(int cid,String channelPassword){}
  public void setChannelMembershipListener(java.util.function.IntConsumer l){}
  public void publishMcUuid(java.util.UUID id){}
- public void sendVoice(byte[] opus,int codec){
+ public void setVoiceRouteEpochSupplier(java.util.function.LongSupplier supplier){}
+ public void clearQueuedVoice(){}
+ public void sendVoice(byte[] opus,int codec){sendVoice(opus,codec,Long.MIN_VALUE);}
+ public void sendVoice(byte[] opus,int codec,long routeEpoch){
   if(throwOnSend){throw new RuntimeException("send failure");}
   sent++;
  }

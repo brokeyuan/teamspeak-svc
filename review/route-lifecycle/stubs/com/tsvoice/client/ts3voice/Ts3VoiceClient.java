@@ -7,8 +7,11 @@ public class Ts3VoiceClient {
          new java.util.concurrent.ConcurrentLinkedDeque<>();
  public boolean connected;
  public int sent;
+ public int droppedByEpoch;
+ public long lastSendEpoch=Long.MIN_VALUE;
  public boolean throwOnSend;
  public boolean throwOnJoin;
+ public java.util.function.LongSupplier epochSupplier=()->Long.MIN_VALUE;
  public int myChannel=1;
  public int joinCalls; public int lastJoinCid; public String lastJoinPassword;
  public Map<Integer,String> channelNames=new java.util.concurrent.ConcurrentHashMap<>();
@@ -70,6 +73,13 @@ public class Ts3VoiceClient {
  public String getVirtualServerUid(){return "fixture-server";}
  public void publishMcUuid(java.util.UUID id){}
  public void sendVoice(byte[] opus,int codec){
+  sendVoice(opus,codec,Long.MIN_VALUE);
+ }
+ public void setVoiceRouteEpochSupplier(java.util.function.LongSupplier supplier){epochSupplier=supplier;}
+ public void clearQueuedVoice(){}
+ public void sendVoice(byte[] opus,int codec,long routeEpoch){
+  if(routeEpoch!=epochSupplier.getAsLong()){droppedByEpoch++;return;}
+  lastSendEpoch=routeEpoch;
   if(throwOnSend){throw new RuntimeException("send failure");}
   sent++;
  }

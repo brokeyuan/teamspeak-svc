@@ -20,7 +20,10 @@ public class Ts3VoiceClient {
  public String getVirtualServerUid(){return "fixture-server";}
  public void setChannelMembershipListener(java.util.function.IntConsumer l){}
  public void publishMcUuid(java.util.UUID id){}
- public void sendVoice(byte[] opus,int codec){sent++;}
+ public void setVoiceRouteEpochSupplier(java.util.function.LongSupplier supplier){}
+ public void clearQueuedVoice(){}
+ public void sendVoice(byte[] opus,int codec){sendVoice(opus,codec,Long.MIN_VALUE);}
+ public void sendVoice(byte[] opus,int codec,long routeEpoch){sent++;}
  public String getUniqueIdOf(int clid){return "uid";}
  public String getNicknameOf(int clid){return "name";}
  public void sendChannelText(String message){}

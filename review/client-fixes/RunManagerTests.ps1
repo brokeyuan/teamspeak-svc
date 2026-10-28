@@ -72,7 +72,10 @@ public class Ts3VoiceClient {
  public void connect(java.net.InetAddress host,int port,long timeout){}public void disconnect(){}public boolean isConnected(){return true;}
  public int getMyClid(){return 1;}public int getMyChannelId(){return 1;}public com.tsvoice.client.ts3voice.TsChannelSnapshot channelSnapshot(){return new com.tsvoice.client.ts3voice.TsChannelSnapshot(null);}public void joinChannel(int cid,String channelPassword){}public void sendCommand(String cmd)throws Ts3VoiceException{}public void requestChannelList()throws Ts3VoiceException{}public void requestServerInfo()throws Ts3VoiceException{}public String getVirtualServerUid(){return "fixture-server";}
  public void setChannelMembershipListener(java.util.function.IntConsumer l){}public void publishMcUuid(java.util.UUID id){}
- public void sendVoice(byte[] opus,int codec){sent++;}public String getUniqueIdOf(int clid){return "uid";}public String getNicknameOf(int clid){return "name";}public java.util.UUID getMcUuidOf(int clid){return null;}
+ public void setVoiceRouteEpochSupplier(java.util.function.LongSupplier supplier){}
+ public void clearQueuedVoice(){}
+ public void sendVoice(byte[] opus,int codec){sendVoice(opus,codec,Long.MIN_VALUE);}
+ public void sendVoice(byte[] opus,int codec,long routeEpoch){sent++;}public String getUniqueIdOf(int clid){return "uid";}public String getNicknameOf(int clid){return "name";}public java.util.UUID getMcUuidOf(int clid){return null;}
  public void sendChannelText(String message){}
 }
 '@

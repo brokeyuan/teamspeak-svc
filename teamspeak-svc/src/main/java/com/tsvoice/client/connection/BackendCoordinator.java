@@ -115,6 +115,8 @@ public final class BackendCoordinator {
      * 提交当前会话的频道策略与合法目标。LOCKED_TARGET 传锁定频道；
      * LEGACY_GROUP_MAPPING 由 mapper 每次解析后提交目标（null=尚无合法目标）；
      * TS_NATIVE_FOLLOW 忽略目标参数（任何服务器确认的 self 频道都可批准）。
+     * policy=null 时仅更新 LEGACY 模式的目标（如 requestMove 的显式选择）；
+     * 锁定目标只能通过显式的 setChannelTarget(LOCKED_TARGET, cid) 解锁/改靶。
      */
     public static synchronized void setChannelTarget(VoiceState.SessionToken token,
                                                      VoiceState.ChannelPolicy policy,
@@ -125,8 +127,7 @@ public final class BackendCoordinator {
         if (policy != null) {
             channelPolicy = policy;
         }
-        if (policy == VoiceState.ChannelPolicy.LOCKED_TARGET
-                || (policy == null && channelPolicy == VoiceState.ChannelPolicy.LOCKED_TARGET)) {
+        if (policy == VoiceState.ChannelPolicy.LOCKED_TARGET) {
             legalTargetCid = legalTarget;
         } else if (policy == VoiceState.ChannelPolicy.LEGACY_GROUP_MAPPING
                 || (policy == null && channelPolicy == VoiceState.ChannelPolicy.LEGACY_GROUP_MAPPING)) {

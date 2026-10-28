@@ -640,6 +640,13 @@ public final class TsVoiceManager {
         String nickname = "[MC] " + Minecraft.getInstance().getUser().getName();
         Ts3VoiceClient c = new Ts3VoiceClient(identity, nickname, "", cfg.tcp());
         c.setServerPassword(cfg.password());
+        // writer 最终写出点的路由代际来源（R08/T03）：路由未就绪/已失效时全部语音丢弃。
+        c.setVoiceRouteEpochSupplier(() -> {
+            var route = com.tsvoice.client.connection.BackendCoordinator.snapshot().route();
+            return route.transmitReady()
+                    && route.backend().orElse(null) == com.tsvoice.client.connection.VoiceState.BackendKind.TS3
+                    ? route.routeEpoch() : Long.MIN_VALUE;
+        });
         // 回调绑定来源 client 与会话代际（投递/处理双检）：被替换会话的迟到回调
         // 在此整体丢弃，不得查询全局"当前 client"解释自己的 clid/文本。
         c.setTextListener((invokerName, message) -> {
@@ -712,9 +719,9 @@ public final class TsVoiceManager {
      */
     public static boolean sendMic(byte[] opusData) {
         // 发送前复核选择快照：MicRedirector 与本方法之间选择可能已变化。
-        var selected = com.tsvoice.client.connection.BackendCoordinator.snapshot()
-                .selection().selectedBackend().orElse(null);
-        if (selected != com.tsvoice.client.connection.VoiceState.BackendKind.TS3) {
+        var snap = com.tsvoice.client.connection.BackendCoordinator.snapshot();
+        if (snap.selection().selectedBackend().orElse(null)
+                != com.tsvoice.client.connection.VoiceState.BackendKind.TS3) {
             return false;
         }
         Ts3VoiceClient c = client;
@@ -725,8 +732,13 @@ public final class TsVoiceManager {
             // 仍接管麦克风，防止回落 SVC/旧 TS 频道泄露频道切换中的语音。
             return true;
         }
+        // 出站帧绑定同一快照的路由代际（R08/T03）：writer 在最终写出点复核。
+        var route = snap.route();
+        long routeEpoch = route.transmitReady()
+                && route.backend().orElse(null) == com.tsvoice.client.connection.VoiceState.BackendKind.TS3
+                ? route.routeEpoch() : Long.MIN_VALUE;
         try {
-            c.sendVoice(opusData, Ts3VoiceClient.CODEC_OPUS_VOICE);
+            c.sendVoice(opusData, Ts3VoiceClient.CODEC_OPUS_VOICE, routeEpoch);
             sentVoiceFrames.incrementAndGet();
             return true;
         } catch (Exception e) {

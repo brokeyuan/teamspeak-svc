@@ -86,8 +86,11 @@ public class Ts3VoiceClient {
          new java.util.concurrent.ConcurrentLinkedDeque<>();
  public boolean connected;
  public int sent;
+ public int droppedByEpoch;
+ public long lastSendEpoch=Long.MIN_VALUE;
  public boolean throwOnSend;
  public boolean throwOnJoin;
+ public java.util.function.LongSupplier epochSupplier=()->Long.MIN_VALUE;
  public int myChannel=1;
  public int joinCalls; public int lastJoinCid; public String lastJoinPassword;
  public Map<Integer,String> channelNames=new java.util.concurrent.ConcurrentHashMap<>();
@@ -149,6 +152,13 @@ public class Ts3VoiceClient {
  public String getVirtualServerUid(){return "fixture-server";}
  public void publishMcUuid(java.util.UUID id){}
  public void sendVoice(byte[] opus,int codec){
+  sendVoice(opus,codec,Long.MIN_VALUE);
+ }
+ public void setVoiceRouteEpochSupplier(java.util.function.LongSupplier supplier){epochSupplier=supplier;}
+ public void clearQueuedVoice(){}
+ public void sendVoice(byte[] opus,int codec,long routeEpoch){
+  if(routeEpoch!=epochSupplier.getAsLong()){droppedByEpoch++;return;}
+  lastSendEpoch=routeEpoch;
   if(throwOnSend){throw new RuntimeException("send failure");}
   sent++;
  }
@@ -183,10 +193,27 @@ $prod = @("$client/TsVoiceManager.java", "$client/MicRedirector.java", "$client/
     "$client/ModConfig.java", "$client/ServerConfigStore.java", "$client/ConfigFileUtil.java") |
     Where-Object { Test-Path $_ }
 & javac -encoding UTF-8 -cp 'review/lib/*' -d "$base/classes" @prod @sources `
-    "$base/RouteLifecycleTest.java" "$base/BookmarkRouteTest.java"
+    "$base/RouteLifecycleTest.java" "$base/BookmarkRouteTest.java" "$base/QueuedVoiceRouteTest.java"
 if ($LASTEXITCODE -ne 0) { throw 'Route lifecycle regression compilation failed' }
 & java -cp "$base/classes;review/lib/*" com.tsvoice.client.RouteLifecycleTest
 if ($LASTEXITCODE -ne 0) { throw 'Route lifecycle regression failed' }
 & java -cp "$base/classes;review/lib/*" com.tsvoice.client.BookmarkRouteTest
 if ($LASTEXITCODE -ne 0) { throw 'Bookmark route regression failed' }
+& java -cp "$base/classes;review/lib/*" com.tsvoice.client.QueuedVoiceRouteTest
+if ($LASTEXITCODE -ne 0) { throw 'Queued voice route regression failed' }
+# Connection-level linearization: REAL Ts3Connection/Ts3Crypt/Ts3Packet/TsTransport
+# against a controllable blocking transport; ts3voice-core protocol sources via
+# -sourcepath, client callback surface stubbed (connection layer only).
+$connClasses = "$base/conn-classes"
+New-Item -ItemType Directory -Path $connClasses -Force | Out-Null
+& javac -encoding UTF-8 -cp 'review/lib/*' -sourcepath 'ts3voice-core/src/main/java' -d $connClasses `
+    "$client/ts3voice/Ts3Connection.java" "$client/ts3voice/Ts3Crypt.java" "$client/ts3voice/Ts3Packet.java" `
+    "$client/ts3voice/TsTransport.java" "$client/ts3voice/TcpTransport.java" "$client/ts3voice/Ts3Identity.java" `
+    "$client/ts3voice/Ed25519Math.java" "$client/ts3voice/PacketType.java" `
+    "$client/ts3voice/Ts3VoiceException.java" "$client/ConfigFileUtil.java" `
+    "$base/conn-stubs/com/tsvoice/client/ts3voice/Ts3VoiceClient.java" `
+    "$base/ConnectionLinearizationTest.java"
+if ($LASTEXITCODE -ne 0) { throw 'Connection linearization compilation failed' }
+& java -cp "$connClasses;review/lib/*" com.tsvoice.client.ConnectionLinearizationTest
+if ($LASTEXITCODE -ne 0) { throw 'Connection linearization regression failed' }
 exit $LASTEXITCODE

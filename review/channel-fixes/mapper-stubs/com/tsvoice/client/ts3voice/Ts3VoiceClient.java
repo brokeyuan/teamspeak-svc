@@ -10,5 +10,7 @@ public final class Ts3VoiceClient {
  public void requestChannelList(){} public void findChannel(String n){}
  public void createChannel(String n,int p,String pass){creates++;lastPassword=pass;lastCreated=n;}
  public void joinChannel(int id,String pass){moves++;lastPassword=pass;}
+ public void setVoiceRouteEpochSupplier(java.util.function.LongSupplier supplier){}
+ public void clearQueuedVoice(){}
  public String getVirtualServerUid(){return "mapper-fixture";}
 }

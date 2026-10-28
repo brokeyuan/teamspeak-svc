@@ -105,10 +105,16 @@ public final class TsChannelRoute {
                 }
             }
         }
+        Integer previousChannel = BackendCoordinator.route().channelId();
         confirmed = BackendCoordinator.confirmChannel(current,
                 client.getVirtualServerUid(), cid);
         synchronized (LOCK) {
             if (confirmed) {
+                // 服务器主动移动的本地隔离边界（R08/T03）：确认频道变化即失效旧
+                // 代际（confirmChannel 递增 routeEpoch）并清排队旧帧。
+                if (!java.util.Objects.equals(previousChannel, cid)) {
+                    client.clearQueuedVoice();
+                }
                 pauseReason = "";
             }
         }
@@ -138,6 +144,11 @@ public final class TsChannelRoute {
             pendingDeadlineMs = System.currentTimeMillis() + PENDING_TIMEOUT_MS;
             pauseReason = "moving to channel " + targetCid;
         }
+        // 用户/mapper 的显式选择即该策略下的新合法目标（LOCKED 仍须先解锁，
+        // setChannelTarget 对 LOCKED 策略的 null-policy 调用不生效于此处语义之外）。
+        BackendCoordinator.setChannelTarget(current, null, targetCid);
+        // 先撤销许可并清旧代际排队帧，再按 writer 顺序提交移动控制命令（R08/T03）。
+        client.clearQueuedVoice();
         try {
             client.joinChannel(targetCid, channelPassword);
             return true;

@@ -317,6 +317,14 @@ public final class Ts3VoiceClient {
     }
 
     public void sendVoice(byte[] opusData, int codec) throws Ts3VoiceException {
+        sendVoice(opusData, codec, Long.MIN_VALUE);
+    }
+
+    /**
+     * 发送一帧 Opus 语音并绑定路由代际（R08/T03）。无有效代际
+     * （{@code Long.MIN_VALUE}）的帧在 writer 最终写出点被丢弃 —— fail-closed。
+     */
+    public void sendVoice(byte[] opusData, int codec, long routeEpoch) throws Ts3VoiceException {
         if (!connected.get() || connection.isClosed()) {
             return;
         }
@@ -324,7 +332,17 @@ public final class Ts3VoiceClient {
         payload[2] = (byte) codec;
         System.arraycopy(opusData, 0, payload, 3, opusData.length);
         // data[0..2) 的 packetId 由连接层覆写
-        connection.addOutgoingPacket(payload, PacketType.VOICE);
+        connection.addOutgoingPacket(payload, PacketType.VOICE, routeEpoch);
+    }
+
+    /** writer 的当前有效路由代际来源（会话层接线协调器快照）。 */
+    public void setVoiceRouteEpochSupplier(java.util.function.LongSupplier supplier) {
+        connection.setVoiceRouteEpochSupplier(supplier);
+    }
+
+    /** 撤销许可后清空排队中的旧代际语音帧（writer 侧代际复核覆盖已取出帧）。 */
+    public void clearQueuedVoice() {
+        connection.clearQueuedVoice();
     }
 
     /** 断开连接（发送 clientdisconnect）。 */
