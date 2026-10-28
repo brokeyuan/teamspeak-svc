@@ -10,6 +10,11 @@ public final class Ts3VoiceClient {
  public void requestChannelList(){} public void findChannel(String n){}
  public void createChannel(String n,int p,String pass){creates++;lastPassword=pass;lastCreated=n;}
  public void joinChannel(int id,String pass){moves++;lastPassword=pass;}
+ public record MoveResult(boolean succeeded,Integer errorCode,String errorMessage){}
+ public java.util.concurrent.CompletableFuture<MoveResult> moveChannelAsync(int id,String pass,long timeoutMillis){
+  moves++;lastPassword=pass;
+  return java.util.concurrent.CompletableFuture.completedFuture(new MoveResult(true,null,null));
+ }
  public void setVoiceRouteEpochSupplier(java.util.function.LongSupplier supplier){}
  public void clearQueuedVoice(){}
  public String getVirtualServerUid(){return "mapper-fixture";}
