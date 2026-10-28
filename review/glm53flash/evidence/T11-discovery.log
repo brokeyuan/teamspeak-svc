@@ -1,0 +1,44 @@
+PASS AUTO without a recommendation goes straight to SVC
+PASS AUTO with a recommendation and an authorized tunnel: UDP then tunnel
+PASS AUTO with a recommendation but no tunnel: UDP only
+PASS PINNED_TS never lists SVC as a fallback
+PASS UDP_ONLY forbids the tunnel step even when authorized
+PASS TCP_ONLY uses only the tunnel step
+PASS TCP_ONLY without an authorized tunnel has no candidates (no silent UDP downgrade)
+PASS explicit OFF never connects
+PASS NETWORK_TIMEOUT on UDP may advance to the authorized tunnel
+PASS auth failure never switches transport (no bypass)
+PASS permission failure never switches transport
+PASS channel-password failure never switches transport
+PASS ban never switches transport
+PASS protocol mismatch never switches transport
+PASS tunnel failure never falls back to UDP (no ping-pong)
+PASS no next step means stop
+PASS backoff stays within base ¡À20% for every attempt
+Fallback policy regression: all checks passed
+PASS begin() issues the request nonce
+PASS window expires without any announcement (no-announcement context terminates)
+PASS announcement from an older context is dropped
+PASS announcement with a wrong nonce is dropped
+PASS announcement for the current context and nonce is accepted
+PASS received announcements are not authorized until the player accepts
+PASS authorization of an arbitrary (never received) list is refused
+PASS authorization of the received snapshot succeeds
+PASS authorized TS endpoint detected, no tunnel
+PASS authorization for a stale context is refused
+PASS context change clears authorized candidates
+PASS re-announcement in the new context accepted
+PASS re-authorization in the new context succeeds
+PASS tunnel announcement accepted
+PASS tunnel authorization accepted
+PASS authorized tunnel detected
+PASS authorized recommendation+tunnel yields the two-step TS decision
+PASS window not expired before 1.5s
+PASS window expires after 1.5s on the injected clock
+PASS short-TTL announcement accepted
+PASS short-TTL authorization accepted while live
+PASS short-TTL candidate is live before expiry
+PASS expired announcement is removed from the snapshot (TTL enforced)
+PASS TTL=0 announcement produces no connectable candidates
+PASS authorization of expired candidates is refused
+Discovery flow regression: all checks passed
