@@ -39,14 +39,14 @@
 
 - 历史失败组：`review/session-consumption/`、`review/upload-confirmation/`（delivery-audit 2026-10-29 §4）。
 - 故障特征：`AvatarPipeline` 静态初始化 JDK `HttpClient` 后回环请求报 `UnixDomainSockets.connect / Invalid argument`。
-- 本轮判定：[`HttpClientSmoke.java`](HttpClientSmoke.java)（无项目依赖，复刻 AvatarPipeline 的 HttpClient 构建 + 回环请求）在本机 **通过**（exit 0，见 [logs/n0-httpclientsmoke.log](logs/n0-httpclientsmoke.log)）。
-- 复测结果：两组套件在本机直接重跑 **均通过**（exit 0，见 [logs/n0-retest-session-consumption.log](logs/n0-retest-session-consumption.log)、[logs/n0-retest-upload-confirmation.log](logs/n0-retest-upload-confirmation.log)）。
+- 本轮判定：[`HttpClientSmoke.java`](HttpClientSmoke.java)（无项目依赖，复刻 AvatarPipeline 的 HttpClient 构建 + 回环请求）在本机 **通过**（exit 0，见 [evidence/n0-httpclientsmoke.log](evidence/n0-httpclientsmoke.log)）。
+- 复测结果：两组套件在本机直接重跑 **均通过**（exit 0，见 [evidence/n0-retest-session-consumption.log](evidence/n0-retest-session-consumption.log)、[evidence/n0-retest-upload-confirmation.log](evidence/n0-retest-upload-confirmation.log)）。
 - 结论：上一轮失败为本机 JDK HttpClient 初始化环境故障，非产品缺陷；该环境故障在本轮会话已不复现。产品结论以正常环境下套件真实通过为准。
 
 ## 统一测试入口（本轮修订）
 
 - `review/RunAll.ps1` v2：ts3voice-core `clean test` **先行**（5 组 harness 链接 `ts3voice-core/build/classes/java/main`，干净检出必须先编译 core），随后 21 组 harness（原 20 组 + upload-confirmation）；每组独立日志于 `$env:TEMP\tsvoice-ci-logs\`，失败输出尾部摘录，任一失败进程退出码非零；脚本不向工作区写入任何文件。
-- 干净副本验证：`git archive HEAD` 至临时目录 + 拷入新 RunAll 后运行，日志 [logs/n0-clean-copy-runall.log](logs/n0-clean-copy-runall.log)。结果：**PASS（core 先行 + 21 组 harness 全绿，进程退出码 0）**，确认干净检出可一键运行、不依赖旧 build 产物。
+- 干净副本验证：`git archive HEAD` 至临时目录 + 拷入新 RunAll 后运行，日志 [evidence/n0-clean-copy-runall.log](evidence/n0-clean-copy-runall.log)。结果：**PASS（core 先行 + 21 组 harness 全绿，进程退出码 0）**，确认干净检出可一键运行、不依赖旧 build 产物。
 
 ## 客户端验收
 

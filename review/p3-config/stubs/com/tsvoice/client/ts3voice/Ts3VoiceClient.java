@@ -14,6 +14,10 @@ public class Ts3VoiceClient {
  public int getMyChannelId(){return 1;}
  public com.tsvoice.client.ts3voice.TsChannelSnapshot channelSnapshot(){return new com.tsvoice.client.ts3voice.TsChannelSnapshot(null);}
  public void joinChannel(int cid,String channelPassword){}
+ public record MoveResult(boolean succeeded,Integer errorCode,String errorMessage){}
+ public java.util.concurrent.CompletableFuture<MoveResult> moveChannelAsync(int cid,String channelPassword,long timeoutMillis){
+  return java.util.concurrent.CompletableFuture.completedFuture(new MoveResult(true,null,null));
+ }
  public void sendCommand(String cmd) throws Ts3VoiceException{}
  public void requestChannelList() throws Ts3VoiceException{}
  public void requestServerInfo() throws Ts3VoiceException{}

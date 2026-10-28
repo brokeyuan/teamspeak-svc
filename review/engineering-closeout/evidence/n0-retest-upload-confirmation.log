@@ -1,0 +1,26 @@
+PASS L1: two commands registered
+PASS L1: in-flight return codes are never reused
+PASS L2: unassociated error completes nobody
+PASS L3: rejection routes to its own request with the server error
+PASS L3: success (error id=0) completes the matching future
+PASS L4: timeout completes exceptionally
+PASS L4: registration released after timeout
+PASS L4: late reply after timeout does not resurrect the future
+PASS L4: late reply does not re-register anything
+PASS L5: cancelSession completes in-flight futures
+PASS L5: cancellation is the completion cause
+PASS L5: registry empty after cancel
+PASS L6: send failure releases the registration
+Command lifecycle regression: all checks passed
+PASS U1: CONFIRMED must be gone from the result type
+PASS U1: result states distinguish transport/verified/failed/unknown (AVATAR_APPLIED is an application-layer outcome, not a transfer state)
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS U2: concurrent uploads use distinct clientftfids
+PASS U2: clean EOF is TRANSPORT_FINISHED for both uploads (never a storage confirmation)
+PASS U3: a reply attributed to the wrong client does not complete the upload
+PASS U3: session close cancels the in-flight upload (no hang, no fake success)
+PASS U4: rejected client_flag_avatar never writes a marker
+PASS U4: confirmed client_flag_avatar writes the marker (AVATAR_APPLIED semantics)
+Upload confirmation regression: all checks passed

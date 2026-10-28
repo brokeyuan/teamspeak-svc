@@ -61,6 +61,19 @@ public class Ts3VoiceClient {
   if(throwOnJoin){throw new RuntimeException("server rejected move");}
   joinCalls++;lastJoinCid=cid;lastJoinPassword=channelPassword;
  }
+ // N1/D05: moveChannelAsync mirrors the production surface. The returned future is
+ // left UNCOMPLETED so tests decide the server's answer (success / error id / timeout);
+ // flows that never complete it still confirm through the self-channel path.
+ public record MoveResult(boolean succeeded,Integer errorCode,String errorMessage){}
+ public static MoveResult moveOk(){return new MoveResult(true,null,null);}
+ public static MoveResult moveError(int id,String msg){return new MoveResult(false,id,msg);}
+ public java.util.concurrent.CompletableFuture<MoveResult> lastMoveFuture;
+ public java.util.concurrent.CompletableFuture<MoveResult> moveChannelAsync(int cid,String channelPassword,long timeoutMillis) throws Ts3VoiceException{
+  if(throwOnJoin){throw new RuntimeException("server rejected move");}
+  joinCalls++;lastJoinCid=cid;lastJoinPassword=channelPassword;
+  lastMoveFuture=new java.util.concurrent.CompletableFuture<>();
+  return lastMoveFuture;
+ }
  public void createChannel(String name,int parent,String password){}
  public void findChannel(String name){}
  public void simulateSelfMove(int cid){

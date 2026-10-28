@@ -1,0 +1,3 @@
+STEP1 HttpClient.newBuilder().build() OK
+STEP2 loopback request OK: HTTP 200
+RESULT: JDK HttpClient functional on this host

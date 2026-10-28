@@ -140,6 +140,19 @@ public class Ts3VoiceClient {
   if(throwOnJoin){throw new RuntimeException("server rejected move");}
   joinCalls++;lastJoinCid=cid;lastJoinPassword=channelPassword;
  }
+ // N1/D05: moveChannelAsync mirrors the production surface. The returned future is
+ // left UNCOMPLETED so tests decide the server's answer (success / error id / timeout);
+ // flows that never complete it still confirm through the self-channel path.
+ public record MoveResult(boolean succeeded,Integer errorCode,String errorMessage){}
+ public static MoveResult moveOk(){return new MoveResult(true,null,null);}
+ public static MoveResult moveError(int id,String msg){return new MoveResult(false,id,msg);}
+ public java.util.concurrent.CompletableFuture<MoveResult> lastMoveFuture;
+ public java.util.concurrent.CompletableFuture<MoveResult> moveChannelAsync(int cid,String channelPassword,long timeoutMillis) throws Ts3VoiceException{
+  if(throwOnJoin){throw new RuntimeException("server rejected move");}
+  joinCalls++;lastJoinCid=cid;lastJoinPassword=channelPassword;
+  lastMoveFuture=new java.util.concurrent.CompletableFuture<>();
+  return lastMoveFuture;
+ }
  public void createChannel(String name,int parent,String password){}
  public void findChannel(String name){}
  public void simulateSelfMove(int cid){
@@ -197,7 +210,8 @@ $prod = @("$client/TsVoiceManager.java", "$client/MicRedirector.java", "$client/
 $svcClientStubs = Get-ChildItem -LiteralPath "$base/stubs/de" -Recurse -Filter '*.java' |
     Select-Object -ExpandProperty FullName
 & javac -encoding UTF-8 -cp 'review/lib/*' -d "$base/classes" @prod @sources $svcClientStubs `
-    "$base/RouteLifecycleTest.java" "$base/BookmarkRouteTest.java" "$base/QueuedVoiceRouteTest.java"
+    "$base/RouteLifecycleTest.java" "$base/BookmarkRouteTest.java" "$base/QueuedVoiceRouteTest.java" `
+    "$base/RouteMoveLifecycleTest.java"
 if ($LASTEXITCODE -ne 0) { throw 'Route lifecycle regression compilation failed' }
 & java -cp "$base/classes;review/lib/*" com.tsvoice.client.RouteLifecycleTest
 if ($LASTEXITCODE -ne 0) { throw 'Route lifecycle regression failed' }
@@ -205,9 +219,13 @@ if ($LASTEXITCODE -ne 0) { throw 'Route lifecycle regression failed' }
 if ($LASTEXITCODE -ne 0) { throw 'Bookmark route regression failed' }
 & java -cp "$base/classes;review/lib/*" com.tsvoice.client.QueuedVoiceRouteTest
 if ($LASTEXITCODE -ne 0) { throw 'Queued voice route regression failed' }
+& java -cp "$base/classes;review/lib/*" com.tsvoice.client.connection.RouteMoveLifecycleTest
+if ($LASTEXITCODE -ne 0) { throw 'Route move lifecycle regression failed' }
 # Connection-level linearization: REAL Ts3Connection/Ts3Crypt/Ts3Packet/TsTransport
 # against a controllable blocking transport; ts3voice-core protocol sources via
 # -sourcepath, client callback surface stubbed (connection layer only).
+# N1: the connection compile also carries the production route coordinator so the
+# epoch-revocation regression consumes real BackendCoordinator route state.
 $connClasses = "$base/conn-classes"
 New-Item -ItemType Directory -Path $connClasses -Force | Out-Null
 & javac -encoding UTF-8 -cp 'review/lib/*' -sourcepath 'ts3voice-core/src/main/java' -d $connClasses `
@@ -215,9 +233,12 @@ New-Item -ItemType Directory -Path $connClasses -Force | Out-Null
     "$client/ts3voice/TsTransport.java" "$client/ts3voice/TcpTransport.java" "$client/ts3voice/Ts3Identity.java" `
     "$client/ts3voice/Ed25519Math.java" "$client/ts3voice/PacketType.java" `
     "$client/ts3voice/Ts3VoiceException.java" "$client/ConfigFileUtil.java" `
+    "$client/connection/VoiceState.java" "$client/connection/SelectionPolicy.java" "$client/connection/BackendCoordinator.java" `
     "$base/conn-stubs/com/tsvoice/client/ts3voice/Ts3VoiceClient.java" `
-    "$base/ConnectionLinearizationTest.java"
+    "$base/ConnectionLinearizationTest.java" "$base/RouteEpochRevocationTest.java"
 if ($LASTEXITCODE -ne 0) { throw 'Connection linearization compilation failed' }
 & java -cp "$connClasses;review/lib/*" com.tsvoice.client.ConnectionLinearizationTest
 if ($LASTEXITCODE -ne 0) { throw 'Connection linearization regression failed' }
+& java -cp "$connClasses;review/lib/*" com.tsvoice.client.RouteEpochRevocationTest
+if ($LASTEXITCODE -ne 0) { throw 'Route epoch revocation regression failed' }
 exit $LASTEXITCODE

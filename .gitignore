@@ -12,7 +12,7 @@ logs/
 # Execution evidence from the glm53flash round is delivery material
 !review/glm53flash/evidence/*.log
 # Execution evidence from the engineering-closeout round is delivery material
-!review/engineering-closeout/logs/*.log
+!review/engineering-closeout/evidence/*.log
 
 # Native/native caches unpacked at runtime
 config/teamspeak-svc/native/

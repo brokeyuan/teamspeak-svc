@@ -104,6 +104,10 @@ public class Ts3VoiceClient {
  public void requestServerInfo() throws Ts3VoiceException{}
  public String getVirtualServerUid(){return "fixture-server";}
  public void joinChannel(int cid,String channelPassword){}
+ public record MoveResult(boolean succeeded,Integer errorCode,String errorMessage){}
+ public java.util.concurrent.CompletableFuture<MoveResult> moveChannelAsync(int cid,String channelPassword,long timeoutMillis){
+  return java.util.concurrent.CompletableFuture.completedFuture(new MoveResult(true,null,null));
+ }
  public void setChannelMembershipListener(java.util.function.IntConsumer l){}
  public void publishMcUuid(java.util.UUID id){}
  public void setVoiceRouteEpochSupplier(java.util.function.LongSupplier supplier){}

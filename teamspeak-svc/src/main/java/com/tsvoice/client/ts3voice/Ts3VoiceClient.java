@@ -299,11 +299,47 @@ public final class Ts3VoiceClient {
         if (myClid < 0) {
             throw new Ts3VoiceException("not connected (no clid)");
         }
+        connection.addOutgoingPacket(buildMoveCommand(cid, channelPassword)
+                .getBytes(StandardCharsets.UTF_8), PacketType.COMMAND);
+    }
+
+    /** clientmove 命令行（含可选频道密码转义）。 */
+    private String buildMoveCommand(int cid, String channelPassword) {
         String cmd = "clientmove clid=" + myClid + " cid=" + cid;
         if (channelPassword != null && !channelPassword.isBlank()) {
             cmd += " cpw=" + escape(channelPassword);
         }
-        connection.addOutgoingPacket(cmd.getBytes(StandardCharsets.UTF_8), PacketType.COMMAND);
+        return cmd;
+    }
+
+    /**
+     * 单条移动命令的最终结果（N1/D05）：成功应答只代表服务器接受了命令，
+     * 不代表 self 频道已确认 —— 发送许可只能由频道确认流程发布。
+     */
+    public record MoveResult(boolean succeeded, Integer errorCode, String errorMessage) {
+    }
+
+    /**
+     * 发起 clientmove 并经命令 tracker 关联结果（N1/D05）：返回的 Future 在服务器
+     * 应答（成功/错误）、命令超时或会话取消时完成；异常保持原始类型（TimeoutException
+     * / CancellationException / 发送失败）。结果按 return_code 绑定本次请求，
+     * 旧请求的迟到回复不会路由到新请求。
+     */
+    public java.util.concurrent.CompletableFuture<MoveResult> moveChannelAsync(
+            int cid, String channelPassword, long timeoutMillis) throws Ts3VoiceException {
+        if (myClid < 0) {
+            throw new Ts3VoiceException("not connected (no clid)");
+        }
+        String cmd = buildMoveCommand(cid, channelPassword);
+        java.util.concurrent.CompletableFuture<MoveResult> out = new java.util.concurrent.CompletableFuture<>();
+        commandTracker.executeAsync(cmd, timeoutMillis).whenComplete((result, error) -> {
+            if (error != null) {
+                out.completeExceptionally(error);
+            } else {
+                out.complete(new MoveResult(result.succeeded(), result.errorCode(), result.errorMessage()));
+            }
+        });
+        return out;
     }
 
     /** 更新本客户端昵称（clientupdate，存在感同步用）。 */

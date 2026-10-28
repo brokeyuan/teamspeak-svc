@@ -21,6 +21,12 @@ public final class BackendCoordinator {
     private static final AtomicLong SELECTION_EPOCH = new AtomicLong(0);
     private static final AtomicLong SESSION_EPOCH = new AtomicLong(0);
     private static final AtomicLong CONTEXT_EPOCH = new AtomicLong(0);
+    /**
+     * 路由写出代际（N1/D04）：全局单调、跨会话不复位。语音帧在入队时绑定该值，
+     * writer 最终写出点复核 —— 旧会话排队的帧即使与新会话的局部计数重合也
+     * 无法匹配，杜绝"旧连接借新会话 epoch 复活"的窗口。
+     */
+    private static final AtomicLong ROUTE_EPOCH = new AtomicLong(1);
 
     /** MC 连接上下文代际（T04）：换服/离开世界递增，旧 MC 关联任务据此失效。 */
     private static volatile long contextEpoch = 0;
@@ -98,7 +104,7 @@ public final class BackendCoordinator {
     /** 新会话开始：token 递增，此前签发的全部 token 失效；路由与频道确认重置。 */
     public static synchronized VoiceState.SessionToken beginSession() {
         current = new VoiceState.SessionToken(SESSION_EPOCH.incrementAndGet());
-        route = new VoiceState.RouteSnapshot(current, selection.selectionEpoch(), 0,
+        route = new VoiceState.RouteSnapshot(current, selection.selectionEpoch(), nextRouteEpoch(),
                 Optional.empty(), null, null, false);
         channelPolicy = VoiceState.ChannelPolicy.LEGACY_GROUP_MAPPING;
         legalTargetCid = null;
@@ -110,7 +116,7 @@ public final class BackendCoordinator {
     public static synchronized void endSession(VoiceState.SessionToken token) {
         if (isCurrent(token)) {
             route = new VoiceState.RouteSnapshot(current, selection.selectionEpoch(),
-                    route.routeEpoch(), Optional.empty(), null, null, false);
+                    nextRouteEpoch(), Optional.empty(), null, null, false);
             current = new VoiceState.SessionToken(0);
         }
     }
@@ -143,6 +149,10 @@ public final class BackendCoordinator {
      * 频道确认：按当前 ChannelPolicy 检查观察到的 self 频道是否可批准，
      * 不把每条通知直接变成发送许可。批准后发布 ready 路由（authority=serverUid，
      * channelId=确认频道）；确认频道变化时递增 routeEpoch（T03 队列隔离依据）。
+     *
+     * <p>N1/D04：观察到当前策略不允许的频道时，若此前的发送许可仍然有效，
+     * 必须原子撤销许可、递增写出代际并清频道信息 —— 旧频道排队的帧在 writer
+     * 最终写出点因代际不符被丢弃（含已出队未写出的帧）。重复对账不再重复递增。</p>
      */
     public static synchronized boolean confirmChannel(VoiceState.SessionToken token,
                                                       String serverUid, int cid) {
@@ -155,6 +165,11 @@ public final class BackendCoordinator {
                     legalTargetCid != null && legalTargetCid == cid;
         };
         if (!allowed) {
+            if (route.transmitReady() || confirmedChannelId != null) {
+                route = new VoiceState.RouteSnapshot(token, selection.selectionEpoch(),
+                        nextRouteEpoch(), route.backend(), null, null, false);
+                confirmedChannelId = null;
+            }
             return false;
         }
         long nextEpoch = route.routeEpoch()
@@ -163,6 +178,11 @@ public final class BackendCoordinator {
                 Optional.of(VoiceState.BackendKind.TS3), serverUid, cid, true);
         confirmedChannelId = cid;
         return true;
+    }
+
+    /** 全局单调的新写出代际（N1/D04：跨会话不复位，旧帧无法借新会话复活）。 */
+    private static long nextRouteEpoch() {
+        return ROUTE_EPOCH.incrementAndGet();
     }
 
     /** 发布当前会话的路由状态；未就绪发布同时清除频道目标信息（旧 token 被拒绝）。 */
@@ -192,7 +212,7 @@ public final class BackendCoordinator {
             return false;
         }
         route = new VoiceState.RouteSnapshot(token, selection.selectionEpoch(),
-                route.routeEpoch() + 1, route.backend(), null, null, false);
+                nextRouteEpoch(), route.backend(), null, null, false);
         confirmedChannelId = null;
         return true;
     }
