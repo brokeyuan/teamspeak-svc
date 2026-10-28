@@ -35,3 +35,8 @@ testserver/
 /voicechat-discord-main/
 /tsbridge-standby/
 /review/build-fixes/
+
+# Volatile harness state (regenerated on every run)
+review/*/config/
+review/*/issuing-config/
+review/p0-defects/classes-dbg/
