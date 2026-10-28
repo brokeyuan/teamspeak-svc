@@ -71,6 +71,18 @@ public class Ts3VoiceClient {
  public void requestServerInfo() throws Ts3VoiceException{}
  public String getVirtualServerUid(){return virtualServerUid;}
  public String getClientUid(){return "uid";}
+ public static java.util.Map<String,String> parseParams(String row){
+  java.util.Map<String,String> out=new java.util.HashMap<>();
+  if(row==null){return out;}
+  for(String token:row.trim().split("\s+")){
+   int eq=token.indexOf('=');
+   if(eq>0){out.put(token.substring(0,eq),token.substring(eq+1));}
+  }
+  return out;
+ }
+ public final com.tsvoice.client.ts3voice.TsCommandTracker commandTrackerField=
+     new com.tsvoice.client.ts3voice.TsCommandTracker(this);
+ public com.tsvoice.client.ts3voice.TsCommandTracker commandTracker(){return commandTrackerField;}
  public void publishMcUuid(java.util.UUID id){}
  public void setVoiceRouteEpochSupplier(java.util.function.LongSupplier supplier){epochSupplier=supplier;}
  public void clearQueuedVoice(){}

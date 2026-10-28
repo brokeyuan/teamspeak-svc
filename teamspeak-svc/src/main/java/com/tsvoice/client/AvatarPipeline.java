@@ -99,26 +99,15 @@ public final class AvatarPipeline {
                 String name = "avatar_tsvoice_" + Long.toHexString(mcUuid.getLeastSignificantBits() & 0xFFFFFFFFL)
                         + ".png";
                 Ts3FileTransfer.Result result = Ts3FileTransfer.upload(client, fileTransferHost, name, face);
-                if (result == Ts3FileTransfer.Result.CONFIRMED) {
-                    // F10：client_flag_avatar 命令也要确认成功后才写 marker —— 上传与
-                    // 生效是两个独立确认。命令失败（权限/错误）时下次重试上传。
+                if (result == Ts3FileTransfer.Result.TRANSPORT_FINISHED) {
+                    // T05/R06：运输结束 ≠ 生效。client_flag_avatar 必须经命令关联器
+                    // 取得成功结果（return_code 关联）后才写 marker；无关联结果/
+                    // 拒绝/取消/超时一律不写，下次重试上传。全链路异步，不阻塞线程。
                     if (!sessionCurrent(ctx)) {
                         ABORTED_TASKS.incrementAndGet(); // 原子提交前再次校验会话（不写 marker）
                         return;
                     }
-                    try {
-                        client.sendCommand("clientupdate client_flag_avatar=" + name);
-                    } catch (Exception cmdError) {
-                        TeamspeakSvcClient.LOGGER.warn("[teamspeak-svc] client_flag_avatar failed: {} — marker not written",
-                                cmdError.getMessage());
-                        return;
-                    }
-                    if (!sessionCurrent(ctx)) {
-                        ABORTED_TASKS.incrementAndGet(); // marker 写入前的最终校验
-                        return;
-                    }
-                    writeMarker(marker, name);
-                    TeamspeakSvcClient.LOGGER.info("[teamspeak-svc] TS avatar uploaded ({}, {} bytes)", name, face.length);
+                    confirmAvatarApplication(ctx, marker, name, face, client);
                 } else {
                     TeamspeakSvcClient.LOGGER.info("[teamspeak-svc] TS avatar upload not confirmed: {} ({})",
                             result, name);
@@ -129,6 +118,38 @@ public final class AvatarPipeline {
         }, "teamspeak-svc-avatar");
         t.setDaemon(true);
         t.start();
+    }
+
+    /**
+     * T05/R06：头像生效确认 —— client_flag_avatar 必须经命令关联器取得成功结果
+     * 后才原子写 marker；marker 写入前再次校验会话。全链路异步，不阻塞任何线程。
+     */
+    static void confirmAvatarApplication(
+            com.tsvoice.client.connection.VoiceState.CallbackContext ctx,
+            java.nio.file.Path marker, String name, byte[] face, Ts3VoiceClient client) {
+        client.commandTracker().executeAsync("clientupdate client_flag_avatar=" + name, 10_000L)
+                .whenComplete((cmdResult, cmdError) -> {
+                    if (cmdError != null || cmdResult == null || !cmdResult.succeeded()) {
+                        TeamspeakSvcClient.LOGGER.warn(
+                                "[teamspeak-svc] client_flag_avatar not confirmed ({} — {}) — marker not written",
+                                cmdError == null ? "error " + cmdResult.errorCode() : cmdError.toString(),
+                                cmdError == null || cmdResult.errorMessage() == null ? "" : cmdResult.errorMessage());
+                        return;
+                    }
+                    if (!sessionCurrent(ctx)) {
+                        ABORTED_TASKS.incrementAndGet(); // marker 写入前的最终校验
+                        return;
+                    }
+                    try {
+                        writeMarker(marker, name);
+                        TeamspeakSvcClient.LOGGER.info(
+                                "[teamspeak-svc] TS avatar applied ({}, {} bytes)", name, face.length);
+                    } catch (Exception markerError) {
+                        TeamspeakSvcClient.LOGGER.warn(
+                                "[teamspeak-svc] marker write failed: {} — treated as not applied",
+                                markerError.getMessage());
+                    }
+                });
     }
 
     private static String waitForVirtualServerUid(Ts3VoiceClient client) {

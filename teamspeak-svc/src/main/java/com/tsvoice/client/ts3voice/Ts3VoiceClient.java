@@ -70,8 +70,13 @@ public final class Ts3VoiceClient {
     /** channelcreate 应答闭环：刚创建的频道名/父频道（收到裸 cid= 应答时补表）。 */
     private volatile String pendingCreateName;
     private volatile Integer pendingCreateParent;
-    /** 命令关联器（P3）：error 行分流到 return_code 等待方；无关联则走 handleError。 */
+    /** 命令关联器（P3/T05）：error 行分流到 return_code 等待方；无关联则走 handleError。 */
     volatile TsCommandTracker commandTracker;
+
+    /** 本会话的命令关联器（异步命令确认入口；调用线程不得同步等待其 Future）。 */
+    public TsCommandTracker commandTracker() {
+        return commandTracker;
+    }
     /** 频道快照（P3）：主键 cid 的完整频道视图；与 channels 名称映射并存。 */
     private final TsChannelSnapshot channelSnapshot = new TsChannelSnapshot(null);
     /** 名称只作属性：不同父频道允许重名，cid 才是频道身份。 */
@@ -103,6 +108,7 @@ public final class Ts3VoiceClient {
         this.crypt = new Ts3Crypt(identity);
         this.tcpTransport = tcp;
         this.connection = new Ts3Connection(crypt, tcp);
+        this.commandTracker = new TsCommandTracker(this);
         this.nickname = nickname;
         this.defaultChannel = defaultChannel == null ? "" : defaultChannel;
         this.myUid = identity.getClientUid();
@@ -356,6 +362,9 @@ public final class Ts3VoiceClient {
         } catch (Exception ignored) {
         }
         connected.set(false);
+        // 会话关闭：立即取消全部在途命令 Future 与本 client 的 ft 登记（T05）。
+        commandTracker.cancelSession();
+        Ts3FileTransferBridge.cancelClient(this);
         connection.stop();
     }
 
@@ -444,7 +453,7 @@ public final class Ts3VoiceClient {
                 }
                 if (trimmed.contains("ftkey=")) {
                     // F10：按 clientftfid 关联到发起请求；无关联则忽略（不喂给单 handler）。
-                    Ts3FileTransferBridge.onFtReply(trimmed);
+                    Ts3FileTransferBridge.onFtReply(trimmed, this);
                 }
                 if (Ts3Connection.DEBUG) {
                     LOG.debug("[teamspeak-svc] notification: {}", trimmed.length() > 120
@@ -965,6 +974,8 @@ public final class Ts3VoiceClient {
             failReason.set(reason);
             LOG.error("[teamspeak-svc] {}", reason);
         }
+        commandTracker.cancelSession();
+        Ts3FileTransferBridge.cancelClient(this);
         // 已完成过 clientinit 的连接意外终止（被踢/被 ban/服务器错误）时，
         // 与网络层掉线同样通知外层，触发上层重连逻辑；连接建立过程中的失败
         // 由 connect() 的调用方处理，不通知（避免双重重连循环）。

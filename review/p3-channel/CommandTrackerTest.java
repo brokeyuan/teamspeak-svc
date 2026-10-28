@@ -78,7 +78,10 @@ public class CommandTrackerTest {
         int code3 = tracker.nextReturnCode();
         Object entry3 = newPending(code3, System.nanoTime() + 5_000_000_000L);
         pending.put(code3, entry3);
-        deliverError(client, "error id=768 msg=connection lost");
+        // Delivered at the tracker boundary: on a disconnected stub client the real
+        // handleError path triggers fail() (T05 cancels in-flight commands on
+        // connection failure), which is production behavior, not tracker routing.
+        tracker.onError("error id=768 msg=connection lost");
         check(tracker.inFlight() == 1 && resultOf(entry3) == null,
                 "unassociated error does not satisfy any request");
         pending.clear();
