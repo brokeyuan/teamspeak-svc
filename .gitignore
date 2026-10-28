@@ -45,3 +45,6 @@ review/p0-defects/classes-dbg/
 voice-capabilities-fabric/build/
 voice-capabilities-fabric/run/
 voice-capabilities-fabric/.gradle/
+
+# Remaining tracked volatile fixtures cleanup
+review/p0-defects/issuing-config/
