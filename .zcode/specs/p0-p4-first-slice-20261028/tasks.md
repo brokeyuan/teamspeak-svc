@@ -229,7 +229,12 @@
   - `rule` TR-12.2: TS 手动频道选择不被周期映射覆盖；无 SVC 群组入口转 TS 子页不发原生包（测试断言）。
 
 ## Task 13: P3 文件上传关联（F10）
-- **Status**: `pending`
+- **Status**: `completed`
+- **Completion Evidence**:
+  - **测试（RunCommandTracker.ps1 合并套件，21/21 PASS）**：FileTransferRegression 6 项——无关联/请求前到达的 ftkey 应答被忽略且无状态泄漏、请求注册表运行后为空（不泄漏）、不同 TS UID / 不同皮肤 hash 产生不同 marker、marker 键含皮肤 hash、Result 三态保留（仅 CONFIRMED 允许 marker）。CommandTrackerTest 15 项同时保持全绿。
+  - **实现**：Ts3FileTransfer 重构为按 clientftfid 关联的 UploadRequest + CompletableFuture（IN_FLIGHT 注册表，ftId 会话内唯一 2..0xFFFF）；onFtReply 只消费精确匹配的请求（迟到/串线/未知 id 全部忽略，不再喂给单个 handler）；Ts3VoiceClient 移除 setFtReplyHandler 单 handler，ftkey= 行经 Ts3FileTransferBridge 分流；EOF 语义注释明确为"运输结束证据"非有效存储证明；AvatarPipeline——marker 键升级为 serverUID+TS UID+MC UUID+skinHash（旧 namespace+MC UUID 无法区分换身份/换皮肤），client_flag_avatar 命令失败时不写 marker（上传与生效双重确认）。
+  - **计划边界**：真实 TS 服务器上的 ftinitupload/权限拒绝/数据端口连通性属真实验证（P8 矩阵），替身级覆盖关联正确性与 marker 语义。
+  - 全部 15 组回归退出码 0；客户端 compileJava 通过。
 - **Priority**: medium
 - **Depends On**: Task 11
 - **Description**:
@@ -240,7 +245,11 @@
   - `rule` TR-13.1: 并发/迟到/错误响应/换身份场景不覆盖不串用；EOF 场景不产生成功 marker（测试断言）。
 
 ## Task 14: P3 收口——CI 与回归全绿
-- **Status**: `pending`
+- **Status**: `completed`
+- **Completion Evidence**:
+  - ci.yml 已含 RunBookmarkConfig（P3/F08，Task 11 提交时接入）与 RunCommandTracker（P3/F10+命令关联，Task 12 提交时接入）。
+  - 本地 CI 等价全量：core `clean test`（108+15）+ 客户端/旧桥 `clean build` + 15 组 harness 回归退出码全 0（Task 13 提交前复跑确认）。
+  - P3 阶段提交：6000b62（书签/凭据）、68d6edb（命令关联/频道快照/分模式）、本提交（F10）。
 - **Priority**: medium
 - **Depends On**: Tasks 12,13
 - **Description**:

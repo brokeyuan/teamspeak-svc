@@ -46,21 +46,34 @@ public final class AvatarPipeline {
                     namespace = fallbackNamespace == null || fallbackNamespace.isBlank()
                             ? "unknown" : fallbackNamespace;
                 }
-                Path marker = markerFile(namespace, mcUuid);
-                if (Files.exists(marker)) {
-                    return; // 该 TS namespace + MC 身份已上传过
-                }
+                String tsUid = client.getClientUid();
                 byte[] skin = downloadSkin(mcUuid);
                 if (skin == null) {
                     TeamspeakSvcClient.LOGGER.info("[teamspeak-svc] No premium skin for {} — avatar skipped", mcUuid);
                     return;
+                }
+                int skinHash = java.util.Arrays.hashCode(skin);
+                Path marker = null;
+                if (!"unknown".equals(namespace) && tsUid != null && !tsUid.isBlank()) {
+                    marker = markerFile(namespace, tsUid, mcUuid, skinHash);
+                }
+                if (marker != null && Files.exists(marker)) {
+                    return; // 该 serverUID + TS UID + MC 身份 + 皮肤版本已上传过
                 }
                 byte[] face = renderFace(skin);
                 String name = "avatar_tsvoice_" + Long.toHexString(mcUuid.getLeastSignificantBits() & 0xFFFFFFFFL)
                         + ".png";
                 Ts3FileTransfer.Result result = Ts3FileTransfer.upload(client, fileTransferHost, name, face);
                 if (result == Ts3FileTransfer.Result.CONFIRMED) {
-                    client.sendCommand("clientupdate client_flag_avatar=" + name);
+                    // F10：client_flag_avatar 命令也要确认成功后才写 marker —— 上传与
+                    // 生效是两个独立确认。命令失败（权限/错误）时下次重试上传。
+                    try {
+                        client.sendCommand("clientupdate client_flag_avatar=" + name);
+                    } catch (Exception cmdError) {
+                        TeamspeakSvcClient.LOGGER.warn("[teamspeak-svc] client_flag_avatar failed: {} — marker not written",
+                                cmdError.getMessage());
+                        return;
+                    }
                     writeMarker(marker, name);
                     TeamspeakSvcClient.LOGGER.info("[teamspeak-svc] TS avatar uploaded ({}, {} bytes)", name, face.length);
                 } else {
@@ -181,17 +194,21 @@ public final class AvatarPipeline {
         }
     }
 
-    private static Path markerFile(String tsNamespace, UUID mcUuid) {
+    /**
+     * Marker 键（F10）：serverUID + TS UID + MC UUID + 皮肤内容 hash —— 旧键
+     * （namespace+MC UUID）无法区分换 TS 身份/换皮肤后的重复上传。
+     */
+    private static Path markerFile(String tsNamespace, String tsUid, UUID mcUuid, int skinHash) {
         String namespaceId;
         try {
             byte[] digest = java.security.MessageDigest.getInstance("SHA-256")
-                    .digest(tsNamespace.getBytes(StandardCharsets.UTF_8));
+                    .digest((tsNamespace + "\0" + tsUid).getBytes(StandardCharsets.UTF_8));
             namespaceId = java.util.HexFormat.of().formatHex(digest).substring(0, 16);
         } catch (Exception e) {
             namespaceId = "unknown";
         }
         return FabricLoader.getInstance().getConfigDir()
                 .resolve("teamspeak-svc")
-                .resolve("avatar_" + namespaceId + "_" + mcUuid + ".done");
+                .resolve("avatar_" + namespaceId + "_" + mcUuid + "_" + Integer.toHexString(skinHash) + ".done");
     }
 }

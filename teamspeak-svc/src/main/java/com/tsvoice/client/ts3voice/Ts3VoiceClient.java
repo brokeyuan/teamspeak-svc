@@ -1,5 +1,7 @@
 package com.tsvoice.client.ts3voice;
 
+import com.tsvoice.client.Ts3FileTransferBridge;
+
 import java.net.InetAddress;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
@@ -68,8 +70,6 @@ public final class Ts3VoiceClient {
     /** channelcreate 应答闭环：刚创建的频道名/父频道（收到裸 cid= 应答时补表）。 */
     private volatile String pendingCreateName;
     private volatile Integer pendingCreateParent;
-    /** ftinitupload 应答钩子（文件传输上传用）。 */
-    private volatile java.util.function.Consumer<String> ftReplyHandler;
     /** 命令关联器（P3）：error 行分流到 return_code 等待方；无关联则走 handleError。 */
     volatile TsCommandTracker commandTracker;
     /** 频道快照（P3）：主键 cid 的完整频道视图；与 channels 名称映射并存。 */
@@ -240,10 +240,6 @@ public final class Ts3VoiceClient {
         return mcUuidByClid.get(clid);
     }
 
-    public void setFtReplyHandler(java.util.function.Consumer<String> handler) {
-        this.ftReplyHandler = handler;
-    }
-
     /** clid → TS 昵称（Ghost 显示名用；客户端表）。 */
     public String getNicknameOf(int clid) {
         ClientEntry e = clients.get(clid);
@@ -315,6 +311,11 @@ public final class Ts3VoiceClient {
     }
 
     /** 发送一帧 Opus 语音（48kHz mono，20ms 帧）。 */
+    /** 当前 TS 身份的 client UID（identity 派生）；未初始化时为 null。 */
+    public String getClientUid() {
+        return myUid;
+    }
+
     public void sendVoice(byte[] opusData, int codec) throws Ts3VoiceException {
         if (!connected.get() || connection.isClosed()) {
             return;
@@ -424,10 +425,8 @@ public final class Ts3VoiceClient {
                     }
                 }
                 if (trimmed.contains("ftkey=")) {
-                    java.util.function.Consumer<String> ft = ftReplyHandler;
-                    if (ft != null) {
-                        ft.accept(trimmed);
-                    }
+                    // F10：按 clientftfid 关联到发起请求；无关联则忽略（不喂给单 handler）。
+                    Ts3FileTransferBridge.onFtReply(trimmed);
                 }
                 if (Ts3Connection.DEBUG) {
                     LOG.debug("[teamspeak-svc] notification: {}", trimmed.length() > 120
