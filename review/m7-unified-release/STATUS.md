@@ -14,7 +14,7 @@
 | T14.4 | 服务端配置与公告迁移 | ✅ `server/ServerConfig`（schema v1、模板检测、原子保存、legacy 备份迁移、未实现 kind 诊断）、`server/CapabilityAnnouncer`（nonce 回显、2/s 突发 4 限流、有界帧、无目标不回复） | ✅ ServerConfigTest F1–F8 + AnnouncerTest A1–A8（RunM7） | ❌ 真实公告往返未验证 |
 | T14.5 | 生命周期与管理诊断 | ✅ `server/ServerRuntime`（每 MinecraftServer 实例、状态机 DISABLED/INVALID_CONFIG/ACTIVE/FAILED、幂等 close、先验证再提交的 reload、集成服务器默认门）、`server/ServerCommands`（/tsvoice-server status\|reload，26.3 权限模型） | ✅ AnnouncerTest A5–A8（状态现实性、失败重载停公告保文件、closed 不响应、集成门） | ❌ 单人 A→B 世界/dedicated 重启未验证 |
 | T14.6 | 打包与冲突 | ✅ 单一 JAR；主入口无 SVC 引用；`breaks` 精确冲突声明；RunM7 内容检查（无 review/stub/身份材料） | ✅ ArtifactChecks 全过；构建产物见 DELIVERY | ❌ 旧公告共存实测未验证（breaks 元数据+客户端日志诊断） |
-| T14.7 | 同一产物安装与功能验收 | — | ✅ RunAll 23 组全绿（含 RunM7）；M7-E01–E12 真实安装矩阵**待真机**（用户暂缓；E04/E11 依赖真机音频） | ❌ 全部未验证 |
+| T14.7 | 同一产物安装与功能验收 | — | ✅ **终点 HEAD 干净副本 RunAll 全绿**（RunM7 在干净检出自行构建产物后通过全部检查，[../engineering-closeout/evidence/m7-clean-copy-runall.log](../engineering-closeout/evidence/m7-clean-copy-runall.log)）；M7-E01–E12 真实安装矩阵**待真机**（用户暂缓；E04/E11 依赖真机音频） | ❌ 全部未验证 |
 | T14.8 | 交付与接点 | ✅ DELIVERY.md、docs/deployment/server-features.md、continuous-development STATUS 更新 | ✅ | — |
 
 ## 关键实现决策（与任务书对应）
