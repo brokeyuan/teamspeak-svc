@@ -1,6 +1,6 @@
 $ErrorActionPreference='Stop'
 Set-Location -LiteralPath (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
-$root = (Get-Item $PSScriptRoot).Parent.FullName
+$root = (Get-Item $PSScriptRoot).Parent.Parent.FullName
 $base='review/m7-unified-release'
 New-Item -ItemType Directory -Path 'review/lib' -Force | Out-Null
 if(!(Test-Path 'review/lib/gson.jar')){
