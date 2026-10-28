@@ -1,4 +1,4 @@
-package com.tsvoice.client.net;
+package com.tsvoice.common.net;
 
 import com.tsvoice.protocol.capability.CapabilityWire;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
@@ -8,7 +8,9 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 
 /**
- * 能力公告的客户端 Fabric 外层（T12/N6）：payload 封装、注册与有界解码。
+ * 能力公告的两端共享 Fabric 外层（T12/N6 / M7-T14.1）：payload 封装与有界解码。
+ * 类型/注册所有权归 common（主入口一次注册）；客户端接收器与服务端 hello 接收
+ * 各自委托，不得再声明第二套同 ID TYPE。
  * 帧格式与语义由 ts3voice-core 的 {@link CapabilityWire} 定义（与可选服务端
  * 公告 mod 的同 ID payload 互通；本类只负责 MC 外层，不重复注册语义）。
  *
@@ -65,9 +67,17 @@ public final class CapabilitiesPayloads {
         }
     }
 
-    /** 注册 S2C/C2S 两侧 payload 类型（客户端入口调用一次）。 */
+    /** 注册 S2C/C2S 两侧 payload 类型（主入口调用一次；同一 JVM 只允许一次）。 */
     public static void register() {
         PayloadTypeRegistry.clientboundPlay().register(CapabilitiesPayload.TYPE, CapabilitiesPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(CapabilitiesHelloPayload.TYPE, CapabilitiesHelloPayload.CODEC);
+        registered = true;
+    }
+
+    private static volatile boolean registered;
+
+    /** 类型是否已在本 JVM 注册（PayloadOwnershipTest/诊断用）。 */
+    public static boolean isRegistered() {
+        return registered;
     }
 }

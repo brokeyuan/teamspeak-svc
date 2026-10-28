@@ -1,0 +1,556 @@
+Compiled from "MicThread.java"
+public class de.maxhenkel.voicechat.voice.client.MicThread extends java.lang.Thread {
+  private final de.maxhenkel.voicechat.voice.client.ClientVoicechat client;
+
+  private final de.maxhenkel.voicechat.voice.client.ClientVoicechatConnection connection;
+
+  private de.maxhenkel.voicechat.voice.client.microphone.Microphone mic;
+
+  private de.maxhenkel.voicechat.voice.client.MicrophoneException microphoneError;
+
+  private volatile boolean running;
+
+  private volatile boolean microphoneLocked;
+
+  private final de.maxhenkel.voicechat.api.opus.OpusEncoder encoder;
+
+  private volatile de.maxhenkel.voicechat.voice.client.MicrophoneProcessor microphoneProcessor;
+
+  private final java.util.function.Consumer<de.maxhenkel.voicechat.voice.client.MicrophoneException> onError;
+
+  private boolean hasSentAudio;
+
+  private final java.util.concurrent.atomic.AtomicLong sequenceNumber;
+
+  private volatile boolean stopPacketSent;
+
+  public de.maxhenkel.voicechat.voice.client.MicThread(de.maxhenkel.voicechat.voice.client.ClientVoicechat, de.maxhenkel.voicechat.voice.client.ClientVoicechatConnection, java.util.function.Consumer<de.maxhenkel.voicechat.voice.client.MicrophoneException>);
+    Code:
+         0: aload_0
+         1: invokespecial #47                 // Method java/lang/Thread."<init>":()V
+         4: aload_0
+         5: new           #49                 // class java/util/concurrent/atomic/AtomicLong
+         8: dup
+         9: invokespecial #50                 // Method java/util/concurrent/atomic/AtomicLong."<init>":()V
+        12: putfield      #52                 // Field sequenceNumber:Ljava/util/concurrent/atomic/AtomicLong;
+        15: aload_0
+        16: iconst_1
+        17: putfield      #54                 // Field stopPacketSent:Z
+        20: aload_0
+        21: aload_1
+        22: putfield      #56                 // Field client:Lde/maxhenkel/voicechat/voice/client/ClientVoicechat;
+        25: aload_0
+        26: aload_2
+        27: putfield      #58                 // Field connection:Lde/maxhenkel/voicechat/voice/client/ClientVoicechatConnection;
+        30: aload_0
+        31: aload_3
+        32: putfield      #60                 // Field onError:Ljava/util/function/Consumer;
+        35: aload_0
+        36: iconst_1
+        37: putfield      #62                 // Field running:Z
+        40: aload_0
+        41: aload_2
+        42: ifnonnull     54
+        45: getstatic     #66                 // Field de/maxhenkel/voicechat/config/ServerConfig$Codec.VOIP:Lde/maxhenkel/voicechat/config/ServerConfig$Codec;
+        48: invokevirtual #70                 // Method de/maxhenkel/voicechat/config/ServerConfig$Codec.getMode:()Lde/maxhenkel/voicechat/api/opus/OpusEncoderMode;
+        51: goto          64
+        54: aload_2
+        55: invokevirtual #80                 // Method de/maxhenkel/voicechat/voice/client/ClientVoicechatConnection.getData:()Lde/maxhenkel/voicechat/voice/client/InitializationData;
+        58: invokevirtual #86                 // Method de/maxhenkel/voicechat/voice/client/InitializationData.getCodec:()Lde/maxhenkel/voicechat/config/ServerConfig$Codec;
+        61: invokevirtual #70                 // Method de/maxhenkel/voicechat/config/ServerConfig$Codec.getMode:()Lde/maxhenkel/voicechat/api/opus/OpusEncoderMode;
+        64: invokestatic  #94                 // Method de/maxhenkel/voicechat/natives/OpusManager.createEncoder:(Lde/maxhenkel/voicechat/api/opus/OpusEncoderMode;)Lde/maxhenkel/voicechat/api/opus/OpusEncoder;
+        67: putfield      #96                 // Field encoder:Lde/maxhenkel/voicechat/api/opus/OpusEncoder;
+        70: aload_0
+        71: aload_0
+        72: invokevirtual #100                // Method createMicrophoneProcessor:()Lde/maxhenkel/voicechat/voice/client/MicrophoneProcessor;
+        75: putfield      #102                // Field microphoneProcessor:Lde/maxhenkel/voicechat/voice/client/MicrophoneProcessor;
+        78: aload_0
+        79: iconst_1
+        80: invokevirtual #106                // Method setDaemon:(Z)V
+        83: aload_0
+        84: ldc           #108                // String MicrophoneThread
+        86: invokevirtual #112                // Method setName:(Ljava/lang/String;)V
+        89: aload_0
+        90: new           #114                // class de/maxhenkel/voicechat/debug/VoicechatUncaughtExceptionHandler
+        93: dup
+        94: invokespecial #115                // Method de/maxhenkel/voicechat/debug/VoicechatUncaughtExceptionHandler."<init>":()V
+        97: invokevirtual #119                // Method setUncaughtExceptionHandler:(Ljava/lang/Thread$UncaughtExceptionHandler;)V
+       100: return
+
+  private de.maxhenkel.voicechat.voice.client.MicrophoneProcessor createMicrophoneProcessor();
+    Code:
+         0: getstatic     #127                // Field de/maxhenkel/voicechat/VoicechatClient.CLIENT_CONFIG:Lde/maxhenkel/voicechat/config/ClientConfig;
+         3: getfield      #133                // Field de/maxhenkel/voicechat/config/ClientConfig.microphoneActivationType:Lde/maxhenkel/voicechat/configbuilder/entry/ConfigEntry;
+         6: invokeinterface #139,  1          // InterfaceMethod de/maxhenkel/voicechat/configbuilder/entry/ConfigEntry.get:()Ljava/lang/Object;
+        11: checkcast     #141                // class de/maxhenkel/voicechat/voice/client/MicrophoneActivationType
+        14: astore_1
+        15: getstatic     #145                // Field de/maxhenkel/voicechat/voice/client/MicrophoneActivationType.VOICE:Lde/maxhenkel/voicechat/voice/client/MicrophoneActivationType;
+        18: aload_1
+        19: invokevirtual #149                // Method de/maxhenkel/voicechat/voice/client/MicrophoneActivationType.equals:(Ljava/lang/Object;)Z
+        22: ifeq          33
+        25: new           #151                // class de/maxhenkel/voicechat/voice/client/VoiceMicrophoneProcessor
+        28: dup
+        29: invokespecial #152                // Method de/maxhenkel/voicechat/voice/client/VoiceMicrophoneProcessor."<init>":()V
+        32: areturn
+        33: new           #154                // class de/maxhenkel/voicechat/voice/client/PTTMicrophoneProcessor
+        36: dup
+        37: invokespecial #155                // Method de/maxhenkel/voicechat/voice/client/PTTMicrophoneProcessor."<init>":()V
+        40: areturn
+
+  public void getError(java.util.function.Consumer<de.maxhenkel.voicechat.voice.client.MicrophoneException>);
+    Code:
+         0: aload_0
+         1: getfield      #161                // Field microphoneError:Lde/maxhenkel/voicechat/voice/client/MicrophoneException;
+         4: ifnull        17
+         7: aload_1
+         8: aload_0
+         9: getfield      #161                // Field microphoneError:Lde/maxhenkel/voicechat/voice/client/MicrophoneException;
+        12: invokeinterface #165,  2          // InterfaceMethod java/util/function/Consumer.accept:(Ljava/lang/Object;)V
+        17: return
+
+  public void run();
+    Code:
+         0: aload_0
+         1: invokevirtual #170                // Method getMic:()Lde/maxhenkel/voicechat/voice/client/microphone/Microphone;
+         4: astore_1
+         5: aload_1
+         6: ifnonnull     10
+         9: return
+        10: aload_0
+        11: getfield      #62                 // Field running:Z
+        14: ifeq          191
+        17: getstatic     #127                // Field de/maxhenkel/voicechat/VoicechatClient.CLIENT_CONFIG:Lde/maxhenkel/voicechat/config/ClientConfig;
+        20: getfield      #133                // Field de/maxhenkel/voicechat/config/ClientConfig.microphoneActivationType:Lde/maxhenkel/voicechat/configbuilder/entry/ConfigEntry;
+        23: invokeinterface #139,  1          // InterfaceMethod de/maxhenkel/voicechat/configbuilder/entry/ConfigEntry.get:()Ljava/lang/Object;
+        28: checkcast     #141                // class de/maxhenkel/voicechat/voice/client/MicrophoneActivationType
+        31: astore_2
+        32: aload_2
+        33: aload_0
+        34: getfield      #102                // Field microphoneProcessor:Lde/maxhenkel/voicechat/voice/client/MicrophoneProcessor;
+        37: invokevirtual #178                // Method de/maxhenkel/voicechat/voice/client/MicrophoneProcessor.getActivationType:()Lde/maxhenkel/voicechat/voice/client/MicrophoneActivationType;
+        40: invokevirtual #149                // Method de/maxhenkel/voicechat/voice/client/MicrophoneActivationType.equals:(Ljava/lang/Object;)Z
+        43: ifne          61
+        46: aload_0
+        47: getfield      #102                // Field microphoneProcessor:Lde/maxhenkel/voicechat/voice/client/MicrophoneProcessor;
+        50: invokevirtual #181                // Method de/maxhenkel/voicechat/voice/client/MicrophoneProcessor.close:()V
+        53: aload_0
+        54: aload_0
+        55: invokevirtual #100                // Method createMicrophoneProcessor:()Lde/maxhenkel/voicechat/voice/client/MicrophoneProcessor;
+        58: putfield      #102                // Field microphoneProcessor:Lde/maxhenkel/voicechat/voice/client/MicrophoneProcessor;
+        61: aload_0
+        62: getfield      #58                 // Field connection:Lde/maxhenkel/voicechat/voice/client/ClientVoicechatConnection;
+        65: ifnull        85
+        68: aload_0
+        69: getfield      #58                 // Field connection:Lde/maxhenkel/voicechat/voice/client/ClientVoicechatConnection;
+        72: invokevirtual #184                // Method de/maxhenkel/voicechat/voice/client/ClientVoicechatConnection.checkTimeout:()V
+        75: aload_0
+        76: getfield      #62                 // Field running:Z
+        79: ifne          85
+        82: goto          191
+        85: aload_0
+        86: getfield      #186                // Field microphoneLocked:Z
+        89: ifne          101
+        92: invokestatic  #192                // Method de/maxhenkel/voicechat/voice/client/ClientManager.getPlayerStateManager:()Lde/maxhenkel/voicechat/voice/client/ClientPlayerStateManager;
+        95: invokevirtual #198                // Method de/maxhenkel/voicechat/voice/client/ClientPlayerStateManager.isDisabled:()Z
+        98: ifeq          151
+       101: aload_0
+       102: invokevirtual #201                // Method flushIfNeeded:()V
+       105: aload_0
+       106: getfield      #186                // Field microphoneLocked:Z
+       109: ifne          143
+       112: invokestatic  #192                // Method de/maxhenkel/voicechat/voice/client/ClientManager.getPlayerStateManager:()Lde/maxhenkel/voicechat/voice/client/ClientPlayerStateManager;
+       115: invokevirtual #198                // Method de/maxhenkel/voicechat/voice/client/ClientPlayerStateManager.isDisabled:()Z
+       118: ifeq          143
+       121: aload_0
+       122: getfield      #102                // Field microphoneProcessor:Lde/maxhenkel/voicechat/voice/client/MicrophoneProcessor;
+       125: invokevirtual #204                // Method de/maxhenkel/voicechat/voice/client/MicrophoneProcessor.reset:()V
+       128: aload_1
+       129: invokeinterface #207,  1          // InterfaceMethod de/maxhenkel/voicechat/voice/client/microphone/Microphone.isStarted:()Z
+       134: ifeq          143
+       137: aload_1
+       138: invokeinterface #210,  1          // InterfaceMethod de/maxhenkel/voicechat/voice/client/microphone/Microphone.stop:()V
+       143: bipush        10
+       145: invokestatic  #216                // Method de/maxhenkel/voicechat/voice/common/Utils.sleep:(I)V
+       148: goto          10
+       151: aload_0
+       152: iconst_0
+       153: invokevirtual #220                // Method pollProcessedAudio:(Z)[S
+       156: astore_3
+       157: aload_3
+       158: ifnonnull     164
+       161: goto          10
+       164: aload_0
+       165: getfield      #102                // Field microphoneProcessor:Lde/maxhenkel/voicechat/voice/client/MicrophoneProcessor;
+       168: invokevirtual #225                // Method de/maxhenkel/voicechat/voice/client/MicrophoneProcessor.shouldTransmitAudio:()Z
+       171: ifne          176
+       174: aconst_null
+       175: astore_3
+       176: aload_0
+       177: aload_3
+       178: aload_0
+       179: getfield      #102                // Field microphoneProcessor:Lde/maxhenkel/voicechat/voice/client/MicrophoneProcessor;
+       182: invokevirtual #228                // Method de/maxhenkel/voicechat/voice/client/MicrophoneProcessor.isWhispering:()Z
+       185: invokevirtual #232                // Method sendAudio:([SZ)V
+       188: goto          10
+       191: return
+
+  public short[] pollMic();
+    Code:
+         0: aload_0
+         1: invokevirtual #170                // Method getMic:()Lde/maxhenkel/voicechat/voice/client/microphone/Microphone;
+         4: astore_1
+         5: aload_1
+         6: ifnonnull     19
+         9: new           #237                // class java/lang/IllegalStateException
+        12: dup
+        13: ldc           #239                // String No microphone available
+        15: invokespecial #241                // Method java/lang/IllegalStateException."<init>":(Ljava/lang/String;)V
+        18: athrow
+        19: aload_1
+        20: invokeinterface #207,  1          // InterfaceMethod de/maxhenkel/voicechat/voice/client/microphone/Microphone.isStarted:()Z
+        25: ifne          34
+        28: aload_1
+        29: invokeinterface #244,  1          // InterfaceMethod de/maxhenkel/voicechat/voice/client/microphone/Microphone.start:()V
+        34: aload_1
+        35: invokeinterface #248,  1          // InterfaceMethod de/maxhenkel/voicechat/voice/client/microphone/Microphone.available:()I
+        40: sipush        960
+        43: if_icmpge     52
+        46: iconst_5
+        47: invokestatic  #216                // Method de/maxhenkel/voicechat/voice/common/Utils.sleep:(I)V
+        50: aconst_null
+        51: areturn
+        52: aload_1
+        53: invokeinterface #251,  1          // InterfaceMethod de/maxhenkel/voicechat/voice/client/microphone/Microphone.read:()[S
+        58: areturn
+
+  public short[] pollProcessedAudio(boolean);
+    Code:
+         0: aload_0
+         1: invokevirtual #253                // Method pollMic:()[S
+         4: astore_2
+         5: aload_2
+         6: ifnonnull     11
+         9: aconst_null
+        10: areturn
+        11: aload_0
+        12: getfield      #102                // Field microphoneProcessor:Lde/maxhenkel/voicechat/voice/client/MicrophoneProcessor;
+        15: aload_2
+        16: iload_1
+        17: invokevirtual #256                // Method de/maxhenkel/voicechat/voice/client/MicrophoneProcessor.process:([SZ)V
+        20: aload_2
+        21: areturn
+
+  private de.maxhenkel.voicechat.voice.client.microphone.Microphone getMic();
+    Code:
+         0: aload_0
+         1: getfield      #62                 // Field running:Z
+         4: ifne          9
+         7: aconst_null
+         8: areturn
+         9: aload_0
+        10: getfield      #262                // Field mic:Lde/maxhenkel/voicechat/voice/client/microphone/Microphone;
+        13: ifnonnull     68
+        16: aload_0
+        17: invokestatic  #267                // Method de/maxhenkel/voicechat/voice/client/microphone/MicrophoneManager.createMicrophone:()Lde/maxhenkel/voicechat/voice/client/microphone/Microphone;
+        20: putfield      #262                // Field mic:Lde/maxhenkel/voicechat/voice/client/microphone/Microphone;
+        23: invokestatic  #273                // Method net/minecraft/client/Minecraft.getInstance:()Lnet/minecraft/client/Minecraft;
+        26: invokestatic  #277                // Method de/maxhenkel/voicechat/voice/client/ClientManager.instance:()Lde/maxhenkel/voicechat/voice/client/ClientManager;
+        29: dup
+        30: invokestatic  #283                // Method java/util/Objects.requireNonNull:(Ljava/lang/Object;)Ljava/lang/Object;
+        33: pop
+        34: invokedynamic #298,  0            // InvokeDynamic #0:run:(Lde/maxhenkel/voicechat/voice/client/ClientManager;)Ljava/lang/Runnable;
+        39: invokevirtual #302                // Method net/minecraft/client/Minecraft.execute:(Ljava/lang/Runnable;)V
+        42: goto          68
+        45: astore_1
+        46: aload_0
+        47: getfield      #60                 // Field onError:Ljava/util/function/Consumer;
+        50: aload_1
+        51: invokeinterface #165,  2          // InterfaceMethod java/util/function/Consumer.accept:(Ljava/lang/Object;)V
+        56: aload_0
+        57: aload_1
+        58: putfield      #161                // Field microphoneError:Lde/maxhenkel/voicechat/voice/client/MicrophoneException;
+        61: aload_0
+        62: iconst_0
+        63: putfield      #62                 // Field running:Z
+        66: aconst_null
+        67: areturn
+        68: aload_0
+        69: getfield      #262                // Field mic:Lde/maxhenkel/voicechat/voice/client/microphone/Microphone;
+        72: areturn
+      Exception table:
+         from    to  target type
+            16    42    45   Class de/maxhenkel/voicechat/voice/client/MicrophoneException
+
+  private void flush();
+    Code:
+         0: aload_0
+         1: invokevirtual #307                // Method sendStopPacket:()V
+         4: aload_0
+         5: getfield      #96                 // Field encoder:Lde/maxhenkel/voicechat/api/opus/OpusEncoder;
+         8: invokeinterface #312,  1          // InterfaceMethod de/maxhenkel/voicechat/api/opus/OpusEncoder.isClosed:()Z
+        13: ifne          25
+        16: aload_0
+        17: getfield      #96                 // Field encoder:Lde/maxhenkel/voicechat/api/opus/OpusEncoder;
+        20: invokeinterface #315,  1          // InterfaceMethod de/maxhenkel/voicechat/api/opus/OpusEncoder.resetState:()V
+        25: aload_0
+        26: getfield      #56                 // Field client:Lde/maxhenkel/voicechat/voice/client/ClientVoicechat;
+        29: ifnonnull     33
+        32: return
+        33: aload_0
+        34: getfield      #56                 // Field client:Lde/maxhenkel/voicechat/voice/client/ClientVoicechat;
+        37: invokevirtual #319                // Method de/maxhenkel/voicechat/voice/client/ClientVoicechat.getRecorder:()Lde/maxhenkel/voicechat/voice/client/AudioRecorder;
+        40: astore_1
+        41: aload_1
+        42: ifnonnull     46
+        45: return
+        46: aload_1
+        47: invokestatic  #273                // Method net/minecraft/client/Minecraft.getInstance:()Lnet/minecraft/client/Minecraft;
+        50: invokevirtual #325                // Method net/minecraft/client/Minecraft.getUser:()Lnet/minecraft/client/User;
+        53: invokevirtual #331                // Method net/minecraft/client/User.getProfileId:()Ljava/util/UUID;
+        56: invokevirtual #335                // Method de/maxhenkel/voicechat/voice/client/AudioRecorder.flushChunkThreaded:(Ljava/util/UUID;)V
+        59: return
+
+  private void sendAudio(short[], boolean);
+    Code:
+         0: invokestatic  #342                // Method de/maxhenkel/voicechat/plugins/ClientPluginManager.instance:()Lde/maxhenkel/voicechat/plugins/ClientPluginManager;
+         3: aload_1
+         4: invokevirtual #346                // Method de/maxhenkel/voicechat/plugins/ClientPluginManager.onMergeClientSound:([S)[S
+         7: astore_3
+         8: aload_3
+         9: ifnonnull     17
+        12: aload_0
+        13: invokevirtual #201                // Method flushIfNeeded:()V
+        16: return
+        17: invokestatic  #342                // Method de/maxhenkel/voicechat/plugins/ClientPluginManager.instance:()Lde/maxhenkel/voicechat/plugins/ClientPluginManager;
+        20: aload_3
+        21: iload_2
+        22: invokevirtual #350                // Method de/maxhenkel/voicechat/plugins/ClientPluginManager.onClientSound:([SZ)[S
+        25: astore        4
+        27: aload         4
+        29: ifnonnull     37
+        32: aload_0
+        33: invokevirtual #201                // Method flushIfNeeded:()V
+        36: return
+        37: aload_0
+        38: aload         4
+        40: iload_2
+        41: invokevirtual #353                // Method sendAudioPacket:([SZ)V
+        44: aload_0
+        45: iconst_1
+        46: putfield      #355                // Field hasSentAudio:Z
+        49: return
+
+  private void flushIfNeeded();
+    Code:
+         0: aload_0
+         1: getfield      #355                // Field hasSentAudio:Z
+         4: ifne          8
+         7: return
+         8: aload_0
+         9: invokevirtual #361                // Method flush:()V
+        12: aload_0
+        13: iconst_0
+        14: putfield      #355                // Field hasSentAudio:Z
+        17: return
+
+  public boolean isTalking();
+    Code:
+         0: aload_0
+         1: getfield      #186                // Field microphoneLocked:Z
+         4: ifne          21
+         7: aload_0
+         8: getfield      #102                // Field microphoneProcessor:Lde/maxhenkel/voicechat/voice/client/MicrophoneProcessor;
+        11: invokevirtual #225                // Method de/maxhenkel/voicechat/voice/client/MicrophoneProcessor.shouldTransmitAudio:()Z
+        14: ifeq          21
+        17: iconst_1
+        18: goto          22
+        21: iconst_0
+        22: ireturn
+
+  public boolean isWhispering();
+    Code:
+         0: aload_0
+         1: getfield      #102                // Field microphoneProcessor:Lde/maxhenkel/voicechat/voice/client/MicrophoneProcessor;
+         4: invokevirtual #228                // Method de/maxhenkel/voicechat/voice/client/MicrophoneProcessor.isWhispering:()Z
+         7: ireturn
+
+  public boolean shouldTransmitAudio();
+    Code:
+         0: aload_0
+         1: getfield      #102                // Field microphoneProcessor:Lde/maxhenkel/voicechat/voice/client/MicrophoneProcessor;
+         4: invokevirtual #225                // Method de/maxhenkel/voicechat/voice/client/MicrophoneProcessor.shouldTransmitAudio:()Z
+         7: ireturn
+
+  public void setMicrophoneLocked(boolean);
+    Code:
+         0: aload_0
+         1: iload_1
+         2: putfield      #186                // Field microphoneLocked:Z
+         5: aload_0
+         6: getfield      #102                // Field microphoneProcessor:Lde/maxhenkel/voicechat/voice/client/MicrophoneProcessor;
+         9: invokevirtual #204                // Method de/maxhenkel/voicechat/voice/client/MicrophoneProcessor.reset:()V
+        12: return
+
+  public void close();
+    Code:
+         0: aload_0
+         1: getfield      #62                 // Field running:Z
+         4: ifne          8
+         7: return
+         8: aload_0
+         9: iconst_0
+        10: putfield      #62                 // Field running:Z
+        13: invokestatic  #369                // Method java/lang/Thread.currentThread:()Ljava/lang/Thread;
+        16: aload_0
+        17: if_acmpeq     56
+        20: aload_0
+        21: ldc2_w        #370                // long 100l
+        24: invokevirtual #375                // Method join:(J)V
+        27: goto          56
+        30: astore_1
+        31: invokestatic  #369                // Method java/lang/Thread.currentThread:()Ljava/lang/Thread;
+        34: invokevirtual #378                // Method java/lang/Thread.interrupt:()V
+        37: getstatic     #384                // Field de/maxhenkel/voicechat/Voicechat.LOGGER:Lde/maxhenkel/voicechat/logging/VoicechatLogger;
+        40: ldc_w         #386                // String Interrupted while waiting for mic thread to close
+        43: iconst_1
+        44: anewarray     #388                // class java/lang/Object
+        47: dup
+        48: iconst_0
+        49: aload_1
+        50: aastore
+        51: invokeinterface #394,  3          // InterfaceMethod de/maxhenkel/voicechat/logging/VoicechatLogger.error:(Ljava/lang/String;[Ljava/lang/Object;)V
+        56: aload_0
+        57: getfield      #262                // Field mic:Lde/maxhenkel/voicechat/voice/client/microphone/Microphone;
+        60: ifnull        72
+        63: aload_0
+        64: getfield      #262                // Field mic:Lde/maxhenkel/voicechat/voice/client/microphone/Microphone;
+        67: invokeinterface #395,  1          // InterfaceMethod de/maxhenkel/voicechat/voice/client/microphone/Microphone.close:()V
+        72: aload_0
+        73: getfield      #96                 // Field encoder:Lde/maxhenkel/voicechat/api/opus/OpusEncoder;
+        76: invokeinterface #396,  1          // InterfaceMethod de/maxhenkel/voicechat/api/opus/OpusEncoder.close:()V
+        81: aload_0
+        82: getfield      #102                // Field microphoneProcessor:Lde/maxhenkel/voicechat/voice/client/MicrophoneProcessor;
+        85: invokevirtual #181                // Method de/maxhenkel/voicechat/voice/client/MicrophoneProcessor.close:()V
+        88: aload_0
+        89: invokevirtual #361                // Method flush:()V
+        92: return
+      Exception table:
+         from    to  target type
+            20    27    30   Class java/lang/InterruptedException
+
+  public boolean isClosed();
+    Code:
+         0: aload_0
+         1: getfield      #62                 // Field running:Z
+         4: ifne          11
+         7: iconst_1
+         8: goto          12
+        11: iconst_0
+        12: ireturn
+
+  private void sendAudioPacket(short[], boolean);
+    Code:
+         0: aload_0
+         1: getfield      #58                 // Field connection:Lde/maxhenkel/voicechat/voice/client/ClientVoicechatConnection;
+         4: ifnull        64
+         7: aload_0
+         8: getfield      #58                 // Field connection:Lde/maxhenkel/voicechat/voice/client/ClientVoicechatConnection;
+        11: invokevirtual #402                // Method de/maxhenkel/voicechat/voice/client/ClientVoicechatConnection.isInitialized:()Z
+        14: ifeq          64
+        17: aload_0
+        18: getfield      #96                 // Field encoder:Lde/maxhenkel/voicechat/api/opus/OpusEncoder;
+        21: aload_1
+        22: invokeinterface #406,  2          // InterfaceMethod de/maxhenkel/voicechat/api/opus/OpusEncoder.encode:([S)[B
+        27: astore_3
+        28: aload_0
+        29: getfield      #58                 // Field connection:Lde/maxhenkel/voicechat/voice/client/ClientVoicechatConnection;
+        32: new           #408                // class de/maxhenkel/voicechat/voice/common/NetworkMessage
+        35: dup
+        36: new           #410                // class de/maxhenkel/voicechat/voice/common/MicPacket
+        39: dup
+        40: aload_3
+        41: iload_2
+        42: aload_0
+        43: getfield      #52                 // Field sequenceNumber:Ljava/util/concurrent/atomic/AtomicLong;
+        46: invokevirtual #414                // Method java/util/concurrent/atomic/AtomicLong.getAndIncrement:()J
+        49: invokespecial #417                // Method de/maxhenkel/voicechat/voice/common/MicPacket."<init>":([BZJ)V
+        52: invokespecial #420                // Method de/maxhenkel/voicechat/voice/common/NetworkMessage."<init>":(Lde/maxhenkel/voicechat/voice/common/Packet;)V
+        55: invokevirtual #424                // Method de/maxhenkel/voicechat/voice/client/ClientVoicechatConnection.sendToServer:(Lde/maxhenkel/voicechat/voice/common/NetworkMessage;)Z
+        58: pop
+        59: aload_0
+        60: iconst_0
+        61: putfield      #54                 // Field stopPacketSent:Z
+        64: aload_0
+        65: getfield      #56                 // Field client:Lde/maxhenkel/voicechat/voice/client/ClientVoicechat;
+        68: ifnull        107
+        71: aload_0
+        72: getfield      #56                 // Field client:Lde/maxhenkel/voicechat/voice/client/ClientVoicechat;
+        75: invokevirtual #319                // Method de/maxhenkel/voicechat/voice/client/ClientVoicechat.getRecorder:()Lde/maxhenkel/voicechat/voice/client/AudioRecorder;
+        78: ifnull        107
+        81: aload_0
+        82: getfield      #56                 // Field client:Lde/maxhenkel/voicechat/voice/client/ClientVoicechat;
+        85: invokevirtual #319                // Method de/maxhenkel/voicechat/voice/client/ClientVoicechat.getRecorder:()Lde/maxhenkel/voicechat/voice/client/AudioRecorder;
+        88: invokestatic  #273                // Method net/minecraft/client/Minecraft.getInstance:()Lnet/minecraft/client/Minecraft;
+        91: invokevirtual #325                // Method net/minecraft/client/Minecraft.getUser:()Lnet/minecraft/client/User;
+        94: invokevirtual #331                // Method net/minecraft/client/User.getProfileId:()Ljava/util/UUID;
+        97: invokestatic  #429                // Method java/lang/System.currentTimeMillis:()J
+       100: aload_1
+       101: invokestatic  #434                // Method de/maxhenkel/voicechat/voice/client/PositionalAudioUtils.convertToStereo:([S)[S
+       104: invokevirtual #438                // Method de/maxhenkel/voicechat/voice/client/AudioRecorder.appendChunk:(Ljava/util/UUID;J[S)V
+       107: goto          139
+       110: astore_3
+       111: getstatic     #384                // Field de/maxhenkel/voicechat/Voicechat.LOGGER:Lde/maxhenkel/voicechat/logging/VoicechatLogger;
+       114: ldc_w         #440                // String Failed to record audio
+       117: iconst_1
+       118: anewarray     #388                // class java/lang/Object
+       121: dup
+       122: iconst_0
+       123: aload_3
+       124: aastore
+       125: invokeinterface #394,  3          // InterfaceMethod de/maxhenkel/voicechat/logging/VoicechatLogger.error:(Ljava/lang/String;[Ljava/lang/Object;)V
+       130: aload_0
+       131: getfield      #56                 // Field client:Lde/maxhenkel/voicechat/voice/client/ClientVoicechat;
+       134: iconst_0
+       135: invokevirtual #444                // Method de/maxhenkel/voicechat/voice/client/ClientVoicechat.setRecording:(Z)Z
+       138: pop
+       139: return
+      Exception table:
+         from    to  target type
+            64   107   110   Class java/io/IOException
+
+  private void sendStopPacket();
+    Code:
+         0: aload_0
+         1: getfield      #54                 // Field stopPacketSent:Z
+         4: ifeq          8
+         7: return
+         8: aload_0
+         9: getfield      #58                 // Field connection:Lde/maxhenkel/voicechat/voice/client/ClientVoicechatConnection;
+        12: ifnull        25
+        15: aload_0
+        16: getfield      #58                 // Field connection:Lde/maxhenkel/voicechat/voice/client/ClientVoicechatConnection;
+        19: invokevirtual #402                // Method de/maxhenkel/voicechat/voice/client/ClientVoicechatConnection.isInitialized:()Z
+        22: ifne          26
+        25: return
+        26: aload_0
+        27: getfield      #58                 // Field connection:Lde/maxhenkel/voicechat/voice/client/ClientVoicechatConnection;
+        30: new           #408                // class de/maxhenkel/voicechat/voice/common/NetworkMessage
+        33: dup
+        34: new           #410                // class de/maxhenkel/voicechat/voice/common/MicPacket
+        37: dup
+        38: iconst_0
+        39: newarray       byte
+        41: iconst_0
+        42: aload_0
+        43: getfield      #52                 // Field sequenceNumber:Ljava/util/concurrent/atomic/AtomicLong;
+        46: invokevirtual #414                // Method java/util/concurrent/atomic/AtomicLong.getAndIncrement:()J
+        49: invokespecial #417                // Method de/maxhenkel/voicechat/voice/common/MicPacket."<init>":([BZJ)V
+        52: invokespecial #420                // Method de/maxhenkel/voicechat/voice/common/NetworkMessage."<init>":(Lde/maxhenkel/voicechat/voice/common/Packet;)V
+        55: invokevirtual #424                // Method de/maxhenkel/voicechat/voice/client/ClientVoicechatConnection.sendToServer:(Lde/maxhenkel/voicechat/voice/common/NetworkMessage;)Z
+        58: pop
+        59: aload_0
+        60: iconst_1
+        61: putfield      #54                 // Field stopPacketSent:Z
+        64: return
+}
+

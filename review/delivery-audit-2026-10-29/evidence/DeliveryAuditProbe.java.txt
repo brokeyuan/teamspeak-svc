@@ -1,0 +1,28 @@
+package com.tsvoice.client.frontend;
+import com.tsvoice.client.*;
+import com.tsvoice.client.connection.*;
+import com.tsvoice.client.ts3voice.*;
+import java.lang.reflect.*;
+public class DeliveryAuditProbe {
+ static void require(boolean v,String m){if(!v)throw new AssertionError(m);System.out.println(m);}
+ static class Mic implements FrontendLease.MicHandle {boolean alive=true;public boolean isAlive(){return alive;}public void close(){alive=false;}}
+ static void field(String name,Object v)throws Exception{Field f=TsVoiceManager.class.getDeclaredField(name);f.setAccessible(true);f.set(null,v);}
+ static VoiceState.SessionToken setup(VoiceState.ChannelPolicy policy,String initial){BackendCoordinator.select(SelectionPolicy.IntentKind.PINNED_TS,"audit");var t=BackendCoordinator.beginSession();TsChannelRoute.beginSession(t,policy,initial);return t;}
+ public static void main(String[]args)throws Exception{
+  final Mic[] latest={null}; final int[] made={0};
+  Svc2625FrontendAdapter.setMicSource(new Svc2625FrontendAdapter.MicSource(){public FrontendLease.MicHandle borrowNativeMic(){return null;}public FrontendLease.MicHandle createIsolatedMic(){made[0]++;return latest[0]=new Mic();}});
+  var adapter=Svc2625FrontendAdapter.instance();var lease=adapter.acquire(new VoiceState.SessionToken(123));latest[0].alive=false;
+  field("frontendLease",lease);field("sessionRunning",true);
+  Method m=TsVoiceManager.class.getDeclaredMethod("reacquireFrontendLeaseIfNeeded");m.setAccessible(true);m.invoke(null);
+  require(!lease.isClosed()&&TsVoiceManager.frontendLeaseHeld()&&made[0]==2&&!latest[0].alive,"D02 reproduced: dead original lease retained; replacement mic created then closed");
+  m.invoke(null);require(made[0]==3&&!latest[0].alive,"D02 reproduced again: reacquisition cannot recover");
+  field("sessionRunning",false);field("frontendLease",null);lease.close();
+  Ts3VoiceClient c=new Ts3VoiceClient(null,"audit","",false);c.connected=true;c.myChannel=5;
+  var t=setup(VoiceState.ChannelPolicy.LOCKED_TARGET,null);BackendCoordinator.setChannelTarget(t,VoiceState.ChannelPolicy.LOCKED_TARGET,5);TsChannelRoute.observeSelf(c);long epoch=BackendCoordinator.route().routeEpoch();c.myChannel=7;TsChannelRoute.observeSelf(c);
+  require(!TsChannelRoute.isReadyForVoice(c)&&BackendCoordinator.route().transmitReady()&&BackendCoordinator.route().routeEpoch()==epoch,"D04 reproduced: locked foreign move blocks new frames but preserves queued-frame permit/epoch");
+  c.myChannel=1;t=setup(VoiceState.ChannelPolicy.TS_NATIVE_FOLLOW,null);TsChannelRoute.observeSelf(c);TsChannelRoute.requestMove(c,5,null);TsChannelRoute.onMoveRejected(t,"password denied");TsChannelRoute.observeSelf(c);
+  require(BackendCoordinator.route().transmitReady()&&BackendCoordinator.route().channelId()==1&&TsChannelRoute.statusReason().isEmpty(),"D05 reproduced: observation after rejection silently re-enables old channel");
+  c.channelNames.clear();c.channelNames.put(5,"Lobby");c.channelNames.put(6,"Lobby");setup(VoiceState.ChannelPolicy.TS_NATIVE_FOLLOW,"Lobby");TsChannelRoute.tick(c);
+  require(TsChannelRoute.statusReason().contains("ambiguous")&&TsChannelRoute.isReadyForVoice(c),"D05 reproduced: ambiguous initial channel says paused but old channel remains sendable");
+ }
+}

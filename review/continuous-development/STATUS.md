@@ -3,9 +3,9 @@
 review/engineering-closeout/DELIVERY.md）。
 
 当前阶段 / 当前任务：
-阶段 A（N0–N7 工程收尾）已完成；进入阶段 B（M7 统一客户端与可选服务端发布）。
-M7 任务书：docs/superpowers/plans/2026-10-29-m7-unified-release-plan.md
-（其"上一轮全部验收通过"开工前提已被 N7 工程门槛替换）。
+阶段 A（N0–N7 工程收尾）与阶段 B（M7 统一发布 T14.1–T14.6/T14.8）已完成；
+真实安装矩阵（M7-E01–E12/T14.7）待用户恢复真机验收。下一段可继续的工作：
+M7 真机矩阵补验（需用户环境）、随后沿队列 C（M9/P6 TS over MC TCP）推进。
 
 已完成的生产路径：
 - D01–D05 全部关闭（工程层）：独立 AudioChannel 播放 / 失效租约接管 / OFF
@@ -16,10 +16,10 @@ M7 任务书：docs/superpowers/plans/2026-10-29-m7-unified-release-plan.md
   （hello→公告→信任授权→候选选择）+ FailureKind 分类 + 退避 jitter。
 
 本次实际测试与证据路径：
-- review/RunAll.ps1 v2：core 先行 + 22 组 harness；终点 HEAD 干净副本全绿
-  （review/engineering-closeout/evidence/n7-clean-copy-runall.log）。
-- gradlew build：BUILD SUCCESSFUL；候选产物 teamspeak-svc-0.9.8+26.3.jar
-  SHA-256 5FA9DF880E53C35CFFE04D12996A58CC9DC00A01DE677AA1E6A5B6FA4C1C6447。
+- review/RunAll.ps1 v2：core 先行 + 23 组 harness（含 m7-unified-release/RunM7）。
+- M7 候选产物 teamspeak-svc-0.9.8+26.3.jar SHA-256
+  2E8BFE430DE304138E240973455CDE084AB45363D76F3C178A536D2CF64ACE73
+  （取代 N7 阶段哈希 5FA9DF88…，N7 记录保留为历史）。
 - 新增回归：RouteMoveLifecycleTest(M1–M8)、RouteEpochRevocationTest(R)、
   FrontendLeaseTest(39 项)、OffGateTest(O1–O6)、GuiFlowTest(G/C/D 段)。
 
@@ -35,13 +35,20 @@ review/engineering-closeout/DEFERRED-CLIENT-ACCEPTANCE.md。
 - 频道页列表超 8 条无分页（已记录）。
 
 下一条具体动作（文件、方法、验证命令）：
-M7：按 teamspeak-svc 同 JAR 交付可选服务端——fabric.mod.json environment
-调整与入口拆分（TeamspeakSvcClient 客户端入口 / 新增服务端入口）、公告 payload
-服务端注册并入（复用 net/CapabilitiesPayloads 语义与 voice-capabilities-fabric
-的 CapabilityMod 逻辑）、配置与生命周期（ServerPlayNetworking/ServerLifecycleEvents）、
-`gradlew build` 产出与既有客户端行为 diff 校验；验证命令：
-`powershell -NoProfile -ExecutionPolicy Bypass -File review/RunAll.ps1` +
-`gradlew -p teamspeak-svc build`（同一候选 JAR 哈希记录到 M7 报告）。
+等用户恢复真机验收后执行 M7-E01–E12 矩阵（review/m7-unified-release/STATUS.md
+未验证清单）；工程侧可继续队列 C 的技术准备：TS3 over MC TCP 的最小数据报往返
+原型（TcpTransport 之上的 per-connection 帧格式冻结前不做生产代码）。验证命令：
+`powershell -NoProfile -ExecutionPolicy Bypass -File review/RunAll.ps1`（23 组全绿）。
+
+本轮新增或修订的技术决策（M7）：
+- 唯一 JAR：environment="*"；main（com.tsvoice.TeamspeakSvcMod，无 SVC 引用）/
+  client（bootstrap.ClientEntrypoint 依赖校验后委托）/ voicechat（compat 门面，
+  服务端只占稳定 ID）三入口；SVC 从全局 depends 移除，客户端以元数据检查明确校验。
+- payload 注册唯一所有者：common/net/CapabilitiesPayloads，主入口一次注册。
+- 服务端公告：server/ServerConfig（schema v1 + legacy 备份迁移 + 未实现 kind 诊断）、
+  CapabilityAnnouncer（nonce 回显、2/s 突发 4 限流）、ServerRuntime（四状态、
+  每 MinecraftServer 实例、集成服务器默认门）、/tsvoice-server status|reload。
+- breaks: voice-capabilities（旧公告 mod 冲突声明）。
 
 本轮新增或修订的技术决策：
 - routeEpoch 全局单调（跨会话不复位）＝ 会话绑定的写出许可（N1）。

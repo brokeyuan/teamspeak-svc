@@ -1,0 +1,1129 @@
+Compiled from "AudioChannel.java"
+public class de.maxhenkel.voicechat.voice.client.AudioChannel extends java.lang.Thread {
+  private final net.minecraft.client.Minecraft minecraft;
+
+  private final de.maxhenkel.voicechat.voice.client.ClientVoicechat client;
+
+  private final de.maxhenkel.voicechat.voice.client.InitializationData initializationData;
+
+  private final de.maxhenkel.voicechat.voice.client.SoundManager soundManager;
+
+  private final java.util.UUID uuid;
+
+  private final java.util.concurrent.BlockingQueue<de.maxhenkel.voicechat.voice.common.SoundPacket<?>> queue;
+
+  private final de.maxhenkel.voicechat.voice.client.AudioPacketBuffer packetBuffer;
+
+  private long lastPacketTime;
+
+  private de.maxhenkel.voicechat.voice.client.speaker.Speaker speaker;
+
+  private volatile boolean stopped;
+
+  private final de.maxhenkel.voicechat.api.opus.OpusDecoder decoder;
+
+  private long lastSequenceNumber;
+
+  private long lostPackets;
+
+  public de.maxhenkel.voicechat.voice.client.AudioChannel(de.maxhenkel.voicechat.voice.client.ClientVoicechat, de.maxhenkel.voicechat.voice.client.InitializationData, de.maxhenkel.voicechat.voice.client.SoundManager, java.util.UUID);
+    Code:
+         0: aload_0
+         1: invokespecial #43                 // Method java/lang/Thread."<init>":()V
+         4: aload_0
+         5: aload_1
+         6: putfield      #45                 // Field client:Lde/maxhenkel/voicechat/voice/client/ClientVoicechat;
+         9: aload_0
+        10: aload_2
+        11: putfield      #47                 // Field initializationData:Lde/maxhenkel/voicechat/voice/client/InitializationData;
+        14: aload_0
+        15: aload_3
+        16: putfield      #49                 // Field soundManager:Lde/maxhenkel/voicechat/voice/client/SoundManager;
+        19: aload_0
+        20: aload         4
+        22: putfield      #51                 // Field uuid:Ljava/util/UUID;
+        25: aload_0
+        26: new           #53                 // class java/util/concurrent/LinkedBlockingQueue
+        29: dup
+        30: invokespecial #54                 // Method java/util/concurrent/LinkedBlockingQueue."<init>":()V
+        33: putfield      #56                 // Field queue:Ljava/util/concurrent/BlockingQueue;
+        36: aload_0
+        37: new           #58                 // class de/maxhenkel/voicechat/voice/client/AudioPacketBuffer
+        40: dup
+        41: getstatic     #64                 // Field de/maxhenkel/voicechat/VoicechatClient.CLIENT_CONFIG:Lde/maxhenkel/voicechat/config/ClientConfig;
+        44: getfield      #70                 // Field de/maxhenkel/voicechat/config/ClientConfig.audioPacketThreshold:Lde/maxhenkel/voicechat/configbuilder/entry/ConfigEntry;
+        47: invokeinterface #76,  1           // InterfaceMethod de/maxhenkel/voicechat/configbuilder/entry/ConfigEntry.get:()Ljava/lang/Object;
+        52: checkcast     #78                 // class java/lang/Integer
+        55: invokevirtual #82                 // Method java/lang/Integer.intValue:()I
+        58: invokespecial #85                 // Method de/maxhenkel/voicechat/voice/client/AudioPacketBuffer."<init>":(I)V
+        61: putfield      #87                 // Field packetBuffer:Lde/maxhenkel/voicechat/voice/client/AudioPacketBuffer;
+        64: aload_0
+        65: invokestatic  #93                 // Method java/lang/System.currentTimeMillis:()J
+        68: putfield      #95                 // Field lastPacketTime:J
+        71: aload_0
+        72: iconst_0
+        73: putfield      #97                 // Field stopped:Z
+        76: aload_0
+        77: invokestatic  #103                // Method de/maxhenkel/voicechat/natives/OpusManager.createDecoder:()Lde/maxhenkel/voicechat/api/opus/OpusDecoder;
+        80: putfield      #105                // Field decoder:Lde/maxhenkel/voicechat/api/opus/OpusDecoder;
+        83: aload_0
+        84: ldc2_w        #106                // long -1l
+        87: putfield      #109                // Field lastSequenceNumber:J
+        90: aload_0
+        91: invokestatic  #115                // Method net/minecraft/client/Minecraft.getInstance:()Lnet/minecraft/client/Minecraft;
+        94: putfield      #117                // Field minecraft:Lnet/minecraft/client/Minecraft;
+        97: aload_0
+        98: iconst_1
+        99: invokevirtual #121                // Method setDaemon:(Z)V
+       102: aload_0
+       103: aload         4
+       105: invokevirtual #127                // Method java/util/UUID.toString:()Ljava/lang/String;
+       108: invokedynamic #139,  0            // InvokeDynamic #0:makeConcatWithConstants:(Ljava/lang/String;)Ljava/lang/String;
+       113: invokevirtual #143                // Method setName:(Ljava/lang/String;)V
+       116: aload_0
+       117: new           #145                // class de/maxhenkel/voicechat/debug/VoicechatUncaughtExceptionHandler
+       120: dup
+       121: invokespecial #146                // Method de/maxhenkel/voicechat/debug/VoicechatUncaughtExceptionHandler."<init>":()V
+       124: invokevirtual #150                // Method setUncaughtExceptionHandler:(Ljava/lang/Thread$UncaughtExceptionHandler;)V
+       127: getstatic     #156                // Field de/maxhenkel/voicechat/Voicechat.LOGGER:Lde/maxhenkel/voicechat/logging/VoicechatLogger;
+       130: ldc           #158                // String Creating audio channel {}
+       132: iconst_1
+       133: anewarray     #160                // class java/lang/Object
+       136: dup
+       137: iconst_0
+       138: aload         4
+       140: aastore
+       141: invokeinterface #166,  3          // InterfaceMethod de/maxhenkel/voicechat/logging/VoicechatLogger.info:(Ljava/lang/String;[Ljava/lang/Object;)V
+       146: return
+
+  public boolean canKill();
+    Code:
+         0: invokestatic  #93                 // Method java/lang/System.currentTimeMillis:()J
+         3: aload_0
+         4: getfield      #95                 // Field lastPacketTime:J
+         7: lsub
+         8: ldc2_w        #171                // long 30000l
+        11: lcmp
+        12: ifle          19
+        15: iconst_1
+        16: goto          20
+        19: iconst_0
+        20: ireturn
+
+  public void closeAndKill();
+    Code:
+         0: getstatic     #156                // Field de/maxhenkel/voicechat/Voicechat.LOGGER:Lde/maxhenkel/voicechat/logging/VoicechatLogger;
+         3: ldc           #177                // String Closing audio channel {}
+         5: iconst_1
+         6: anewarray     #160                // class java/lang/Object
+         9: dup
+        10: iconst_0
+        11: aload_0
+        12: getfield      #51                 // Field uuid:Ljava/util/UUID;
+        15: aastore
+        16: invokeinterface #166,  3          // InterfaceMethod de/maxhenkel/voicechat/logging/VoicechatLogger.info:(Ljava/lang/String;[Ljava/lang/Object;)V
+        21: aload_0
+        22: iconst_1
+        23: putfield      #97                 // Field stopped:Z
+        26: aload_0
+        27: getfield      #56                 // Field queue:Ljava/util/concurrent/BlockingQueue;
+        30: invokeinterface #182,  1          // InterfaceMethod java/util/concurrent/BlockingQueue.clear:()V
+        35: invokestatic  #186                // Method java/lang/Thread.currentThread:()Ljava/lang/Thread;
+        38: aload_0
+        39: if_acmpne     43
+        42: return
+        43: aload_0
+        44: ldc2_w        #187                // long 3000l
+        47: invokevirtual #192                // Method join:(J)V
+        50: aload_0
+        51: invokevirtual #195                // Method isAlive:()Z
+        54: ifeq          78
+        57: getstatic     #156                // Field de/maxhenkel/voicechat/Voicechat.LOGGER:Lde/maxhenkel/voicechat/logging/VoicechatLogger;
+        60: ldc           #197                // String Timed out waiting for audio channel {} to close
+        62: iconst_1
+        63: anewarray     #160                // class java/lang/Object
+        66: dup
+        67: iconst_0
+        68: aload_0
+        69: getfield      #51                 // Field uuid:Ljava/util/UUID;
+        72: aastore
+        73: invokeinterface #200,  3          // InterfaceMethod de/maxhenkel/voicechat/logging/VoicechatLogger.warn:(Ljava/lang/String;[Ljava/lang/Object;)V
+        78: goto          100
+        81: astore_1
+        82: getstatic     #156                // Field de/maxhenkel/voicechat/Voicechat.LOGGER:Lde/maxhenkel/voicechat/logging/VoicechatLogger;
+        85: ldc           #202                // String Interrupted while waiting for audio channel to close
+        87: iconst_1
+        88: anewarray     #160                // class java/lang/Object
+        91: dup
+        92: iconst_0
+        93: aload_1
+        94: aastore
+        95: invokeinterface #205,  3          // InterfaceMethod de/maxhenkel/voicechat/logging/VoicechatLogger.error:(Ljava/lang/String;[Ljava/lang/Object;)V
+       100: return
+      Exception table:
+         from    to  target type
+            43    78    81   Class java/lang/InterruptedException
+
+  public java.util.UUID getChannelId();
+    Code:
+         0: aload_0
+         1: getfield      #51                 // Field uuid:Ljava/util/UUID;
+         4: areturn
+
+  public void addToQueue(de.maxhenkel.voicechat.voice.common.SoundPacket<?>);
+    Code:
+         0: aload_0
+         1: getfield      #56                 // Field queue:Ljava/util/concurrent/BlockingQueue;
+         4: aload_1
+         5: invokeinterface #216,  2          // InterfaceMethod java/util/concurrent/BlockingQueue.add:(Ljava/lang/Object;)Z
+        10: pop
+        11: return
+
+  public void run();
+    Code:
+         0: aload_0
+         1: aload_0
+         2: getfield      #49                 // Field soundManager:Lde/maxhenkel/voicechat/voice/client/SoundManager;
+         5: aload_0
+         6: getfield      #51                 // Field uuid:Ljava/util/UUID;
+         9: invokestatic  #230                // Method de/maxhenkel/voicechat/voice/client/speaker/SpeakerManager.createSpeaker:(Lde/maxhenkel/voicechat/voice/client/SoundManager;Ljava/util/UUID;)Lde/maxhenkel/voicechat/voice/client/speaker/Speaker;
+        12: putfield      #232                // Field speaker:Lde/maxhenkel/voicechat/voice/client/speaker/Speaker;
+        15: goto          108
+        18: astore_1
+        19: aload_0
+        20: getfield      #49                 // Field soundManager:Lde/maxhenkel/voicechat/voice/client/SoundManager;
+        23: invokevirtual #237                // Method de/maxhenkel/voicechat/voice/client/SoundManager.isClosing:()Z
+        26: ifeq          106
+        29: getstatic     #156                // Field de/maxhenkel/voicechat/Voicechat.LOGGER:Lde/maxhenkel/voicechat/logging/VoicechatLogger;
+        32: ldc           #239                // String Sound manager closing, skipping audio channel {}
+        34: iconst_1
+        35: anewarray     #160                // class java/lang/Object
+        38: dup
+        39: iconst_0
+        40: aload_0
+        41: getfield      #51                 // Field uuid:Ljava/util/UUID;
+        44: aastore
+        45: invokeinterface #242,  3          // InterfaceMethod de/maxhenkel/voicechat/logging/VoicechatLogger.debug:(Ljava/lang/String;[Ljava/lang/Object;)V
+        50: aload_0
+        51: iconst_1
+        52: putfield      #97                 // Field stopped:Z
+        55: aload_0
+        56: getfield      #232                // Field speaker:Lde/maxhenkel/voicechat/voice/client/speaker/Speaker;
+        59: ifnull        75
+        62: aload_0
+        63: invokevirtual #245                // Method flushRecording:()V
+        66: aload_0
+        67: getfield      #232                // Field speaker:Lde/maxhenkel/voicechat/voice/client/speaker/Speaker;
+        70: invokeinterface #250,  1          // InterfaceMethod de/maxhenkel/voicechat/voice/client/speaker/Speaker.close:()V
+        75: aload_0
+        76: getfield      #105                // Field decoder:Lde/maxhenkel/voicechat/api/opus/OpusDecoder;
+        79: invokeinterface #253,  1          // InterfaceMethod de/maxhenkel/voicechat/api/opus/OpusDecoder.close:()V
+        84: getstatic     #156                // Field de/maxhenkel/voicechat/Voicechat.LOGGER:Lde/maxhenkel/voicechat/logging/VoicechatLogger;
+        87: ldc           #255                // String Closed audio channel {}
+        89: iconst_1
+        90: anewarray     #160                // class java/lang/Object
+        93: dup
+        94: iconst_0
+        95: aload_0
+        96: getfield      #51                 // Field uuid:Ljava/util/UUID;
+        99: aastore
+       100: invokeinterface #166,  3          // InterfaceMethod de/maxhenkel/voicechat/logging/VoicechatLogger.info:(Ljava/lang/String;[Ljava/lang/Object;)V
+       105: return
+       106: aload_1
+       107: athrow
+       108: aload_0
+       109: getfield      #97                 // Field stopped:Z
+       112: ifne          650
+       115: aload_0
+       116: getfield      #49                 // Field soundManager:Lde/maxhenkel/voicechat/voice/client/SoundManager;
+       119: invokevirtual #258                // Method de/maxhenkel/voicechat/voice/client/SoundManager.isClosed:()Z
+       122: ifeq          128
+       125: goto          650
+       128: invokestatic  #264                // Method de/maxhenkel/voicechat/voice/client/ClientManager.getPlayerStateManager:()Lde/maxhenkel/voicechat/voice/client/ClientPlayerStateManager;
+       131: invokevirtual #269                // Method de/maxhenkel/voicechat/voice/client/ClientPlayerStateManager.isDisabled:()Z
+       134: ifeq          197
+       137: aload_0
+       138: invokevirtual #271                // Method closeAndKill:()V
+       141: aload_0
+       142: iconst_1
+       143: putfield      #97                 // Field stopped:Z
+       146: aload_0
+       147: getfield      #232                // Field speaker:Lde/maxhenkel/voicechat/voice/client/speaker/Speaker;
+       150: ifnull        166
+       153: aload_0
+       154: invokevirtual #245                // Method flushRecording:()V
+       157: aload_0
+       158: getfield      #232                // Field speaker:Lde/maxhenkel/voicechat/voice/client/speaker/Speaker;
+       161: invokeinterface #250,  1          // InterfaceMethod de/maxhenkel/voicechat/voice/client/speaker/Speaker.close:()V
+       166: aload_0
+       167: getfield      #105                // Field decoder:Lde/maxhenkel/voicechat/api/opus/OpusDecoder;
+       170: invokeinterface #253,  1          // InterfaceMethod de/maxhenkel/voicechat/api/opus/OpusDecoder.close:()V
+       175: getstatic     #156                // Field de/maxhenkel/voicechat/Voicechat.LOGGER:Lde/maxhenkel/voicechat/logging/VoicechatLogger;
+       178: ldc           #255                // String Closed audio channel {}
+       180: iconst_1
+       181: anewarray     #160                // class java/lang/Object
+       184: dup
+       185: iconst_0
+       186: aload_0
+       187: getfield      #51                 // Field uuid:Ljava/util/UUID;
+       190: aastore
+       191: invokeinterface #166,  3          // InterfaceMethod de/maxhenkel/voicechat/logging/VoicechatLogger.info:(Ljava/lang/String;[Ljava/lang/Object;)V
+       196: return
+       197: aload_0
+       198: getfield      #87                 // Field packetBuffer:Lde/maxhenkel/voicechat/voice/client/AudioPacketBuffer;
+       201: aload_0
+       202: getfield      #56                 // Field queue:Ljava/util/concurrent/BlockingQueue;
+       205: invokevirtual #275                // Method de/maxhenkel/voicechat/voice/client/AudioPacketBuffer.poll:(Ljava/util/concurrent/BlockingQueue;)Lde/maxhenkel/voicechat/voice/common/SoundPacket;
+       208: astore_1
+       209: aload_1
+       210: ifnonnull     216
+       213: goto          108
+       216: aload_0
+       217: invokestatic  #93                 // Method java/lang/System.currentTimeMillis:()J
+       220: putfield      #95                 // Field lastPacketTime:J
+       223: aload_1
+       224: invokevirtual #280                // Method de/maxhenkel/voicechat/voice/common/SoundPacket.isFromClientAudioChannel:()Z
+       227: ifne          254
+       230: aload_0
+       231: getfield      #109                // Field lastSequenceNumber:J
+       234: lconst_0
+       235: lcmp
+       236: iflt          254
+       239: aload_1
+       240: invokevirtual #283                // Method de/maxhenkel/voicechat/voice/common/SoundPacket.getSequenceNumber:()J
+       243: aload_0
+       244: getfield      #109                // Field lastSequenceNumber:J
+       247: lcmp
+       248: ifgt          254
+       251: goto          108
+       254: aload_0
+       255: getfield      #117                // Field minecraft:Lnet/minecraft/client/Minecraft;
+       258: getfield      #287                // Field net/minecraft/client/Minecraft.level:Lnet/minecraft/client/multiplayer/ClientLevel;
+       261: ifnull        108
+       264: aload_0
+       265: getfield      #117                // Field minecraft:Lnet/minecraft/client/Minecraft;
+       268: getfield      #291                // Field net/minecraft/client/Minecraft.player:Lnet/minecraft/client/player/LocalPlayer;
+       271: ifnonnull     277
+       274: goto          108
+       277: aload_1
+       278: invokevirtual #295                // Method de/maxhenkel/voicechat/voice/common/SoundPacket.getData:()[B
+       281: arraylength
+       282: ifne          436
+       285: aload_1
+       286: instanceof    #297                // class de/maxhenkel/voicechat/voice/common/PlayerSoundPacket
+       289: ifeq          326
+       292: aload_1
+       293: checkcast     #297                // class de/maxhenkel/voicechat/voice/common/PlayerSoundPacket
+       296: astore_2
+       297: invokestatic  #303                // Method de/maxhenkel/voicechat/plugins/ClientPluginManager.instance:()Lde/maxhenkel/voicechat/plugins/ClientPluginManager;
+       300: aload_0
+       301: getfield      #51                 // Field uuid:Ljava/util/UUID;
+       304: aload_2
+       305: invokevirtual #306                // Method de/maxhenkel/voicechat/voice/common/PlayerSoundPacket.getSender:()Ljava/util/UUID;
+       308: iconst_0
+       309: newarray       short
+       311: aload_2
+       312: invokevirtual #309                // Method de/maxhenkel/voicechat/voice/common/PlayerSoundPacket.isWhispering:()Z
+       315: aload_2
+       316: invokevirtual #313                // Method de/maxhenkel/voicechat/voice/common/PlayerSoundPacket.getDistance:()F
+       319: invokevirtual #317                // Method de/maxhenkel/voicechat/plugins/ClientPluginManager.onReceiveEntityClientSound:(Ljava/util/UUID;Ljava/util/UUID;[SZF)[S
+       322: pop
+       323: goto          384
+       326: aload_1
+       327: instanceof    #319                // class de/maxhenkel/voicechat/voice/common/LocationSoundPacket
+       330: ifeq          363
+       333: aload_1
+       334: checkcast     #319                // class de/maxhenkel/voicechat/voice/common/LocationSoundPacket
+       337: astore_3
+       338: invokestatic  #303                // Method de/maxhenkel/voicechat/plugins/ClientPluginManager.instance:()Lde/maxhenkel/voicechat/plugins/ClientPluginManager;
+       341: aload_0
+       342: getfield      #51                 // Field uuid:Ljava/util/UUID;
+       345: iconst_0
+       346: newarray       short
+       348: aload_3
+       349: invokevirtual #323                // Method de/maxhenkel/voicechat/voice/common/LocationSoundPacket.getLocation:()Lnet/minecraft/world/phys/Vec3;
+       352: aload_3
+       353: invokevirtual #324                // Method de/maxhenkel/voicechat/voice/common/LocationSoundPacket.getDistance:()F
+       356: invokevirtual #328                // Method de/maxhenkel/voicechat/plugins/ClientPluginManager.onReceiveLocationalClientSound:(Ljava/util/UUID;[SLnet/minecraft/world/phys/Vec3;F)[S
+       359: pop
+       360: goto          384
+       363: aload_1
+       364: instanceof    #330                // class de/maxhenkel/voicechat/voice/common/GroupSoundPacket
+       367: ifeq          384
+       370: invokestatic  #303                // Method de/maxhenkel/voicechat/plugins/ClientPluginManager.instance:()Lde/maxhenkel/voicechat/plugins/ClientPluginManager;
+       373: aload_0
+       374: getfield      #51                 // Field uuid:Ljava/util/UUID;
+       377: iconst_0
+       378: newarray       short
+       380: invokevirtual #334                // Method de/maxhenkel/voicechat/plugins/ClientPluginManager.onReceiveStaticClientSound:(Ljava/util/UUID;[S)[S
+       383: pop
+       384: aload_0
+       385: ldc2_w        #106                // long -1l
+       388: putfield      #109                // Field lastSequenceNumber:J
+       391: aload_0
+       392: getfield      #87                 // Field packetBuffer:Lde/maxhenkel/voicechat/voice/client/AudioPacketBuffer;
+       395: invokevirtual #335                // Method de/maxhenkel/voicechat/voice/client/AudioPacketBuffer.clear:()V
+       398: aload_0
+       399: invokevirtual #245                // Method flushRecording:()V
+       402: aload_0
+       403: getfield      #105                // Field decoder:Lde/maxhenkel/voicechat/api/opus/OpusDecoder;
+       406: invokeinterface #338,  1          // InterfaceMethod de/maxhenkel/voicechat/api/opus/OpusDecoder.resetState:()V
+       411: aload_0
+       412: getfield      #45                 // Field client:Lde/maxhenkel/voicechat/voice/client/ClientVoicechat;
+       415: invokevirtual #344                // Method de/maxhenkel/voicechat/voice/client/ClientVoicechat.getTalkCache:()Lde/maxhenkel/voicechat/voice/client/TalkCache;
+       418: aload_0
+       419: getfield      #51                 // Field uuid:Ljava/util/UUID;
+       422: aload_1
+       423: invokevirtual #347                // Method de/maxhenkel/voicechat/voice/common/SoundPacket.getCategory:()Ljava/lang/String;
+       426: iconst_0
+       427: iconst_0
+       428: newarray       short
+       430: invokevirtual #353                // Method de/maxhenkel/voicechat/voice/client/TalkCache.updateLevel:(Ljava/util/UUID;Ljava/lang/String;Z[S)V
+       433: goto          108
+       436: aload_1
+       437: invokevirtual #280                // Method de/maxhenkel/voicechat/voice/common/SoundPacket.isFromClientAudioChannel:()Z
+       440: ifeq          458
+       443: aload_0
+       444: aload_1
+       445: aload_1
+       446: invokevirtual #295                // Method de/maxhenkel/voicechat/voice/common/SoundPacket.getData:()[B
+       449: invokestatic  #359                // Method de/maxhenkel/voicechat/voice/common/AudioUtils.bytesToShorts:([B)[S
+       452: invokevirtual #363                // Method writeToSpeaker:(Lde/maxhenkel/voicechat/voice/common/SoundPacket;[S)V
+       455: goto          108
+       458: iconst_0
+       459: istore_2
+       460: aload_0
+       461: getfield      #109                // Field lastSequenceNumber:J
+       464: lconst_0
+       465: lcmp
+       466: iflt          584
+       469: aload_1
+       470: invokevirtual #283                // Method de/maxhenkel/voicechat/voice/common/SoundPacket.getSequenceNumber:()J
+       473: aload_0
+       474: getfield      #109                // Field lastSequenceNumber:J
+       477: lconst_1
+       478: ladd
+       479: lsub
+       480: l2i
+       481: istore_2
+       482: iload_2
+       483: ifle          497
+       486: aload_0
+       487: dup
+       488: getfield      #365                // Field lostPackets:J
+       491: iload_2
+       492: i2l
+       493: ladd
+       494: putfield      #365                // Field lostPackets:J
+       497: iload_2
+       498: getstatic     #64                 // Field de/maxhenkel/voicechat/VoicechatClient.CLIENT_CONFIG:Lde/maxhenkel/voicechat/config/ClientConfig;
+       501: getfield      #368                // Field de/maxhenkel/voicechat/config/ClientConfig.outputBufferSize:Lde/maxhenkel/voicechat/configbuilder/entry/ConfigEntry;
+       504: invokeinterface #76,  1           // InterfaceMethod de/maxhenkel/voicechat/configbuilder/entry/ConfigEntry.get:()Ljava/lang/Object;
+       509: checkcast     #78                 // class java/lang/Integer
+       512: invokevirtual #82                 // Method java/lang/Integer.intValue:()I
+       515: if_icmple     558
+       518: getstatic     #156                // Field de/maxhenkel/voicechat/Voicechat.LOGGER:Lde/maxhenkel/voicechat/logging/VoicechatLogger;
+       521: ldc_w         #370                // String Skipping compensation for {} packets
+       524: iconst_1
+       525: anewarray     #160                // class java/lang/Object
+       528: dup
+       529: iconst_0
+       530: iload_2
+       531: invokestatic  #374                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+       534: aastore
+       535: invokeinterface #242,  3          // InterfaceMethod de/maxhenkel/voicechat/logging/VoicechatLogger.debug:(Ljava/lang/String;[Ljava/lang/Object;)V
+       540: iconst_0
+       541: istore_2
+       542: aload_0
+       543: getfield      #105                // Field decoder:Lde/maxhenkel/voicechat/api/opus/OpusDecoder;
+       546: invokeinterface #338,  1          // InterfaceMethod de/maxhenkel/voicechat/api/opus/OpusDecoder.resetState:()V
+       551: aload_0
+       552: invokevirtual #245                // Method flushRecording:()V
+       555: goto          584
+       558: iload_2
+       559: ifle          584
+       562: getstatic     #156                // Field de/maxhenkel/voicechat/Voicechat.LOGGER:Lde/maxhenkel/voicechat/logging/VoicechatLogger;
+       565: ldc_w         #376                // String Compensating {} packet(s)
+       568: iconst_1
+       569: anewarray     #160                // class java/lang/Object
+       572: dup
+       573: iconst_0
+       574: iload_2
+       575: invokestatic  #374                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+       578: aastore
+       579: invokeinterface #242,  3          // InterfaceMethod de/maxhenkel/voicechat/logging/VoicechatLogger.debug:(Ljava/lang/String;[Ljava/lang/Object;)V
+       584: aload_0
+       585: aload_1
+       586: invokevirtual #283                // Method de/maxhenkel/voicechat/voice/common/SoundPacket.getSequenceNumber:()J
+       589: putfield      #109                // Field lastSequenceNumber:J
+       592: aload_0
+       593: getfield      #105                // Field decoder:Lde/maxhenkel/voicechat/api/opus/OpusDecoder;
+       596: aload_1
+       597: invokevirtual #295                // Method de/maxhenkel/voicechat/voice/common/SoundPacket.getData:()[B
+       600: iload_2
+       601: iconst_1
+       602: iadd
+       603: invokeinterface #380,  3          // InterfaceMethod de/maxhenkel/voicechat/api/opus/OpusDecoder.decode:([BI)[[S
+       608: astore_3
+       609: aload_3
+       610: astore        4
+       612: aload         4
+       614: arraylength
+       615: istore        5
+       617: iconst_0
+       618: istore        6
+       620: iload         6
+       622: iload         5
+       624: if_icmpge     647
+       627: aload         4
+       629: iload         6
+       631: aaload
+       632: astore        7
+       634: aload_0
+       635: aload_1
+       636: aload         7
+       638: invokevirtual #363                // Method writeToSpeaker:(Lde/maxhenkel/voicechat/voice/common/SoundPacket;[S)V
+       641: iinc          6, 1
+       644: goto          620
+       647: goto          108
+       650: aload_0
+       651: iconst_1
+       652: putfield      #97                 // Field stopped:Z
+       655: aload_0
+       656: getfield      #232                // Field speaker:Lde/maxhenkel/voicechat/voice/client/speaker/Speaker;
+       659: ifnull        675
+       662: aload_0
+       663: invokevirtual #245                // Method flushRecording:()V
+       666: aload_0
+       667: getfield      #232                // Field speaker:Lde/maxhenkel/voicechat/voice/client/speaker/Speaker;
+       670: invokeinterface #250,  1          // InterfaceMethod de/maxhenkel/voicechat/voice/client/speaker/Speaker.close:()V
+       675: aload_0
+       676: getfield      #105                // Field decoder:Lde/maxhenkel/voicechat/api/opus/OpusDecoder;
+       679: invokeinterface #253,  1          // InterfaceMethod de/maxhenkel/voicechat/api/opus/OpusDecoder.close:()V
+       684: getstatic     #156                // Field de/maxhenkel/voicechat/Voicechat.LOGGER:Lde/maxhenkel/voicechat/logging/VoicechatLogger;
+       687: ldc           #255                // String Closed audio channel {}
+       689: iconst_1
+       690: anewarray     #160                // class java/lang/Object
+       693: dup
+       694: iconst_0
+       695: aload_0
+       696: getfield      #51                 // Field uuid:Ljava/util/UUID;
+       699: aastore
+       700: invokeinterface #166,  3          // InterfaceMethod de/maxhenkel/voicechat/logging/VoicechatLogger.info:(Ljava/lang/String;[Ljava/lang/Object;)V
+       705: goto          905
+       708: astore_1
+       709: aload_0
+       710: iconst_1
+       711: putfield      #97                 // Field stopped:Z
+       714: aload_0
+       715: getfield      #232                // Field speaker:Lde/maxhenkel/voicechat/voice/client/speaker/Speaker;
+       718: ifnull        734
+       721: aload_0
+       722: invokevirtual #245                // Method flushRecording:()V
+       725: aload_0
+       726: getfield      #232                // Field speaker:Lde/maxhenkel/voicechat/voice/client/speaker/Speaker;
+       729: invokeinterface #250,  1          // InterfaceMethod de/maxhenkel/voicechat/voice/client/speaker/Speaker.close:()V
+       734: aload_0
+       735: getfield      #105                // Field decoder:Lde/maxhenkel/voicechat/api/opus/OpusDecoder;
+       738: invokeinterface #253,  1          // InterfaceMethod de/maxhenkel/voicechat/api/opus/OpusDecoder.close:()V
+       743: getstatic     #156                // Field de/maxhenkel/voicechat/Voicechat.LOGGER:Lde/maxhenkel/voicechat/logging/VoicechatLogger;
+       746: ldc           #255                // String Closed audio channel {}
+       748: iconst_1
+       749: anewarray     #160                // class java/lang/Object
+       752: dup
+       753: iconst_0
+       754: aload_0
+       755: getfield      #51                 // Field uuid:Ljava/util/UUID;
+       758: aastore
+       759: invokeinterface #166,  3          // InterfaceMethod de/maxhenkel/voicechat/logging/VoicechatLogger.info:(Ljava/lang/String;[Ljava/lang/Object;)V
+       764: goto          905
+       767: astore_1
+       768: getstatic     #156                // Field de/maxhenkel/voicechat/Voicechat.LOGGER:Lde/maxhenkel/voicechat/logging/VoicechatLogger;
+       771: ldc_w         #384                // String Audio channel error
+       774: iconst_1
+       775: anewarray     #160                // class java/lang/Object
+       778: dup
+       779: iconst_0
+       780: aload_1
+       781: aastore
+       782: invokeinterface #205,  3          // InterfaceMethod de/maxhenkel/voicechat/logging/VoicechatLogger.error:(Ljava/lang/String;[Ljava/lang/Object;)V
+       787: aload_0
+       788: iconst_1
+       789: putfield      #97                 // Field stopped:Z
+       792: aload_0
+       793: getfield      #232                // Field speaker:Lde/maxhenkel/voicechat/voice/client/speaker/Speaker;
+       796: ifnull        812
+       799: aload_0
+       800: invokevirtual #245                // Method flushRecording:()V
+       803: aload_0
+       804: getfield      #232                // Field speaker:Lde/maxhenkel/voicechat/voice/client/speaker/Speaker;
+       807: invokeinterface #250,  1          // InterfaceMethod de/maxhenkel/voicechat/voice/client/speaker/Speaker.close:()V
+       812: aload_0
+       813: getfield      #105                // Field decoder:Lde/maxhenkel/voicechat/api/opus/OpusDecoder;
+       816: invokeinterface #253,  1          // InterfaceMethod de/maxhenkel/voicechat/api/opus/OpusDecoder.close:()V
+       821: getstatic     #156                // Field de/maxhenkel/voicechat/Voicechat.LOGGER:Lde/maxhenkel/voicechat/logging/VoicechatLogger;
+       824: ldc           #255                // String Closed audio channel {}
+       826: iconst_1
+       827: anewarray     #160                // class java/lang/Object
+       830: dup
+       831: iconst_0
+       832: aload_0
+       833: getfield      #51                 // Field uuid:Ljava/util/UUID;
+       836: aastore
+       837: invokeinterface #166,  3          // InterfaceMethod de/maxhenkel/voicechat/logging/VoicechatLogger.info:(Ljava/lang/String;[Ljava/lang/Object;)V
+       842: goto          905
+       845: astore        8
+       847: aload_0
+       848: iconst_1
+       849: putfield      #97                 // Field stopped:Z
+       852: aload_0
+       853: getfield      #232                // Field speaker:Lde/maxhenkel/voicechat/voice/client/speaker/Speaker;
+       856: ifnull        872
+       859: aload_0
+       860: invokevirtual #245                // Method flushRecording:()V
+       863: aload_0
+       864: getfield      #232                // Field speaker:Lde/maxhenkel/voicechat/voice/client/speaker/Speaker;
+       867: invokeinterface #250,  1          // InterfaceMethod de/maxhenkel/voicechat/voice/client/speaker/Speaker.close:()V
+       872: aload_0
+       873: getfield      #105                // Field decoder:Lde/maxhenkel/voicechat/api/opus/OpusDecoder;
+       876: invokeinterface #253,  1          // InterfaceMethod de/maxhenkel/voicechat/api/opus/OpusDecoder.close:()V
+       881: getstatic     #156                // Field de/maxhenkel/voicechat/Voicechat.LOGGER:Lde/maxhenkel/voicechat/logging/VoicechatLogger;
+       884: ldc           #255                // String Closed audio channel {}
+       886: iconst_1
+       887: anewarray     #160                // class java/lang/Object
+       890: dup
+       891: iconst_0
+       892: aload_0
+       893: getfield      #51                 // Field uuid:Ljava/util/UUID;
+       896: aastore
+       897: invokeinterface #166,  3          // InterfaceMethod de/maxhenkel/voicechat/logging/VoicechatLogger.info:(Ljava/lang/String;[Ljava/lang/Object;)V
+       902: aload         8
+       904: athrow
+       905: return
+      Exception table:
+         from    to  target type
+             0    15    18   Class de/maxhenkel/voicechat/voice/client/speaker/SpeakerException
+             0    50   708   Class java/lang/InterruptedException
+           106   141   708   Class java/lang/InterruptedException
+           197   650   708   Class java/lang/InterruptedException
+             0    50   767   Class java/lang/Throwable
+           106   141   767   Class java/lang/Throwable
+           197   650   767   Class java/lang/Throwable
+             0    50   845   any
+           106   141   845   any
+           197   650   845   any
+           767   787   845   any
+           845   847   845   any
+
+  private void flushRecording();
+    Code:
+         0: aload_0
+         1: getfield      #45                 // Field client:Lde/maxhenkel/voicechat/voice/client/ClientVoicechat;
+         4: invokevirtual #400                // Method de/maxhenkel/voicechat/voice/client/ClientVoicechat.getRecorder:()Lde/maxhenkel/voicechat/voice/client/AudioRecorder;
+         7: astore_1
+         8: aload_1
+         9: ifnonnull     13
+        12: return
+        13: aload_1
+        14: aload_0
+        15: getfield      #51                 // Field uuid:Ljava/util/UUID;
+        18: invokevirtual #406                // Method de/maxhenkel/voicechat/voice/client/AudioRecorder.flushChunkThreaded:(Ljava/util/UUID;)V
+        21: return
+
+  private void writeToSpeaker(de.maxhenkel.voicechat.voice.common.SoundPacket<?>, short[]);
+    Code:
+         0: invokestatic  #413                // Method de/maxhenkel/voicechat/voice/client/ClientManager.getCameraState:()Lde/maxhenkel/voicechat/voice/client/camera/CameraState;
+         3: astore_3
+         4: aload_1
+         5: invokevirtual #347                // Method de/maxhenkel/voicechat/voice/common/SoundPacket.getCategory:()Ljava/lang/String;
+         8: astore        5
+        10: getstatic     #417                // Field de/maxhenkel/voicechat/VoicechatClient.USERNAME_CACHE:Lde/maxhenkel/voicechat/profile/UsernameCache;
+        13: aload_0
+        14: getfield      #51                 // Field uuid:Ljava/util/UUID;
+        17: invokevirtual #423                // Method de/maxhenkel/voicechat/profile/UsernameCache.has:(Ljava/util/UUID;)Z
+        20: ifeq          39
+        23: getstatic     #427                // Field de/maxhenkel/voicechat/VoicechatClient.PLAYER_VOLUME_CONFIG:Lde/maxhenkel/voicechat/config/PlayerVolumeConfig;
+        26: aload_0
+        27: getfield      #51                 // Field uuid:Ljava/util/UUID;
+        30: invokevirtual #433                // Method de/maxhenkel/voicechat/config/PlayerVolumeConfig.getVolume:(Ljava/lang/Object;)D
+        33: d2f
+        34: fstore        4
+        36: goto          70
+        39: aload         5
+        41: ifnull        58
+        44: getstatic     #441                // Field de/maxhenkel/voicechat/VoicechatClient.CATEGORY_VOLUME_CONFIG:Lde/maxhenkel/voicechat/config/CategoryVolumeConfig;
+        47: aload         5
+        49: invokevirtual #444                // Method de/maxhenkel/voicechat/config/CategoryVolumeConfig.getVolume:(Ljava/lang/Object;)D
+        52: d2f
+        53: fstore        4
+        55: goto          70
+        58: getstatic     #441                // Field de/maxhenkel/voicechat/VoicechatClient.CATEGORY_VOLUME_CONFIG:Lde/maxhenkel/voicechat/config/CategoryVolumeConfig;
+        61: ldc_w         #446                // String other
+        64: invokevirtual #444                // Method de/maxhenkel/voicechat/config/CategoryVolumeConfig.getVolume:(Ljava/lang/Object;)D
+        67: d2f
+        68: fstore        4
+        70: getstatic     #64                 // Field de/maxhenkel/voicechat/VoicechatClient.CLIENT_CONFIG:Lde/maxhenkel/voicechat/config/ClientConfig;
+        73: getfield      #451                // Field de/maxhenkel/voicechat/config/ClientConfig.voiceChatVolume:Lde/maxhenkel/voicechat/configbuilder/entry/DoubleConfigEntry;
+        76: invokevirtual #454                // Method de/maxhenkel/voicechat/configbuilder/entry/DoubleConfigEntry.get:()Ljava/lang/Object;
+        79: checkcast     #456                // class java/lang/Double
+        82: invokevirtual #459                // Method java/lang/Double.floatValue:()F
+        85: fload         4
+        87: fmul
+        88: fstore        6
+        90: aload_1
+        91: instanceof    #330                // class de/maxhenkel/voicechat/voice/common/GroupSoundPacket
+        94: ifeq          160
+        97: invokestatic  #303                // Method de/maxhenkel/voicechat/plugins/ClientPluginManager.instance:()Lde/maxhenkel/voicechat/plugins/ClientPluginManager;
+       100: aload_0
+       101: getfield      #51                 // Field uuid:Ljava/util/UUID;
+       104: aload_2
+       105: invokevirtual #334                // Method de/maxhenkel/voicechat/plugins/ClientPluginManager.onReceiveStaticClientSound:(Ljava/util/UUID;[S)[S
+       108: astore        9
+       110: aload_0
+       111: getfield      #232                // Field speaker:Lde/maxhenkel/voicechat/voice/client/speaker/Speaker;
+       114: aload         9
+       116: fload         6
+       118: aload_1
+       119: invokevirtual #347                // Method de/maxhenkel/voicechat/voice/common/SoundPacket.getCategory:()Ljava/lang/String;
+       122: invokeinterface #463,  4          // InterfaceMethod de/maxhenkel/voicechat/voice/client/speaker/Speaker.play:([SFLjava/lang/String;)V
+       127: aload_0
+       128: getfield      #45                 // Field client:Lde/maxhenkel/voicechat/voice/client/ClientVoicechat;
+       131: invokevirtual #344                // Method de/maxhenkel/voicechat/voice/client/ClientVoicechat.getTalkCache:()Lde/maxhenkel/voicechat/voice/client/TalkCache;
+       134: aload_0
+       135: getfield      #51                 // Field uuid:Ljava/util/UUID;
+       138: aload         5
+       140: iconst_0
+       141: aload         9
+       143: invokevirtual #353                // Method de/maxhenkel/voicechat/voice/client/TalkCache.updateLevel:(Ljava/util/UUID;Ljava/lang/String;Z[S)V
+       146: aload_0
+       147: aload         9
+       149: invokedynamic #481,  0            // InvokeDynamic #1:get:([S)Ljava/util/function/Supplier;
+       154: invokevirtual #485                // Method appendRecording:(Ljava/util/function/Supplier;)V
+       157: goto          816
+       160: aload_1
+       161: instanceof    #297                // class de/maxhenkel/voicechat/voice/common/PlayerSoundPacket
+       164: ifeq          697
+       167: aload_1
+       168: checkcast     #297                // class de/maxhenkel/voicechat/voice/common/PlayerSoundPacket
+       171: astore        7
+       173: aload_0
+       174: getfield      #117                // Field minecraft:Lnet/minecraft/client/Minecraft;
+       177: getfield      #287                // Field net/minecraft/client/Minecraft.level:Lnet/minecraft/client/multiplayer/ClientLevel;
+       180: aload         7
+       182: invokevirtual #306                // Method de/maxhenkel/voicechat/voice/common/PlayerSoundPacket.getSender:()Ljava/util/UUID;
+       185: invokevirtual #491                // Method net/minecraft/client/multiplayer/ClientLevel.getPlayerByUUID:(Ljava/util/UUID;)Lnet/minecraft/world/entity/player/Player;
+       188: astore        9
+       190: aload         9
+       192: ifnonnull     342
+       195: aload_3
+       196: invokevirtual #494                // Method de/maxhenkel/voicechat/voice/client/camera/CameraState.position:()Lnet/minecraft/world/phys/Vec3;
+       199: astore        10
+       201: new           #496                // class net/minecraft/world/phys/AABB
+       204: dup
+       205: aload         10
+       207: getfield      #502                // Field net/minecraft/world/phys/Vec3.x:D
+       210: aload         7
+       212: invokevirtual #313                // Method de/maxhenkel/voicechat/voice/common/PlayerSoundPacket.getDistance:()F
+       215: f2d
+       216: dsub
+       217: dconst_1
+       218: dsub
+       219: aload         10
+       221: getfield      #505                // Field net/minecraft/world/phys/Vec3.y:D
+       224: aload         7
+       226: invokevirtual #313                // Method de/maxhenkel/voicechat/voice/common/PlayerSoundPacket.getDistance:()F
+       229: f2d
+       230: dsub
+       231: dconst_1
+       232: dsub
+       233: aload         10
+       235: getfield      #508                // Field net/minecraft/world/phys/Vec3.z:D
+       238: aload         7
+       240: invokevirtual #313                // Method de/maxhenkel/voicechat/voice/common/PlayerSoundPacket.getDistance:()F
+       243: f2d
+       244: dsub
+       245: dconst_1
+       246: dsub
+       247: aload         10
+       249: getfield      #502                // Field net/minecraft/world/phys/Vec3.x:D
+       252: aload         7
+       254: invokevirtual #313                // Method de/maxhenkel/voicechat/voice/common/PlayerSoundPacket.getDistance:()F
+       257: f2d
+       258: dadd
+       259: dconst_1
+       260: dadd
+       261: aload         10
+       263: getfield      #505                // Field net/minecraft/world/phys/Vec3.y:D
+       266: aload         7
+       268: invokevirtual #313                // Method de/maxhenkel/voicechat/voice/common/PlayerSoundPacket.getDistance:()F
+       271: f2d
+       272: dadd
+       273: dconst_1
+       274: dadd
+       275: aload         10
+       277: getfield      #508                // Field net/minecraft/world/phys/Vec3.z:D
+       280: aload         7
+       282: invokevirtual #313                // Method de/maxhenkel/voicechat/voice/common/PlayerSoundPacket.getDistance:()F
+       285: f2d
+       286: dadd
+       287: dconst_1
+       288: dadd
+       289: invokespecial #511                // Method net/minecraft/world/phys/AABB."<init>":(DDDDDD)V
+       292: astore        11
+       294: aload_0
+       295: getfield      #117                // Field minecraft:Lnet/minecraft/client/Minecraft;
+       298: getfield      #287                // Field net/minecraft/client/Minecraft.level:Lnet/minecraft/client/multiplayer/ClientLevel;
+       301: aconst_null
+       302: checkcast     #513                // class net/minecraft/world/entity/Entity
+       305: aload         11
+       307: aload         7
+       309: invokedynamic #525,  0            // InvokeDynamic #2:test:(Lde/maxhenkel/voicechat/voice/common/PlayerSoundPacket;)Ljava/util/function/Predicate;
+       314: invokevirtual #529                // Method net/minecraft/client/multiplayer/ClientLevel.getEntities:(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/phys/AABB;Ljava/util/function/Predicate;)Ljava/util/List;
+       317: invokeinterface #535,  1          // InterfaceMethod java/util/List.stream:()Ljava/util/stream/Stream;
+       322: invokeinterface #541,  1          // InterfaceMethod java/util/stream/Stream.findAny:()Ljava/util/Optional;
+       327: aconst_null
+       328: invokevirtual #547                // Method java/util/Optional.orElse:(Ljava/lang/Object;)Ljava/lang/Object;
+       331: checkcast     #513                // class net/minecraft/world/entity/Entity
+       334: astore        9
+       336: aload         9
+       338: ifnonnull     342
+       341: return
+       342: aload         9
+       344: invokevirtual #550                // Method net/minecraft/world/entity/Entity.getUUID:()Ljava/util/UUID;
+       347: aload_3
+       348: invokevirtual #553                // Method de/maxhenkel/voicechat/voice/client/camera/CameraState.cameraEntity:()Ljava/util/UUID;
+       351: invokevirtual #556                // Method java/util/UUID.equals:(Ljava/lang/Object;)Z
+       354: ifeq          423
+       357: invokestatic  #303                // Method de/maxhenkel/voicechat/plugins/ClientPluginManager.instance:()Lde/maxhenkel/voicechat/plugins/ClientPluginManager;
+       360: aload_0
+       361: getfield      #51                 // Field uuid:Ljava/util/UUID;
+       364: aload_2
+       365: invokevirtual #334                // Method de/maxhenkel/voicechat/plugins/ClientPluginManager.onReceiveStaticClientSound:(Ljava/util/UUID;[S)[S
+       368: astore        10
+       370: aload_0
+       371: getfield      #232                // Field speaker:Lde/maxhenkel/voicechat/voice/client/speaker/Speaker;
+       374: aload         10
+       376: fload         6
+       378: aload         7
+       380: invokevirtual #557                // Method de/maxhenkel/voicechat/voice/common/PlayerSoundPacket.getCategory:()Ljava/lang/String;
+       383: invokeinterface #463,  4          // InterfaceMethod de/maxhenkel/voicechat/voice/client/speaker/Speaker.play:([SFLjava/lang/String;)V
+       388: aload_0
+       389: getfield      #45                 // Field client:Lde/maxhenkel/voicechat/voice/client/ClientVoicechat;
+       392: invokevirtual #344                // Method de/maxhenkel/voicechat/voice/client/ClientVoicechat.getTalkCache:()Lde/maxhenkel/voicechat/voice/client/TalkCache;
+       395: aload_0
+       396: getfield      #51                 // Field uuid:Ljava/util/UUID;
+       399: aload         5
+       401: aload         7
+       403: invokevirtual #309                // Method de/maxhenkel/voicechat/voice/common/PlayerSoundPacket.isWhispering:()Z
+       406: aload         10
+       408: invokevirtual #353                // Method de/maxhenkel/voicechat/voice/client/TalkCache.updateLevel:(Ljava/util/UUID;Ljava/lang/String;Z[S)V
+       411: aload_0
+       412: aload         10
+       414: invokedynamic #562,  0            // InvokeDynamic #3:get:([S)Ljava/util/function/Supplier;
+       419: invokevirtual #485                // Method appendRecording:(Ljava/util/function/Supplier;)V
+       422: return
+       423: fconst_1
+       424: fstore        10
+       426: aload         9
+       428: instanceof    #564                // class net/minecraft/world/entity/LivingEntity
+       431: ifeq          461
+       434: ldc_w         #565                // float 20.0f
+       437: aload         9
+       439: checkcast     #564                // class net/minecraft/world/entity/LivingEntity
+       442: getfield      #568                // Field net/minecraft/world/entity/LivingEntity.deathTime:I
+       445: i2f
+       446: fsub
+       447: ldc_w         #565                // float 20.0f
+       450: fdiv
+       451: fconst_0
+       452: invokestatic  #574                // Method java/lang/Math.max:(FF)F
+       455: fconst_1
+       456: invokestatic  #577                // Method java/lang/Math.min:(FF)F
+       459: fstore        10
+       461: fload         6
+       463: fload         10
+       465: fmul
+       466: fstore        6
+       468: aload         9
+       470: invokevirtual #580                // Method net/minecraft/world/entity/Entity.getEyePosition:()Lnet/minecraft/world/phys/Vec3;
+       473: astore        11
+       475: invokestatic  #303                // Method de/maxhenkel/voicechat/plugins/ClientPluginManager.instance:()Lde/maxhenkel/voicechat/plugins/ClientPluginManager;
+       478: aload_0
+       479: getfield      #51                 // Field uuid:Ljava/util/UUID;
+       482: aload         7
+       484: invokevirtual #306                // Method de/maxhenkel/voicechat/voice/common/PlayerSoundPacket.getSender:()Ljava/util/UUID;
+       487: aload_2
+       488: aload         7
+       490: invokevirtual #309                // Method de/maxhenkel/voicechat/voice/common/PlayerSoundPacket.isWhispering:()Z
+       493: aload         7
+       495: invokevirtual #313                // Method de/maxhenkel/voicechat/voice/common/PlayerSoundPacket.getDistance:()F
+       498: invokevirtual #317                // Method de/maxhenkel/voicechat/plugins/ClientPluginManager.onReceiveEntityClientSound:(Ljava/util/UUID;Ljava/util/UUID;[SZF)[S
+       501: astore        12
+       503: aload_3
+       504: aload         11
+       506: invokestatic  #586                // Method de/maxhenkel/voicechat/integration/freecam/FreecamUtil.getDistanceTo:(Lde/maxhenkel/voicechat/voice/client/camera/CameraState;Lnet/minecraft/world/phys/Vec3;)D
+       509: aload         7
+       511: invokevirtual #313                // Method de/maxhenkel/voicechat/voice/common/PlayerSoundPacket.getDistance:()F
+       514: f2d
+       515: dconst_1
+       516: dadd
+       517: dcmpl
+       518: ifle          522
+       521: return
+       522: aload_3
+       523: aload         7
+       525: invokevirtual #313                // Method de/maxhenkel/voicechat/voice/common/PlayerSoundPacket.getDistance:()F
+       528: aload         11
+       530: invokestatic  #590                // Method de/maxhenkel/voicechat/integration/freecam/FreecamUtil.getDistanceVolume:(Lde/maxhenkel/voicechat/voice/client/camera/CameraState;FLnet/minecraft/world/phys/Vec3;)F
+       533: fstore        13
+       535: aload_3
+       536: invokestatic  #594                // Method de/maxhenkel/voicechat/integration/freecam/FreecamUtil.isFreecamEnabled:(Lde/maxhenkel/voicechat/voice/client/camera/CameraState;)Z
+       539: ifeq          616
+       542: fload         6
+       544: fload         13
+       546: fmul
+       547: fstore        6
+       549: aload_0
+       550: getfield      #232                // Field speaker:Lde/maxhenkel/voicechat/voice/client/speaker/Speaker;
+       553: aload         12
+       555: fload         6
+       557: aload         7
+       559: invokevirtual #557                // Method de/maxhenkel/voicechat/voice/common/PlayerSoundPacket.getCategory:()Ljava/lang/String;
+       562: invokeinterface #463,  4          // InterfaceMethod de/maxhenkel/voicechat/voice/client/speaker/Speaker.play:([SFLjava/lang/String;)V
+       567: fload         13
+       569: fconst_0
+       570: fcmpl
+       571: ifle          598
+       574: aload_0
+       575: getfield      #45                 // Field client:Lde/maxhenkel/voicechat/voice/client/ClientVoicechat;
+       578: invokevirtual #344                // Method de/maxhenkel/voicechat/voice/client/ClientVoicechat.getTalkCache:()Lde/maxhenkel/voicechat/voice/client/TalkCache;
+       581: aload         7
+       583: invokevirtual #306                // Method de/maxhenkel/voicechat/voice/common/PlayerSoundPacket.getSender:()Ljava/util/UUID;
+       586: aload         5
+       588: aload         7
+       590: invokevirtual #309                // Method de/maxhenkel/voicechat/voice/common/PlayerSoundPacket.isWhispering:()Z
+       593: aload         12
+       595: invokevirtual #353                // Method de/maxhenkel/voicechat/voice/client/TalkCache.updateLevel:(Ljava/util/UUID;Ljava/lang/String;Z[S)V
+       598: fload         6
+       600: fstore        14
+       602: aload_0
+       603: aload         12
+       605: fload         14
+       607: invokedynamic #602,  0            // InvokeDynamic #4:get:([SF)Ljava/util/function/Supplier;
+       612: invokevirtual #485                // Method appendRecording:(Ljava/util/function/Supplier;)V
+       615: return
+       616: aload_0
+       617: getfield      #232                // Field speaker:Lde/maxhenkel/voicechat/voice/client/speaker/Speaker;
+       620: aload         12
+       622: fload         6
+       624: aload         11
+       626: aload         7
+       628: invokevirtual #557                // Method de/maxhenkel/voicechat/voice/common/PlayerSoundPacket.getCategory:()Ljava/lang/String;
+       631: aload         7
+       633: invokevirtual #313                // Method de/maxhenkel/voicechat/voice/common/PlayerSoundPacket.getDistance:()F
+       636: invokeinterface #605,  6          // InterfaceMethod de/maxhenkel/voicechat/voice/client/speaker/Speaker.play:([SFLnet/minecraft/world/phys/Vec3;Ljava/lang/String;F)V
+       641: fload         13
+       643: fconst_0
+       644: fcmpl
+       645: ifle          672
+       648: aload_0
+       649: getfield      #45                 // Field client:Lde/maxhenkel/voicechat/voice/client/ClientVoicechat;
+       652: invokevirtual #344                // Method de/maxhenkel/voicechat/voice/client/ClientVoicechat.getTalkCache:()Lde/maxhenkel/voicechat/voice/client/TalkCache;
+       655: aload         7
+       657: invokevirtual #306                // Method de/maxhenkel/voicechat/voice/common/PlayerSoundPacket.getSender:()Ljava/util/UUID;
+       660: aload         5
+       662: aload         7
+       664: invokevirtual #309                // Method de/maxhenkel/voicechat/voice/common/PlayerSoundPacket.isWhispering:()Z
+       667: aload         12
+       669: invokevirtual #353                // Method de/maxhenkel/voicechat/voice/client/TalkCache.updateLevel:(Ljava/util/UUID;Ljava/lang/String;Z[S)V
+       672: fload         10
+       674: fstore        14
+       676: aload_0
+       677: aload         7
+       679: aload_3
+       680: aload         11
+       682: aload         12
+       684: fload         14
+       686: invokedynamic #613,  0            // InvokeDynamic #5:get:(Lde/maxhenkel/voicechat/voice/common/PlayerSoundPacket;Lde/maxhenkel/voicechat/voice/client/camera/CameraState;Lnet/minecraft/world/phys/Vec3;[SF)Ljava/util/function/Supplier;
+       691: invokevirtual #485                // Method appendRecording:(Ljava/util/function/Supplier;)V
+       694: goto          816
+       697: aload_1
+       698: instanceof    #319                // class de/maxhenkel/voicechat/voice/common/LocationSoundPacket
+       701: ifeq          816
+       704: aload_1
+       705: checkcast     #319                // class de/maxhenkel/voicechat/voice/common/LocationSoundPacket
+       708: astore        8
+       710: invokestatic  #303                // Method de/maxhenkel/voicechat/plugins/ClientPluginManager.instance:()Lde/maxhenkel/voicechat/plugins/ClientPluginManager;
+       713: aload_0
+       714: getfield      #51                 // Field uuid:Ljava/util/UUID;
+       717: aload_2
+       718: aload         8
+       720: invokevirtual #323                // Method de/maxhenkel/voicechat/voice/common/LocationSoundPacket.getLocation:()Lnet/minecraft/world/phys/Vec3;
+       723: aload         8
+       725: invokevirtual #324                // Method de/maxhenkel/voicechat/voice/common/LocationSoundPacket.getDistance:()F
+       728: invokevirtual #328                // Method de/maxhenkel/voicechat/plugins/ClientPluginManager.onReceiveLocationalClientSound:(Ljava/util/UUID;[SLnet/minecraft/world/phys/Vec3;F)[S
+       731: astore        9
+       733: aload_3
+       734: aload         8
+       736: invokevirtual #323                // Method de/maxhenkel/voicechat/voice/common/LocationSoundPacket.getLocation:()Lnet/minecraft/world/phys/Vec3;
+       739: invokestatic  #586                // Method de/maxhenkel/voicechat/integration/freecam/FreecamUtil.getDistanceTo:(Lde/maxhenkel/voicechat/voice/client/camera/CameraState;Lnet/minecraft/world/phys/Vec3;)D
+       742: aload         8
+       744: invokevirtual #324                // Method de/maxhenkel/voicechat/voice/common/LocationSoundPacket.getDistance:()F
+       747: f2d
+       748: dconst_1
+       749: dadd
+       750: dcmpl
+       751: ifle          755
+       754: return
+       755: aload_0
+       756: getfield      #232                // Field speaker:Lde/maxhenkel/voicechat/voice/client/speaker/Speaker;
+       759: aload         9
+       761: fload         6
+       763: aload         8
+       765: invokevirtual #323                // Method de/maxhenkel/voicechat/voice/common/LocationSoundPacket.getLocation:()Lnet/minecraft/world/phys/Vec3;
+       768: aload         8
+       770: invokevirtual #614                // Method de/maxhenkel/voicechat/voice/common/LocationSoundPacket.getCategory:()Ljava/lang/String;
+       773: aload         8
+       775: invokevirtual #324                // Method de/maxhenkel/voicechat/voice/common/LocationSoundPacket.getDistance:()F
+       778: invokeinterface #605,  6          // InterfaceMethod de/maxhenkel/voicechat/voice/client/speaker/Speaker.play:([SFLnet/minecraft/world/phys/Vec3;Ljava/lang/String;F)V
+       783: aload_0
+       784: getfield      #45                 // Field client:Lde/maxhenkel/voicechat/voice/client/ClientVoicechat;
+       787: invokevirtual #344                // Method de/maxhenkel/voicechat/voice/client/ClientVoicechat.getTalkCache:()Lde/maxhenkel/voicechat/voice/client/TalkCache;
+       790: aload_0
+       791: getfield      #51                 // Field uuid:Ljava/util/UUID;
+       794: aload         5
+       796: iconst_0
+       797: aload         9
+       799: invokevirtual #353                // Method de/maxhenkel/voicechat/voice/client/TalkCache.updateLevel:(Ljava/util/UUID;Ljava/lang/String;Z[S)V
+       802: aload_0
+       803: aload         8
+       805: aload_3
+       806: aload         9
+       808: invokedynamic #622,  0            // InvokeDynamic #6:get:(Lde/maxhenkel/voicechat/voice/common/LocationSoundPacket;Lde/maxhenkel/voicechat/voice/client/camera/CameraState;[S)Ljava/util/function/Supplier;
+       813: invokevirtual #485                // Method appendRecording:(Ljava/util/function/Supplier;)V
+       816: return
+
+  private void appendRecording(java.util.function.Supplier<short[]>);
+    Code:
+         0: aload_0
+         1: getfield      #45                 // Field client:Lde/maxhenkel/voicechat/voice/client/ClientVoicechat;
+         4: invokevirtual #400                // Method de/maxhenkel/voicechat/voice/client/ClientVoicechat.getRecorder:()Lde/maxhenkel/voicechat/voice/client/AudioRecorder;
+         7: ifnull        68
+        10: aload_0
+        11: getfield      #45                 // Field client:Lde/maxhenkel/voicechat/voice/client/ClientVoicechat;
+        14: invokevirtual #400                // Method de/maxhenkel/voicechat/voice/client/ClientVoicechat.getRecorder:()Lde/maxhenkel/voicechat/voice/client/AudioRecorder;
+        17: aload_0
+        18: getfield      #51                 // Field uuid:Ljava/util/UUID;
+        21: invokestatic  #93                 // Method java/lang/System.currentTimeMillis:()J
+        24: aload_1
+        25: invokeinterface #647,  1          // InterfaceMethod java/util/function/Supplier.get:()Ljava/lang/Object;
+        30: checkcast     #447                // class "[S"
+        33: invokevirtual #651                // Method de/maxhenkel/voicechat/voice/client/AudioRecorder.appendChunk:(Ljava/util/UUID;J[S)V
+        36: goto          68
+        39: astore_2
+        40: getstatic     #156                // Field de/maxhenkel/voicechat/Voicechat.LOGGER:Lde/maxhenkel/voicechat/logging/VoicechatLogger;
+        43: ldc_w         #653                // String Failed to record audio
+        46: iconst_1
+        47: anewarray     #160                // class java/lang/Object
+        50: dup
+        51: iconst_0
+        52: aload_2
+        53: aastore
+        54: invokeinterface #205,  3          // InterfaceMethod de/maxhenkel/voicechat/logging/VoicechatLogger.error:(Ljava/lang/String;[Ljava/lang/Object;)V
+        59: aload_0
+        60: getfield      #45                 // Field client:Lde/maxhenkel/voicechat/voice/client/ClientVoicechat;
+        63: iconst_0
+        64: invokevirtual #657                // Method de/maxhenkel/voicechat/voice/client/ClientVoicechat.setRecording:(Z)Z
+        67: pop
+        68: return
+      Exception table:
+         from    to  target type
+            10    36    39   Class java/io/IOException
+
+  public boolean isClosed();
+    Code:
+         0: aload_0
+         1: getfield      #97                 // Field stopped:Z
+         4: ireturn
+
+  public java.util.concurrent.BlockingQueue<de.maxhenkel.voicechat.voice.common.SoundPacket<?>> getQueue();
+    Code:
+         0: aload_0
+         1: getfield      #56                 // Field queue:Ljava/util/concurrent/BlockingQueue;
+         4: areturn
+
+  public de.maxhenkel.voicechat.voice.client.speaker.Speaker getSpeaker();
+    Code:
+         0: aload_0
+         1: getfield      #232                // Field speaker:Lde/maxhenkel/voicechat/voice/client/speaker/Speaker;
+         4: areturn
+
+  public de.maxhenkel.voicechat.voice.client.AudioPacketBuffer getPacketBuffer();
+    Code:
+         0: aload_0
+         1: getfield      #87                 // Field packetBuffer:Lde/maxhenkel/voicechat/voice/client/AudioPacketBuffer;
+         4: areturn
+
+  public long getLostPackets();
+    Code:
+         0: aload_0
+         1: getfield      #365                // Field lostPackets:J
+         4: lreturn
+
+  private static short[] lambda$writeToSpeaker$5(de.maxhenkel.voicechat.voice.common.LocationSoundPacket, de.maxhenkel.voicechat.voice.client.camera.CameraState, short[]);
+    Code:
+         0: aload_0
+         1: invokevirtual #324                // Method de/maxhenkel/voicechat/voice/common/LocationSoundPacket.getDistance:()F
+         4: aload_1
+         5: invokevirtual #494                // Method de/maxhenkel/voicechat/voice/client/camera/CameraState.position:()Lnet/minecraft/world/phys/Vec3;
+         8: aload_1
+         9: invokevirtual #672                // Method de/maxhenkel/voicechat/voice/client/camera/CameraState.yRot:()F
+        12: aload_0
+        13: invokevirtual #323                // Method de/maxhenkel/voicechat/voice/common/LocationSoundPacket.getLocation:()Lnet/minecraft/world/phys/Vec3;
+        16: aload_2
+        17: invokestatic  #678                // Method de/maxhenkel/voicechat/voice/client/PositionalAudioUtils.convertToStereoForRecording:(FLnet/minecraft/world/phys/Vec3;FLnet/minecraft/world/phys/Vec3;[S)[S
+        20: areturn
+
+  private static short[] lambda$writeToSpeaker$4(de.maxhenkel.voicechat.voice.common.PlayerSoundPacket, de.maxhenkel.voicechat.voice.client.camera.CameraState, net.minecraft.world.phys.Vec3, short[], float);
+    Code:
+         0: aload_0
+         1: invokevirtual #313                // Method de/maxhenkel/voicechat/voice/common/PlayerSoundPacket.getDistance:()F
+         4: aload_1
+         5: invokevirtual #494                // Method de/maxhenkel/voicechat/voice/client/camera/CameraState.position:()Lnet/minecraft/world/phys/Vec3;
+         8: aload_1
+         9: invokevirtual #672                // Method de/maxhenkel/voicechat/voice/client/camera/CameraState.yRot:()F
+        12: aload_2
+        13: aload_3
+        14: fload         4
+        16: invokestatic  #681                // Method de/maxhenkel/voicechat/voice/client/PositionalAudioUtils.convertToStereoForRecording:(FLnet/minecraft/world/phys/Vec3;FLnet/minecraft/world/phys/Vec3;[SF)[S
+        19: areturn
+
+  private static short[] lambda$writeToSpeaker$3(short[], float);
+    Code:
+         0: aload_0
+         1: fload_1
+         2: invokestatic  #684                // Method de/maxhenkel/voicechat/voice/client/PositionalAudioUtils.convertToStereo:([SF)[S
+         5: areturn
+
+  private static short[] lambda$writeToSpeaker$2(short[]);
+    Code:
+         0: aload_0
+         1: invokestatic  #686                // Method de/maxhenkel/voicechat/voice/client/PositionalAudioUtils.convertToStereo:([S)[S
+         4: areturn
+
+  private static boolean lambda$writeToSpeaker$1(de.maxhenkel.voicechat.voice.common.PlayerSoundPacket, net.minecraft.world.entity.Entity);
+    Code:
+         0: aload_1
+         1: invokevirtual #550                // Method net/minecraft/world/entity/Entity.getUUID:()Ljava/util/UUID;
+         4: aload_0
+         5: invokevirtual #306                // Method de/maxhenkel/voicechat/voice/common/PlayerSoundPacket.getSender:()Ljava/util/UUID;
+         8: invokevirtual #556                // Method java/util/UUID.equals:(Ljava/lang/Object;)Z
+        11: ireturn
+
+  private static short[] lambda$writeToSpeaker$0(short[]);
+    Code:
+         0: aload_0
+         1: invokestatic  #686                // Method de/maxhenkel/voicechat/voice/client/PositionalAudioUtils.convertToStereo:([S)[S
+         4: areturn
+}
+

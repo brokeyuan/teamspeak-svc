@@ -2,7 +2,6 @@ package com.tsvoice.client;
 
 import com.tsvoice.client.net.BeaconPayload;
 import com.tsvoice.client.net.GroupInfoPayload;
-import net.fabricmc.api.ClientModInitializer;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
@@ -24,7 +23,7 @@ import static net.fabricmc.fabric.api.client.command.v2.ClientCommands.literal;
 /**
  * 客户端入口：配置加载、信标/群组信息接收、/tsvoice 命令、配置 GUI。
  */
-public class TeamspeakSvcClient implements ClientModInitializer {
+public class TeamspeakSvcClient {
 
     public static final Logger LOGGER = LoggerFactory.getLogger("teamspeak-svc");
 
@@ -61,8 +60,8 @@ public class TeamspeakSvcClient implements ClientModInitializer {
         return FabricLoader.getInstance().getConfigDir();
     }
 
-    @Override
-    public void onInitializeClient() {
+    /** 客户端初始化（M7 起由 bootstrap/ClientEntrypoint 在依赖检查通过后调用）。 */
+    public static void onInitializeClient() {
         config = ModConfig.load();
         ServerConfigStore.load();
         com.tsvoice.client.audio.TsAudio.refresh();
@@ -114,9 +113,8 @@ public class TeamspeakSvcClient implements ClientModInitializer {
         ClientIdentityService.register();
         PayloadTypeRegistry.clientboundPlay().register(BeaconPayload.TYPE, BeaconPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(GroupInfoPayload.TYPE, GroupInfoPayload.CODEC);
-        // T12/N6：能力公告 payload 注册（与可选服务端公告 mod 同 ID 互通）
-        com.tsvoice.client.net.CapabilitiesPayloads.register();
-        ClientPlayNetworking.registerGlobalReceiver(com.tsvoice.client.net.CapabilitiesPayloads.CapabilitiesPayload.TYPE,
+        // T12/N6/M7：S2C 公告接收（payload 注册归主入口；这里只挂客户端接收器）
+        ClientPlayNetworking.registerGlobalReceiver(com.tsvoice.common.net.CapabilitiesPayloads.CapabilitiesPayload.TYPE,
                 (payload, context) -> context.client().execute(() ->
                         TsVoiceManager.onCapabilitiesAnnouncementFrame(payload.frame())));
 
@@ -150,8 +148,8 @@ public class TeamspeakSvcClient implements ClientModInitializer {
                 byte[] hello = TsVoiceManager.beginCapabilityDiscovery();
                 if (hello != null && hello.length <= com.tsvoice.protocol.capability.CapabilityWire.MAX_FRAME_BYTES
                         && ClientPlayNetworking.canSend(
-                        com.tsvoice.client.net.CapabilitiesPayloads.CapabilitiesHelloPayload.TYPE)) {
-                    ClientPlayNetworking.send(new com.tsvoice.client.net.CapabilitiesPayloads
+                        com.tsvoice.common.net.CapabilitiesPayloads.CapabilitiesHelloPayload.TYPE)) {
+                    ClientPlayNetworking.send(new com.tsvoice.common.net.CapabilitiesPayloads
                             .CapabilitiesHelloPayload(hello));
                 }
             } catch (Throwable t) {

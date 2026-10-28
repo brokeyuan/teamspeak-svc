@@ -9,13 +9,12 @@
     "GameProfileUtilsMixin",
     "MicProcessorMixin",
     "MinecraftGizmoMixin",
-    "VoiceChatScreenMixin"
+    "VoiceChatScreenMixin",
+    "SoundEngineAccessor",
+    "SoundManagerAccessor"
   ],
   "injectors": {
     "defaultRequire": 0
   },
-  "mixins": [
-    "SoundEngineAccessor",
-    "SoundManagerAccessor"
-  ]
+  "mixins": []
 }
