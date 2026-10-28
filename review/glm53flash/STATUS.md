@@ -9,7 +9,7 @@
 - **日期：**2026-10-28。执行环境：Windows 10.0.26100 x64，Git Bash + PowerShell。
 - **Java：**25.0.4.1 LTS（要求 Java 25，满足）。
 - **模块版本：**teamspeak-svc 0.9.8（MC 26.3，voicechat-api 2.6.20，Loom 1.17.21，Gradle wrapper 9.5.1 已缓存）；ts3voice-core 0.1.0；voice-capabilities-fabric 0.1.0（MC 26.3）。
-- **SVC 参考：**`review/lib/voicechat-api-2.6.20.jar`（API JAR）；`simple-voice-chat-26.2/` 为参考源码。**实际 SVC 2.6.25 完整 mod JAR 未在工作区定位到**；T08a 真实 ABI 验证受此阻塞，其余任务不依赖。
+- **SVC 参考：**`review/lib/voicechat-api-2.6.20.jar`（API JAR）；`simple-voice-chat-26.2/` 为参考源码。**更正（2026-10-29 工程收尾 N0）：**实际 SVC 2.6.25 完整 mod JAR 一直在 `teamspeak-svc/libs/voicechat-fabric-2.6.25+26.3.jar`（Git 跟踪文件，SHA-256 `189605FD1C07D582DB3F243201F0435A48545F18481FB79847F1965011579407` 已复核）；本行旧表述"实际 SVC JAR 未定位到"作废，真实 ABI 依据随 N2（D01）补记。
 - **真实环境：**未启动 MC、未连接真实 TS 服务器、无音频设备验收条件。按计划约束，环境缺失只阻塞对应验证列，不停止可完成的源码修复。
 
 ## 证据状态定义
@@ -41,7 +41,7 @@
 | T04 | R07 异步二次消费隔离 | ✅ | ✅ Session 10 + Identity 7 项 | ✅（聊天/身份/头像三条排队路径） | ❌ 真实竞争未验证 |
 | T05 | R06 命令生命周期与上传确认 | ✅ | ✅ CommandLifecycle 13 + UploadConfirmation 9 项 | ✅（tracker 接线+marker 确认链） | ❌ E10 未验证 |
 | T06 | R09 撤销信任与展示降级 | ✅ | ✅ R09 8 项新增 + 身份既有 15 项 | ✅（查询复核+显示通知） | ❌ E09 未验证 |
-| T07 | R10 参与者标识与播放所有权 | ❌ | ❌ | ❌ | ❌ |
+| T07 | R10 参与者标识与播放所有权 | ✅（更正 2026-10-29 N0：提交 `736b8f0`，原行误记 ❌） | ✅ playback-ownership 12 项 | ✅ 注入/清理/对账 | ❌ E09/E11 未验证 |
 | T08 | R03 独立 SVC 音频前端（a/b/c） | ✅（租约接线+播放入口） | ✅ FrontendLease 14 项+租约会话断言 | 🔶 集成待验收（L3 真机未验证） | ❌ E01/E11 未验证 |
 | T09 | 书签配置与界面入口 | ❌ 未开始（manager 动作层已具备） | ❌ | ❌ | ❌ |
 | T10 | 频道树/用户列表/命令结果 | ❌ 未开始（TsChannelRoute/TsChannelSnapshot 已具备） | ❌ | ❌ | ❌ |
@@ -82,3 +82,11 @@ T08 特别约束：无实际 SVC 2.6.25 JAR 与音频设备时，M3 只能标“
 - 每任务按计划第 9 节模板在 evidence/ 留报告；提交信息带任务编号。
 - 未验证项如实标注“未验证 + 缺什么条件”；环境失败不得记为代码已修。
 - 历史文档只增不改；更正以新说明形式追加。
+
+## 工程收尾轮更正与接续（2026-10-29 N0 追加）
+
+- **交付计数更正：**DELIVERY 开头"11/14 任务"与任务表 T00–T08+T11（共 10 项）不符；"22 组 harness + core"实为 RunAll 当时 20 组 harness + core（final-runall 日志 22 行含 core 行与汇总行）。以任务表为准。
+- **D01–D05 登记：**delivery-audit 2026-10-29 确认五类未闭合问题全部保持未关闭，分别由收尾轮 N1（D04/D05）、N2（D01/D02）、N3（D03）修复，见 [engineering-closeout/](../engineering-closeout/)。
+- **统一测试入口更新：**`review/RunAll.ps1` v2 改为 ts3voice-core clean test 先行（5 组 harness 依赖其 build/classes）、纳入 upload-confirmation（共 21 组 harness + core）、每组独立日志、任一失败非零退出。
+- **环境故障分类：**上一轮 session-consumption / upload-confirmation 两组失败经无依赖 HttpClientSmoke 判定为本机 JDK HttpClient 初始化环境故障；本轮环境已复测两组均通过（证据 [engineering-closeout/logs/](../engineering-closeout/logs/)）。非产品缺陷。
+- **客户验收：**E01–E15 全部维持未验证，按用户要求暂缓；后续轮继续沿用此状态直至用户恢复验收。

@@ -2,7 +2,9 @@
 
 日期：2026-10-28。基线 `09361cc` → 终点提交见 git log。本报告对应计划 T13（M6 验收）的
 诚实结论：**核心切片未全部通过——M6 不标完成**；已交付 11/14 个任务的可复查实现与
-自动化证据，M4（T09/T10 GUI）与 T12（公告 payload 接线）未开始（见"剩余工作"）。
+自动化证据（**更正 2026-10-29 工程收尾 N0：**下表实际为 T00–T08+T11 共 10 项任务，
+含 T00 记录项才计 11；任务计数以表行为准），M4（T09/T10 GUI）与 T12（公告 payload
+接线）未开始（见"剩余工作"）。
 
 ## 已完成任务与提交
 
@@ -42,7 +44,10 @@ R09 ✅ T06；R10 ✅ T07。
 ## 自动化总入口
 
 `powershell -NoProfile -ExecutionPolicy Bypass -File .\review\RunAll.ps1`
-→ 22 组 harness + ts3voice-core clean test 全绿（T08-runall.log）；
+→ 20 组 harness + ts3voice-core clean test 全绿（T08-runall.log；**更正 2026-10-29 N0：**
+原"22 组 harness"为日志行数误读——22 行含 core 行与汇总行；且当时未含
+upload-confirmation。收尾轮 v2 入口改为 core 先行 + 21 组 harness，见
+[engineering-closeout/N0-BASELINE.md](../engineering-closeout/N0-BASELINE.md)）；
 `gradlew -p teamspeak-svc build` 成功（T08-build.log）。
 
 ## 剩余工作（按计划顺序，未开始）
