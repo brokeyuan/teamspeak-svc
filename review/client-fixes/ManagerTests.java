@@ -52,6 +52,10 @@ public class ManagerTests {
 
   Ts3VoiceClient c=new Ts3VoiceClient(new Ts3Identity(),"Test","",false);
   var field=TsVoiceManager.class.getDeclaredField("client");field.setAccessible(true);field.set(null,c);
+  // T01 契约：sendMic 只在 TS 被选中时接管 —— 经生产入口提交选择（不直改内部状态）。
+  ServerConfigStore.get("manager-sendmic").host="127.0.0.1";
+  TsVoiceManager.onServerChanged("manager-sendmic");
+  check(com.tsvoice.client.audio.MicRouteGate.tsSelected(),"sendMic precondition: TS route committed via activation");
   GroupChannelMapper.ready=false;
   check(TsVoiceManager.sendMic(new byte[]{1}) && c.sent==0,"unconfirmed channel consumes microphone frame without TS send or SVC fallback");
   GroupChannelMapper.ready=true;

@@ -15,16 +15,28 @@ public final class SelectionPolicy {
     private SelectionPolicy() {
     }
 
-    /** 用户意图（D03 语义）。 */
-    public enum IntentKind { AUTO, PINNED_TS, PINNED_SVC, OFF }
+    /** 用户意图（D03/D1 语义）。PAUSED：用户主动断开 TS 后的明确暂停，不自动改选其他后端。 */
+    public enum IntentKind { AUTO, PINNED_TS, PINNED_SVC, PAUSED, OFF }
 
     /** 传输策略：强制遵守，不悄悄把强制 TCP 改成 UDP。 */
     public enum TransportPolicy { AUTO, UDP_ONLY, TCP_ONLY }
 
-    /** 失败类别（与 VoiceState.FailureKind 对齐便于扩展）。 */
-    public enum FailureKind {
-        NETWORK_TIMEOUT, DNS_FAILED, AUTH_DENIED, CHANNEL_PASSWORD, PERMISSION_DENIED,
-        BANNED, SERVER_FULL, UNSUPPORTED_PROTOCOL, FRONTEND_UNAVAILABLE, CANCELLED, INTERNAL
+    /** 失败类别：唯一枚举在 {@link VoiceState.FailureKind}；此处仅保留常量别名避免同义枚举漂移。 */
+    public static final class FailureKind {
+        public static final VoiceState.FailureKind NETWORK_TIMEOUT = VoiceState.FailureKind.NETWORK_TIMEOUT;
+        public static final VoiceState.FailureKind DNS_FAILED = VoiceState.FailureKind.DNS_FAILED;
+        public static final VoiceState.FailureKind AUTH_DENIED = VoiceState.FailureKind.AUTH_DENIED;
+        public static final VoiceState.FailureKind CHANNEL_PASSWORD = VoiceState.FailureKind.CHANNEL_PASSWORD;
+        public static final VoiceState.FailureKind PERMISSION_DENIED = VoiceState.FailureKind.PERMISSION_DENIED;
+        public static final VoiceState.FailureKind BANNED = VoiceState.FailureKind.BANNED;
+        public static final VoiceState.FailureKind SERVER_FULL = VoiceState.FailureKind.SERVER_FULL;
+        public static final VoiceState.FailureKind UNSUPPORTED_PROTOCOL = VoiceState.FailureKind.UNSUPPORTED_PROTOCOL;
+        public static final VoiceState.FailureKind FRONTEND_UNAVAILABLE = VoiceState.FailureKind.FRONTEND_UNAVAILABLE;
+        public static final VoiceState.FailureKind CANCELLED = VoiceState.FailureKind.CANCELLED;
+        public static final VoiceState.FailureKind INTERNAL = VoiceState.FailureKind.INTERNAL;
+
+        private FailureKind() {
+        }
     }
 
     /** 选择结果：目标后端与候选顺序（不可变）。 */
@@ -37,13 +49,13 @@ public final class SelectionPolicy {
 
     /**
      * 解析候选顺序。pinned 意图不跨后端（PINNED_TS 只试 TS：UDP→已授权隧道）；
-     * AUTO 按推荐与 SVC 兜底；OFF 永不连接。
+     * AUTO 按推荐与 SVC 兜底；PAUSED/OFF 永不自动连接。
      */
     public static Decision candidates(IntentKind intent, TransportPolicy transport,
                                       boolean authorizedTsRecommended,
                                       boolean authorizedTunnel) {
         return switch (intent) {
-            case OFF -> new Decision(SVC, List.of());
+            case OFF, PAUSED -> new Decision(SVC, List.of());
             case PINNED_SVC -> new Decision(SVC, List.of(new Step(SVC, false)));
             case PINNED_TS -> new Decision(TS3, tsSteps(transport, authorizedTunnel));
             case AUTO -> {
@@ -72,7 +84,7 @@ public final class SelectionPolicy {
      * 失败后是否允许下一步：仅传输内回退（UDP→隧道）在 NETWORK_TIMEOUT 且
      * 下一步确实是兼容隧道时允许；认证/权限/密码/ban/版本/前端错误一律停（等用户）。
      */
-    public static boolean mayAdvanceAfter(FailureKind failure, Step failed, Step next) {
+    public static boolean mayAdvanceAfter(VoiceState.FailureKind failure, Step failed, Step next) {
         if (failure != FailureKind.NETWORK_TIMEOUT) {
             return false;
         }

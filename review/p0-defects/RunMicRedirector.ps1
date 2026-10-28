@@ -144,7 +144,7 @@ $sources = foreach ($item in $stubs.GetEnumerator()) {
 }
 $client = 'teamspeak-svc/src/main/java/com/tsvoice/client'
 # MicRouteGate is part of the fix; tolerate its absence when proving the old code fails.
-$prod = @("$client/TsVoiceManager.java", "$client/MicRedirector.java", "$client/audio/MicRouteGate.java", "$client/connection/VoiceState.java", "$client/connection/BackendCoordinator.java",
+$prod = @("$client/TsVoiceManager.java", "$client/MicRedirector.java", "$client/audio/MicRouteGate.java", "$client/connection/VoiceState.java", "$client/connection/BackendCoordinator.java", "$client/connection/SelectionPolicy.java",
     "$client/config/TsBookmarkStore.java", "$client/config/EndpointCredentialStore.java", "$client/backend/SvcBackendAdapter.java",
     "$client/ModConfig.java", "$client/ServerConfigStore.java", "$client/ConfigFileUtil.java") | Where-Object { Test-Path $_ }
 & javac -encoding UTF-8 -cp 'review/lib/*' -d "$base/classes" @prod @sources "$base/MicRedirectorRegression.java"

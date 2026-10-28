@@ -1,30 +1,30 @@
 package com.tsvoice.client.audio;
 
+import com.tsvoice.client.connection.BackendCoordinator;
+import com.tsvoice.client.connection.VoiceState;
+
 /**
- * 唯一的麦克风路由归属。TS 路由被选中期间，SVC 的 ClientSoundEvent 必须在
- * 任何编码/发送工作之前被取消，使任何失败模式都不能把同一段语音泄漏进 SVC 网络。
+ * 唯一的麦克风路由归属（T01 起为协调器快照的兼容视图）。
+ * 状态唯一来源是 {@link BackendCoordinator}；本类不再持有独立写入口。
  *
- * <p>P0 最小形态：只跟踪"选中后端"。等待/重连等未就绪状态由调用方在取消之后
- * 丢弃帧处理；P1 协调器将以不可变 route 快照与会话 token 取代此简化判定。</p>
+ * <p>注意：{@link #owner()} 的两值映射不区分 PAUSED/OFF —— 需要"断开/全关"
+ * 语义的调用方必须读取协调器完整快照，不得把暂停解释为 SVC_NATIVE。</p>
  */
 public final class MicRouteGate {
 
     public enum Owner { SVC_NATIVE, TS }
 
-    private static volatile Owner owner = Owner.SVC_NATIVE;
-
     private MicRouteGate() {
     }
 
-    public static void setOwner(Owner newOwner) {
-        owner = newOwner == null ? Owner.SVC_NATIVE : newOwner;
-    }
-
-    public static Owner owner() {
-        return owner;
-    }
-
+    /** TS 路由当前被选中（含连接中/重连中/等待频道等未就绪状态）。 */
     public static boolean tsSelected() {
-        return owner == Owner.TS;
+        return BackendCoordinator.snapshot().selection().selectedBackend()
+                .orElse(VoiceState.BackendKind.SVC) == VoiceState.BackendKind.TS3;
+    }
+
+    /** 兼容视图：仅表达"TS 选中与否"；PAUSED/OFF 由协调器快照表达。 */
+    public static Owner owner() {
+        return tsSelected() ? Owner.TS : Owner.SVC_NATIVE;
     }
 }

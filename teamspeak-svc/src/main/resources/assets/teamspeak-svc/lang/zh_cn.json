@@ -17,7 +17,7 @@
   "tsvoice.gui.denoise": "降噪",
   "tsvoice.gui.auto": "自动",
   "tsvoice.status": "TeamSpeak 语音: state=%s, source=%s, denoise=%s%s, ghosts=%s, receivedFrames=%s",
-  "tsvoice.ts_disconnected": "TS 会话已停止。",
+  "tsvoice.ts_disconnected": "TS 已断开，语音发送已暂停（不会自动切换到 SVC）。",
   "tsvoice.config_reloaded": "配置已重载。",
   "tsvoice.send_failed": "发送失败: %s",
   "tsvoice.ts_not_connected": "TS 未连接。",

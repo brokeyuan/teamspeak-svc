@@ -17,7 +17,7 @@
   "tsvoice.gui.denoise": "Denoise",
   "tsvoice.gui.auto": "auto",
   "tsvoice.status": "TeamSpeak Voice: state=%s, source=%s, denoise=%s%s, ghosts=%s, receivedFrames=%s",
-  "tsvoice.ts_disconnected": "TS session stopped.",
+  "tsvoice.ts_disconnected": "TeamSpeak disconnected. Voice sending is paused (no automatic switch to SVC).",
   "tsvoice.config_reloaded": "Config reloaded.",
   "tsvoice.send_failed": "Send failed: %s",
   "tsvoice.ts_not_connected": "TS not connected.",

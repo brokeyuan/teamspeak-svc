@@ -8,6 +8,7 @@ if (!(Test-Path 'review/lib/gson.jar')) {
 }
 & javac -encoding UTF-8 -cp 'review/lib/*' -d "$base/classes" `
     'teamspeak-svc/src/main/java/com/tsvoice/client/connection/VoiceState.java' `
+    'teamspeak-svc/src/main/java/com/tsvoice/client/connection/SelectionPolicy.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/client/frontend/FrontendCapabilities.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/client/frontend/SvcFrontendAdapter.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/client/frontend/FrontendLease.java' `

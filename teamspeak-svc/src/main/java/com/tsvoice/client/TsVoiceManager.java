@@ -25,7 +25,13 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public final class TsVoiceManager {
 
-    public enum State { DORMANT, WAITING_SVC, AWAITING_TRUST, CONNECTING, CONNECTED, RECONNECTING, ERROR }
+    public enum State {
+        DORMANT, WAITING_SVC, AWAITING_TRUST, CONNECTING, CONNECTED, RECONNECTING,
+        /** 用户主动断开 TS：不自动切换 SVC/不自动重连，等待用户明确选择（D1）。 */
+        PAUSED,
+        /** 用户关闭全部语音收发（保留配置）。 */
+        VOICE_OFF, ERROR
+    }
 
     /** 当前生效的会话配置（tcp=true 时 port 为隧道端口；password=服务器/频道密码）。 */
     public record SessionConfig(String host, int port, String channel, String source, boolean tcp,
@@ -54,8 +60,6 @@ public final class TsVoiceManager {
     /** 当前会话的协调器 token：回调绑定它，旧会话回调据此整体丢弃。 */
     private static volatile com.tsvoice.client.connection.VoiceState.SessionToken sessionToken =
             new com.tsvoice.client.connection.VoiceState.SessionToken(0);
-    /** 用户手动断开：在换服或再次手动连接前抑制自动激活。 */
-    private static volatile boolean userDisabled = false;
     /** 前端自检失败：关键 SVC hook 缺失，TS 整体禁用（原版 SVC 不受影响）。 */
     private static volatile boolean frontendUnavailable = false;
     private static volatile String lastError = "";
@@ -80,12 +84,11 @@ public final class TsVoiceManager {
 
     // ---- 上下文更新入口 ----
 
-    /** MC 连接变化（进入/离开服务器）。 */
+    /** MC 连接变化（进入/离开服务器）。PAUSED/OFF 与显式选择不被换服自动覆盖（E14）。 */
     public static void onServerChanged(String address) {
         currentAddress = address == null ? "" : address;
         beacon = null;
         pendingBeacon = null;
-        userDisabled = false; // 换服/重进世界恢复自动策略
         GroupChannelMapper.reset();
         evaluateActivation();
     }
@@ -111,7 +114,11 @@ public final class TsVoiceManager {
         }
         evaluateActivation();
         if (pendingBeacon != null) {
-            state = State.AWAITING_TRUST;
+            var selection = com.tsvoice.client.connection.BackendCoordinator.snapshot().selection();
+            if (selection.intent() != com.tsvoice.client.connection.SelectionPolicy.IntentKind.PAUSED
+                    && selection.intent() != com.tsvoice.client.connection.SelectionPolicy.IntentKind.OFF) {
+                state = State.AWAITING_TRUST;
+            }
         }
     }
 
@@ -270,7 +277,6 @@ public final class TsVoiceManager {
                 lastError = "TS frontend unavailable (SVC hook self-check failed)";
             }
         }
-        refreshRouteOwnership();
     }
 
     public static boolean isFrontendUnavailable() {
@@ -284,25 +290,47 @@ public final class TsVoiceManager {
     }
 
     /**
-     * 麦克风路由归属：存在生效 TS 配置且未被用户禁用即选中 TS。
-     * 等待 SVC/重连期间帧被消费丢弃（P1 由协调器的 route 快照取代此简化判定）。
+     * 重新评估激活：配置变化触发会话重建，无配置则休眠。
+     *
+     * <p>选择归属的唯一提交点是 {@link com.tsvoice.client.connection.BackendCoordinator}：
+     * AUTO 在此提交解析出的后端；PAUSED/OFF 与显式 PINNED 不被公告、重试、设备事件
+     * 或 MC 换服自动覆盖（D1/E14）。</p>
      */
-    private static void refreshRouteOwnership() {
-        com.tsvoice.client.audio.MicRouteGate.setOwner(
-                activeConfig != null && !userDisabled && !frontendUnavailable
-                        ? com.tsvoice.client.audio.MicRouteGate.Owner.TS
-                        : com.tsvoice.client.audio.MicRouteGate.Owner.SVC_NATIVE);
-    }
-
-    /** 重新评估激活：配置变化触发会话重建，无配置则休眠。 */
     static synchronized void evaluateActivation() {
-        SessionConfig resolved = resolveSessionConfig();
-        activeConfig = resolved;
-        refreshRouteOwnership();
-        if (userDisabled) {
+        var selection = com.tsvoice.client.connection.BackendCoordinator.snapshot().selection();
+        var intent = selection.intent();
+        if (intent == com.tsvoice.client.connection.SelectionPolicy.IntentKind.PAUSED
+                || intent == com.tsvoice.client.connection.SelectionPolicy.IntentKind.OFF) {
+            // 用户主动断开/全关：任何自动来源都不得恢复语音或改选后端。
+            stopSession();
+            state = intent == com.tsvoice.client.connection.SelectionPolicy.IntentKind.OFF
+                    ? State.VOICE_OFF : State.PAUSED;
+            return;
+        }
+        if (intent == com.tsvoice.client.connection.SelectionPolicy.IntentKind.PINNED_SVC) {
             stopSession();
             state = State.DORMANT;
             return;
+        }
+        SessionConfig resolved = resolveSessionConfig();
+        activeConfig = resolved;
+        if (intent == com.tsvoice.client.connection.SelectionPolicy.IntentKind.PINNED_TS) {
+            if (resolved == null) {
+                // 显式 TS 目标已不存在（如书签被删除）：清除意图，回落常规解析。
+                com.tsvoice.client.connection.BackendCoordinator.selectAuto(
+                        com.tsvoice.client.connection.VoiceState.BackendKind.SVC, "vanilla");
+                stopSession();
+                state = pendingBeacon != null ? State.AWAITING_TRUST : State.DORMANT;
+                return;
+            }
+        } else {
+            // AUTO：把解析出的后端归属提交为事实（发送归属跟随配置存在与否）。
+            com.tsvoice.client.connection.BackendCoordinator.selectAuto(
+                    resolved != null ? com.tsvoice.client.connection.VoiceState.BackendKind.TS3
+                            : com.tsvoice.client.connection.VoiceState.BackendKind.SVC,
+                    resolved != null
+                            ? resolved.source() + "@" + resolved.host() + ":" + resolved.port()
+                            : "vanilla");
         }
         if (frontendUnavailable) {
             stopSession();
@@ -333,29 +361,32 @@ public final class TsVoiceManager {
         startSession();
     }
 
-    // ---- 会话生命周期 ----
+    // ---- 用户意图入口（全部经协调器提交，R01 修复面）----
 
+    /**
+     * 用户手动连接 TS：先提交 TS 选择与未就绪路由，再启动后台连接；
+     * 连接失败不改变已选后端（保持 TS，进入重连循环）。
+     */
     public static void manualConnect() {
-        userDisabled = false;
-        if (activeConfig == null) {
+        com.tsvoice.client.backend.SvcBackendAdapter.setVoiceMuted(false); // 仅清除 OFF 覆盖
+        SessionConfig resolved = resolveSessionConfig();
+        if (resolved == null) {
             lastError = "no configuration (server beacon or manual config required)";
             state = State.ERROR;
             return;
         }
-        if (!svcConnected) {
-            // SVC 尚未连接：等待其连接事件后再启动会话（避免空转线程占用 sessionRunning）
-            state = State.WAITING_SVC;
-            return;
-        }
-        startSession();
+        com.tsvoice.client.connection.BackendCoordinator.select(
+                com.tsvoice.client.connection.SelectionPolicy.IntentKind.PINNED_TS,
+                resolved.source() + "@" + resolved.host());
+        evaluateActivation();
     }
 
     /**
-     * 按书签建立显式连接意图（P3）：立即解析书签配置并启动会话；不受本服公告
+     * 按书签建立显式连接意图（P3）：立即解析书签配置并提交 TS 选择；不受本服公告
      * （含 server-bridge 休眠规则）与 autoConnect 影响。书签/凭据缺失时报可操作错误。
      */
     public static void manualConnect(String bookmarkId) {
-        userDisabled = false;
+        com.tsvoice.client.backend.SvcBackendAdapter.setVoiceMuted(false);
         com.tsvoice.client.config.TsBookmarkStore.Bookmark bookmark =
                 com.tsvoice.client.config.TsBookmarkStore.get(bookmarkId);
         if (bookmark == null) {
@@ -364,25 +395,54 @@ public final class TsVoiceManager {
             return;
         }
         explicitBookmarkId = bookmarkId;
-        evaluateActivation();
-        if (activeConfig == null) {
+        SessionConfig resolved = resolveSessionConfig();
+        if (resolved == null) {
             lastError = "bookmark cannot be resolved: " + bookmarkId;
             state = State.ERROR;
             return;
         }
-        if (!svcConnected) {
-            state = State.WAITING_SVC;
-            return;
-        }
-        startSession();
+        com.tsvoice.client.connection.BackendCoordinator.select(
+                com.tsvoice.client.connection.SelectionPolicy.IntentKind.PINNED_TS,
+                "bookmark:" + bookmarkId);
+        evaluateActivation();
     }
 
-    public static void manualDisconnect() {
-        userDisabled = true;
+    /**
+     * 用户断开 TeamSpeak（D1）：进入 PAUSED —— 关闭 TS 会话并阻断麦克风，
+     * 不自动切换到 SVC、不被公告/换服自动撤销。SVC 已被明确选中时为无操作。
+     */
+    public static void disconnectTeamSpeak() {
+        boolean paused = com.tsvoice.client.connection.BackendCoordinator.disconnectTeamSpeak();
         explicitBookmarkId = null;
-        refreshRouteOwnership();
+        stopSession();
+        if (paused) {
+            state = State.PAUSED;
+        } else if (activeConfig == null) {
+            state = State.DORMANT;
+        }
+    }
+
+    /** 兼容入口：旧调用方（GUI/命令/CLIENT_STOPPING）语义即"断开 TeamSpeak"。 */
+    public static void manualDisconnect() {
+        disconnectTeamSpeak();
+    }
+
+    /** 用户切回原生 SVC（独立操作）：TS 会话关闭，发言边界过后恢复原版发送。 */
+    public static void switchToSvc() {
+        explicitBookmarkId = null;
+        com.tsvoice.client.connection.BackendCoordinator.switchToSvc();
+        com.tsvoice.client.backend.SvcBackendAdapter.setVoiceMuted(false);
         stopSession();
         state = State.DORMANT;
+    }
+
+    /** 用户关闭全部语音（收发同时停止，保留配置；用户原有静音设置不受影响）。 */
+    public static void disableAllVoice() {
+        explicitBookmarkId = null;
+        com.tsvoice.client.connection.BackendCoordinator.disableAllVoice();
+        com.tsvoice.client.backend.SvcBackendAdapter.setVoiceMuted(true);
+        stopSession();
+        state = State.VOICE_OFF;
     }
 
     private static synchronized void startSession() {
@@ -393,6 +453,9 @@ public final class TsVoiceManager {
         state = State.CONNECTING;
         long gen = ++sessionGeneration;
         sessionToken = com.tsvoice.client.connection.BackendCoordinator.beginSession();
+        // 连接前先发布未就绪路由（R01）：后台连接期间发送许可保持关闭。
+        com.tsvoice.client.connection.BackendCoordinator.publishRoute(sessionToken,
+                com.tsvoice.client.connection.VoiceState.BackendKind.TS3, false);
         Thread t = new Thread(() -> sessionLoop(gen), "teamspeak-svc-voice");
         t.setDaemon(true);
         t.start();
@@ -629,6 +692,12 @@ public final class TsVoiceManager {
      * @return 是否已接管（接管后调用方应取消 SVC 原始发送）
      */
     public static boolean sendMic(byte[] opusData) {
+        // 发送前复核选择快照：MicRedirector 与本方法之间选择可能已变化。
+        var selected = com.tsvoice.client.connection.BackendCoordinator.snapshot()
+                .selection().selectedBackend().orElse(null);
+        if (selected != com.tsvoice.client.connection.VoiceState.BackendKind.TS3) {
+            return false;
+        }
         Ts3VoiceClient c = client;
         if (c == null || !c.isConnected()) {
             return false;
@@ -759,6 +828,14 @@ public final class TsVoiceManager {
 
     /** TS 语音帧处理：source 是帧的来源会话，解析只依赖 source（F03）。 */
     private static void handleVoiceFrame(Ts3VoiceClient source, Ts3VoiceClient.TsVoiceIn frame) {
+        // 全关/主动断开时不向任何播放管线投递（OFF 覆盖由 SvcBackendAdapter 记录）。
+        var intent = com.tsvoice.client.connection.BackendCoordinator.snapshot()
+                .selection().intent();
+        if (intent == com.tsvoice.client.connection.SelectionPolicy.IntentKind.OFF
+                || intent == com.tsvoice.client.connection.SelectionPolicy.IntentKind.PAUSED
+                || com.tsvoice.client.backend.SvcBackendAdapter.isVoiceMuted()) {
+            return;
+        }
         voiceCounter.incrementAndGet();
         String uid = source.getUniqueIdOf(frame.senderClid());
         if (uid == null) {
