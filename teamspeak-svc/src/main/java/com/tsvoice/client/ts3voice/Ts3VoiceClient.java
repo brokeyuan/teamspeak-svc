@@ -70,6 +70,10 @@ public final class Ts3VoiceClient {
     private volatile Integer pendingCreateParent;
     /** ftinitupload 应答钩子（文件传输上传用）。 */
     private volatile java.util.function.Consumer<String> ftReplyHandler;
+    /** 命令关联器（P3）：error 行分流到 return_code 等待方；无关联则走 handleError。 */
+    volatile TsCommandTracker commandTracker;
+    /** 频道快照（P3）：主键 cid 的完整频道视图；与 channels 名称映射并存。 */
+    private final TsChannelSnapshot channelSnapshot = new TsChannelSnapshot(null);
     /** 名称只作属性：不同父频道允许重名，cid 才是频道身份。 */
     private final Map<Integer, ChannelEntry> channels = new ConcurrentHashMap<>();
     private record ChannelEntry(String name, int parentId) {
@@ -415,6 +419,7 @@ public final class Ts3VoiceClient {
                         String uid = params.get("virtualserver_unique_identifier");
                         if (uid != null && !uid.isBlank()) {
                             virtualServerUid = uid;
+                            refreshSnapshotServerUid(uid);
                         }
                     }
                 }
@@ -467,6 +472,17 @@ public final class Ts3VoiceClient {
                 }
                 if (name != null) {
                     channels.put(cid, new ChannelEntry(name, parent));
+                    // P3 频道快照：同步 upsert（password/order/clients 可选字段缺省 UNKNOWN）。
+                    String passwordStr = params.get("password");
+                    String orderStr = params.get("channel_order");
+                    String clientsStr = params.containsKey("clients") ? params.get("clients")
+                            : params.get("total_clients");
+                    String maxStr = params.get("channel_maxclients");
+                    channelSnapshot.upsert(new TsChannelSnapshot.Channel(cid, parent, name,
+                            passwordStr != null && "1".equals(passwordStr),
+                            orderStr != null ? safeParseInt(orderStr) : TsChannelSnapshot.UNKNOWN,
+                            clientsStr != null ? safeParseInt(clientsStr) : TsChannelSnapshot.UNKNOWN,
+                            maxStr != null ? safeParseInt(maxStr) : TsChannelSnapshot.UNKNOWN));
                 }
             } catch (NumberFormatException ignored) {
             }
@@ -478,8 +494,29 @@ public final class Ts3VoiceClient {
             try {
                 int cid = Integer.parseInt(parseParams(row).get("cid"));
                 channels.remove(cid);
+                channelSnapshot.remove(cid);
             } catch (NumberFormatException ignored) {
             }
+        }
+    }
+
+    private static int safeParseInt(String value) {
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            return TsChannelSnapshot.UNKNOWN;
+        }
+    }
+
+    /** 频道快照（P3）：只读视图；serverUID 在握手确认后填充。 */
+    public TsChannelSnapshot channelSnapshot() {
+        return channelSnapshot;
+    }
+
+    /** 会话确认 serverUID 后刷新快照的命名空间。 */
+    void refreshSnapshotServerUid(String serverUid) {
+        if (serverUid != null && !serverUid.isBlank()) {
+            channelSnapshot.refreshServerUid(serverUid);
         }
     }
 
@@ -798,6 +835,14 @@ public final class Ts3VoiceClient {
     }
 
     private void handleError(String command) {
+        // P3：带 return_code 的错误/成功优先路由给等待方；未关联的才走既有路径。
+        if (command.contains("return_code=")) {
+            TsCommandTracker tracker = commandTracker;
+            if (tracker != null) {
+                tracker.onError(command);
+            }
+            return;
+        }
         Map<String, String> params = parseParams(command);
         String id = params.get("id");
         if (id != null && !"0".equals(id)) {

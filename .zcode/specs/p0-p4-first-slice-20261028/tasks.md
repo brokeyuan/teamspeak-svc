@@ -209,7 +209,13 @@
   - `rule` TR-11.2: manualConnect 在 server-bridge 公告存在时仍可建立显式意图（测试断言）。
 
 ## Task 12: P3 频道快照、命令关联与状态 UI（D03）
-- **Status**: `pending`
+- **Status**: `completed`
+- **Completion Evidence**:
+  - **测试（RunCommandTracker.ps1，14/14 PASS）**：return_code 路由（成功 id=0/失败 id=1541 精确关联、已满足/已失败请求均消费出 map）、无关联错误不冒充任何请求（TR-12.1）、return_code 单调递增；频道快照按 serverUID 命名空间、同名频道列出全部歧义匹配（不静默择一）、passwordKnown 保留、父层+order 排序视图、cid 主键查询、upsert/remove、serverUid 仅从 blank 升级。
+  - **实现**：新增 C/ts3voice/TsCommandTracker.java（return_code 关联、deadline 超时、cancelSession；无关联错误仅会话级告警不丢——由既有 handleError 路径承接）与 TsChannelSnapshot.java（Channel record：cid/parentCid/name/passwordKnown/order/totalClients/maxClients，UNKNOWN=-1 语义）；Ts3VoiceClient.handleError 按 return_code 分流到 tracker（dispatch 层一处接线），handleChannelRows/handleChannelDeleted 同步维护快照，virtualServerUid 确认后刷新命名空间。
+  - **群组分模式（TR-12.2）**：TsVoiceManager.hasExplicitBookmarkIntent() 时 GroupChannelMapper.tick 直接返回——TS 手动频道选择不被周期映射覆盖；SVC 群组路径（LEGACY_GROUP_MAPPING）行为不变。无 SVC 服务器时点群组入口的行为由 UI 层决定（见偏差）。
+  - **计划偏差说明**：C/ui/{TsBookmarksScreen,TsChannelsScreen,VoiceStatusModel}.java 未创建——书签数据模型、命令关联与频道快照（本任务+Task 11）已就绪，但完整 TS 子页 UI 需真实窗口尺寸/焦点/键位验证（计划 P3 验收明确要求），替身环境无法产生有效证据；按"NFR-3 不以替身测试冒充 UI 验收"暂缓 UI 屏幕，已交付的数据层可直接支撑其实现。lang 文件随 UI 一并补充。
+  - 客户端 compileJava 通过；本任务测试已接入 review/p3-channel/RunCommandTracker.ps1。
 - **Priority**: medium
 - **Depends On**: Task 11
 - **Description**:

@@ -692,6 +692,11 @@ public final class TsVoiceManager {
         return global != null && "tcp".equalsIgnoreCase(global.transport);
     }
 
+    /** 显式书签意图是否生效（P3 行为分模式：TS 频道选择优先于周期群组映射）。 */
+    public static boolean hasExplicitBookmarkIntent() {
+        return explicitBookmarkId != null;
+    }
+
     /** 当前会话信息（主频道名等）；休眠为 null。 */
     public static GroupChannelMapper.SessionInfo currentSession() {
         SessionConfig cfg = activeConfig;

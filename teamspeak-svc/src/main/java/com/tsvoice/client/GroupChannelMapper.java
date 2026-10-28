@@ -51,6 +51,12 @@ public final class GroupChannelMapper {
 
     public static void tick(Ts3VoiceClient client) {
         routing = null;
+        // P3 行为分模式：显式 TS 频道选择（书签意图）时不做周期映射 —— legacy
+        // 群组映射只在 SVC 群组路径（LEGACY_GROUP_MAPPING）下驱动频道移动，
+        // 手动 TS 频道选择（TS_CHANNEL_SELECTION）完全由用户/UI 控制。
+        if (TsVoiceManager.hasExplicitBookmarkIntent()) {
+            return;
+        }
         try {
             VoicechatClientApi api = TeamspeakSvcClient.clientApi();
             SessionInfo session = TsVoiceManager.currentSession();
