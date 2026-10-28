@@ -40,3 +40,8 @@ testserver/
 review/*/config/
 review/*/issuing-config/
 review/p0-defects/classes-dbg/
+
+# Capabilities mod build outputs
+voice-capabilities-fabric/build/
+voice-capabilities-fabric/run/
+voice-capabilities-fabric/.gradle/

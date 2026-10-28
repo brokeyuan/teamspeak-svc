@@ -1,4 +1,4 @@
-package com.tsvoice.protocol;
+package com.tsvoice.protocol.capability;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;

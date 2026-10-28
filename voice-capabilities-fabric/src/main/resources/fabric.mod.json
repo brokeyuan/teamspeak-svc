@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "voice-capabilities",
+  "version": "${version}",
+  "name": "TSVoice Capabilities Announcer",
+  "description": "Optional server-side capability announcements for teamspeak-svc clients (TS/tunnel endpoints). Fabric only; no voicechat or bridge dependency.",
+  "authors": [],
+  "license": "MIT",
+  "environment": "server",
+  "entrypoints": {
+    "main": ["com.tsvoice.capabilities.CapabilityMod"]
+  },
+  "depends": {
+    "fabricloader": ">=0.20.1",
+    "fabric-api": "*",
+    "minecraft": "~26.3"
+  }
+}

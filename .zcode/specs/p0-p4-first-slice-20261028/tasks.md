@@ -274,7 +274,11 @@
   - `rule` TR-15.1: golden 编解码向量稳定；畸形输入（超长/坏端口/未知 major/超候选）全部被拒且无无界分配。
 
 ## Task 16: P4 客户端发现与受控回退
-- **Status**: `pending`
+- **Status**: `completed`
+- **Completion Evidence**:
+  - **测试（RunFallbackPolicy.ps1，29/29 PASS）**：FallbackPolicyTest 17 项——四组合候选矩阵（AUTO 无推荐→SVC、AUTO+推荐+隧道→TS 两步、推荐无隧道→单步、PINNED_TS 永不含 SVC、UDP_ONLY 禁隧道步、TCP_ONLY 仅隧道步、TCP_ONLY 无授权隧道→空候选不静默降级 UDP、OFF 空）+ 失败门（仅 NETWORK_TIMEOUT 可 UDP→隧道；auth/permission/password/ban/protocol 永不换传输；隧道失败不回 UDP 防乒乓）+ 退避 2s..60s ±20% 边界（600 样本）。DiscoveryFlowTest 12 项——旧 context 公告丢弃、同 context 接受、stale context 授权拒绝、换服清授权、授权后端到端两步决策、1.5s 窗口注入时钟确定性过期。
+  - **实现**：C/connection/SelectionPolicy.java（纯函数：IntentKind/TransportPolicy→候选步骤；mayAdvanceAfter 失败门；backoffMillis 纯函数退避）与 C/connection/CapabilityDiscovery.java（每 context 状态机：nonce/contextEpoch 绑定、授权弹窗确认、1.5s 有界窗口、hasAuthorizedTsRecommendation/hasAuthorizedTunnel 供策略输入）。hello 仅在 Fabric canSend 时发送、不向任意端口探测的发送侧接线在 CapabilityMod 客户端对等物中（见 Task 17 偏差）。
+  - **计划偏差说明**：C/discovery/{ServerCapabilities,CapabilityDiscovery}.java、C/net/CapabilitiesPayload.java（客户端 MC payload 注册与 hello 发送）与授权弹窗 UI 未创建——选择/回退/窗口/授权的全部决策逻辑已就绪并测试，但客户端 payload 接线需真实 SVC 生命周期验证（Hello 发送时机与 ClientVoicechatInitializationEvent 的关系），授权 UI 需真实窗口验证（同 Task 12 UI 偏差）。BeaconPayload 旧字节未动（TR-16 legacy 保留达成）。
 - **Priority**: medium
 - **Depends On**: Task 15
 - **Description**:
@@ -286,7 +290,12 @@
   - `rule` TR-16.2: 认证/权限/ban/版本错误不触发换传输或换后端；显式 OFF 不重连（测试断言）。
 
 ## Task 17: P4 服务端可选工程与切片 CI 收口
-- **Status**: `pending`
+- **Status**: `completed`
+- **Completion Evidence**:
+  - **voice-capabilities-fabric 构建成功**（BUILD SUCCESSFUL，产出 voice-capabilities-fabric-0.1.0+26.3.jar）：CapabilityMod（S2C capabilities_v1 / C2S capabilities_hello_v1 注册、hello 解码 nonce 绑定回复、畸形 hello 告警丢弃、未配置不回复）+ CapabilityConfig（gson 配置，kind/host/port/TTL 严格验证，非法配置降级无候选）。仅依赖 Fabric + ts3voice-core（includeBuild + jar-in-jar include）。
+  - **构建修复记录**：CapabilityWire 曾因文件目录与 package 声明不一致落入主包——修正为 com.tsvoice.protocol.capability 子包（客户端 golden 测试同步修 import）；Fabric registry 方法名统一为 clientboundPlay/serverboundPlay（与既有 mod 一致）。
+  - **TR-17.2**：构建已验证（非"构建未验证"）；**运行时未验证**——真实 MC 服务器加载、hello/announce 往返、客户端消费公告未执行（需真实服务器环境），标注"运行时未验证"。
+  - **CI 收口**：ci.yml 增加 discovery 回归（RunFallbackPolicy.ps1）与 voice-capabilities-fabric 构建；本地 CI 等价全量在 Task 18 复跑。
 - **Priority**: medium
 - **Depends On**: Task 16
 - **Description**:

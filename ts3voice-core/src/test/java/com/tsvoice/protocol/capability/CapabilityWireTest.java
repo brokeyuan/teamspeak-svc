@@ -1,6 +1,6 @@
 package com.tsvoice.protocol.capability;
 
-import com.tsvoice.protocol.CapabilityWire;
+import com.tsvoice.protocol.capability.CapabilityWire;
 
 import java.util.List;
 

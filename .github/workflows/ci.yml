@@ -67,6 +67,12 @@ jobs:
       - name: Command tracker and file transfer regressions (P3)
         shell: pwsh
         run: ./review/p3-channel/RunCommandTracker.ps1
+      - name: Discovery and fallback regressions (P4)
+        shell: pwsh
+        run: ./review/p4-discovery/RunFallbackPolicy.ps1
+      - name: Build capabilities server mod (P4)
+        working-directory: ./voice-capabilities-fabric
+        run: ./gradlew.bat clean build --no-daemon
       - name: Server regressions
         shell: pwsh
         run: ./review/server-fixes/RunServerChecks.ps1
