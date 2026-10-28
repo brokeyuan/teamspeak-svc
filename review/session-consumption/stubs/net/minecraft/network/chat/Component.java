@@ -1,0 +1,3 @@
+package net.minecraft.network.chat;
+public class Component {public final String text;public Component(){this.text="";}public Component(String t){this.text=t;}public static Component literal(String text){return new Component(text);} public static Component translatable(String key){return new Component(key);} public static Component translatable(String key,Object... args){return new Component(key);}public String getString(){return text;}
+}

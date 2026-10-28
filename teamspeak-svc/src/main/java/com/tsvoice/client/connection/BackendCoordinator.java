@@ -20,6 +20,10 @@ public final class BackendCoordinator {
 
     private static final AtomicLong SELECTION_EPOCH = new AtomicLong(0);
     private static final AtomicLong SESSION_EPOCH = new AtomicLong(0);
+    private static final AtomicLong CONTEXT_EPOCH = new AtomicLong(0);
+
+    /** MC 连接上下文代际（T04）：换服/离开世界递增，旧 MC 关联任务据此失效。 */
+    private static volatile long contextEpoch = 0;
 
     private static volatile VoiceState.SessionToken current = new VoiceState.SessionToken(0);
     /** 初始选择：AUTO + 原生 SVC —— 未安装/未配置 TS 时零干扰。 */
@@ -196,6 +200,22 @@ public final class BackendCoordinator {
     /** 回调校验：token 是否仍代表当前会话。 */
     public static boolean isCurrent(VoiceState.SessionToken token) {
         return token != null && token.equals(current);
+    }
+
+    /** MC 连接上下文变化（换服/离开世界）：递增并返回新 contextEpoch。 */
+    public static synchronized long onMcContextChanged(String serverAddress) {
+        contextEpoch = CONTEXT_EPOCH.incrementAndGet();
+        return contextEpoch;
+    }
+
+    /** 当前 MC 上下文代际（回调二次消费检查用）。 */
+    public static long currentContextEpoch() {
+        return contextEpoch;
+    }
+
+    /** 当前会话 token（异步任务绑定 CallbackContext 用）。 */
+    public static VoiceState.SessionToken currentSessionToken() {
+        return current;
     }
 
     /** 当前频道策略（只读观察）。 */

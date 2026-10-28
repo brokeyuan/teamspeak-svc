@@ -36,6 +36,8 @@ public final class ClientIdentityService {
 
     private static volatile Ts3VoiceClient client;
     private static volatile Ts3Identity identity;
+    /** 当前证明会话绑定（T04/R07）：旧会话的迟到任务/声明据此整体丢弃。 */
+    private static volatile com.tsvoice.client.connection.VoiceState.CallbackContext sessionContext;
     private static final Map<String, VerifiedIdentity> verified = new ConcurrentHashMap<>();
     private static final ServerTrustDirectory trustDirectory = new ServerTrustDirectory();
     /** 持久防重放高水位：claimKey → 已接受/已撤销的最高 revision。 */
@@ -57,10 +59,31 @@ public final class ClientIdentityService {
         PayloadTypeRegistry.serverboundPlay().register(IdentityPayloads.IdentityProof.TYPE,
                 IdentityPayloads.IdentityProof.CODEC);
 
-        ClientPlayNetworking.registerGlobalReceiver(IdentityPayloads.IdentityChallenge.TYPE, (payload, context) ->
-                context.client().execute(() -> handleChallenge(payload)));
-        ClientPlayNetworking.registerGlobalReceiver(IdentityPayloads.SignedClaim.TYPE, (payload, context) ->
-                context.client().execute(() -> handleClaim(payload)));
+        // 到达时刻捕获会话绑定（T04/R07）：排队到主线程执行之间会话可能重建，
+        // 旧会话的 challenge/claim 在执行时按其到达绑定整体丢弃。撤销墓碑是
+        // 服务器权威的全局状态，不随会话丢弃。
+        ClientPlayNetworking.registerGlobalReceiver(IdentityPayloads.IdentityChallenge.TYPE, (payload, context) -> {
+            var arrival = new com.tsvoice.client.connection.VoiceState.CallbackContext(
+                    com.tsvoice.client.connection.BackendCoordinator.currentSessionToken(),
+                    com.tsvoice.client.connection.BackendCoordinator.currentContextEpoch(), client);
+            context.client().execute(() -> {
+                if (!isCurrentSession(arrival)) {
+                    return;
+                }
+                handleChallenge(payload);
+            });
+        });
+        ClientPlayNetworking.registerGlobalReceiver(IdentityPayloads.SignedClaim.TYPE, (payload, context) -> {
+            var arrival = new com.tsvoice.client.connection.VoiceState.CallbackContext(
+                    com.tsvoice.client.connection.BackendCoordinator.currentSessionToken(),
+                    com.tsvoice.client.connection.BackendCoordinator.currentContextEpoch(), client);
+            context.client().execute(() -> {
+                if (!isCurrentSession(arrival)) {
+                    return;
+                }
+                handleClaim(payload);
+            });
+        });
         ClientPlayNetworking.registerGlobalReceiver(IdentityPayloads.ClaimRevoked.TYPE, (payload, context) ->
                 context.client().execute(() -> handleRevocation(payload)));
         loadTrustState();
@@ -79,17 +102,38 @@ public final class ClientIdentityService {
     public static void beginProof(Ts3VoiceClient tsClient, Ts3Identity tsIdentity) {
         client = tsClient;
         identity = tsIdentity;
+        com.tsvoice.client.connection.VoiceState.CallbackContext bound =
+                new com.tsvoice.client.connection.VoiceState.CallbackContext(
+                        com.tsvoice.client.connection.BackendCoordinator.currentSessionToken(),
+                        com.tsvoice.client.connection.BackendCoordinator.currentContextEpoch(), tsClient);
+        sessionContext = bound;
         // Fabric allows the call off-thread, but queueing on the client thread keeps
-        // payload ordering with the rest of the mod's networking explicit.
-        Minecraft.getInstance().execute(() -> ClientPlayNetworking.send(
-                new IdentityPayloads.IdentityProofRequest(
-                        tsIdentity.getClientUid(), tsIdentity.getPublicKeyString())));
+        // payload ordering with the rest of the mod's networking explicit. The queued
+        // send re-checks ITS OWN captured binding at execution time (T04/R07) ——
+        // 不得读取字段当前值解释旧任务。
+        Minecraft.getInstance().execute(() -> {
+            if (!isCurrentSession(bound)) {
+                return;
+            }
+            ClientPlayNetworking.send(new IdentityPayloads.IdentityProofRequest(
+                    tsIdentity.getClientUid(), tsIdentity.getPublicKeyString()));
+        });
+    }
+
+    /** 回调二次消费检查：绑定会话仍有效、MC 上下文未变、来源 client 未被替换。 */
+    private static boolean isCurrentSession(
+            com.tsvoice.client.connection.VoiceState.CallbackContext ctx) {
+        return ctx != null
+                && com.tsvoice.client.connection.BackendCoordinator.isCurrent(ctx.session())
+                && com.tsvoice.client.connection.BackendCoordinator.currentContextEpoch() == ctx.contextEpoch()
+                && client == ctx.source();
     }
 
     public static void tsDisconnected(Ts3VoiceClient tsClient) {
         if (client == tsClient) {
             client = null;
             identity = null;
+            sessionContext = null;
             verified.clear();
             // watermarks 保留：防重放状态跨会话持久，不随 TS 断线丢失。
         }
@@ -112,6 +156,9 @@ public final class ClientIdentityService {
     }
 
     private static void handleChallenge(IdentityPayloads.IdentityChallenge challenge) {
+        if (!isCurrentSession(sessionContext)) {
+            return; // 旧会话的迟到 challenge 不再应答（T04/R07）
+        }
         Ts3VoiceClient current = client;
         Ts3Identity currentIdentity = identity;
         Minecraft mc = Minecraft.getInstance();
@@ -132,8 +179,8 @@ public final class ClientIdentityService {
 
     private static void handleClaim(IdentityPayloads.SignedClaim message) {
         Ts3VoiceClient current = client;
-        if (current == null) {
-            return;
+        if (current == null || !isCurrentSession(sessionContext)) {
+            return; // 会话已重建/替换：旧声明确认不得写入新会话（T04/R07）
         }
         try {
             SignedPlayerClaim claim = SignedPlayerClaim.decode(message.claim());

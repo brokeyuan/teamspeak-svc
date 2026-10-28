@@ -32,9 +32,8 @@ public class ClientIdentityServiceRegression {
     }
 
     static void setClient(Ts3VoiceClient tsClient) throws Exception {
-        Field active = ClientIdentityService.class.getDeclaredField("client");
-        active.setAccessible(true);
-        active.set(null, tsClient);
+        // T04：会话绑定必须经生产入口 beginProof 建立（直设字段不再构成有效绑定）。
+        ClientIdentityService.beginProof(tsClient, Ts3Identity.generate(0, 1));
     }
 
     static Ts3VoiceClient newClient() throws Exception {

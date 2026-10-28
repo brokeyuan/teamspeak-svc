@@ -1,0 +1,7 @@
+package com.tsvoice.client.ts3voice;
+public class Ts3Identity {
+ public static Ts3Identity load(java.nio.file.Path path){return new Ts3Identity();}
+ public static Ts3Identity generate(int a,long b){return new Ts3Identity();}
+ public void save(java.nio.file.Path path){}
+ public String getClientUid(){return "uid";}
+}

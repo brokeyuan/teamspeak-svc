@@ -47,6 +47,18 @@ public final class VoiceState {
      */
     public enum ChannelPolicy { TS_NATIVE_FOLLOW, LOCKED_TARGET, LEGACY_GROUP_MAPPING }
 
+    /** MC 连接上下文（T04/T11）：contextEpoch 在换服/离开世界时递增。 */
+    public record McContext(long contextEpoch, String serverAddress) {
+    }
+
+    /**
+     * 回调绑定（T04/R07）：异步任务捕获其来源会话、MC 上下文与来源 client，
+     * 排队后执行前复核 —— 旧会话/旧上下文任务不得解释或写入新状态。
+     */
+    public record CallbackContext(SessionToken session, long contextEpoch,
+                                  com.tsvoice.client.ts3voice.Ts3VoiceClient source) {
+    }
+
     /** 失败类别（唯一枚举；SelectionPolicy.FailureKind 仅保留常量别名避免同义漂移）。 */
     public enum FailureKind {
         NETWORK_TIMEOUT, DNS_FAILED, AUTH_DENIED, CHANNEL_PASSWORD, PERMISSION_DENIED,

@@ -33,18 +33,53 @@ public final class AvatarPipeline {
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
 
+    private static final java.util.concurrent.atomic.AtomicLong ABORTED_TASKS =
+            new java.util.concurrent.atomic.AtomicLong(0);
+    private static final java.util.concurrent.atomic.AtomicLong STARTED_TASKS =
+            new java.util.concurrent.atomic.AtomicLong(0);
+
     private AvatarPipeline() {
+    }
+
+    /** 因会话失效而中止的后台头像任务数（诊断/回归观测用）。 */
+    public static long abortedAvatarTasks() {
+        return ABORTED_TASKS.get();
+    }
+
+    /** 已通过初始会话门开始执行的后台头像任务数（诊断/回归观测用）。 */
+    public static long startedAvatarTasks() {
+        return STARTED_TASKS.get();
+    }
+
+    /** 头像属于 TS 侧产物：只受 TS 会话约束（MC 换服不改绑）。 */
+    private static boolean sessionCurrent(
+            com.tsvoice.client.connection.VoiceState.CallbackContext ctx) {
+        return com.tsvoice.client.connection.BackendCoordinator.isCurrent(ctx.session())
+                && TsVoiceManager.currentClient() == ctx.source();
     }
 
     /** 连接成功后异步执行（voice 线程调用，立即返回）。 */
     public static void uploadAvatarAsync(Ts3VoiceClient client, UUID mcUuid,
                                          String fallbackNamespace, String fileTransferHost) {
+        com.tsvoice.client.connection.VoiceState.CallbackContext ctx =
+                new com.tsvoice.client.connection.VoiceState.CallbackContext(
+                        com.tsvoice.client.connection.BackendCoordinator.currentSessionToken(),
+                        com.tsvoice.client.connection.BackendCoordinator.currentContextEpoch(), client);
         Thread t = new Thread(() -> {
             try {
+                if (!sessionCurrent(ctx)) {
+                    ABORTED_TASKS.incrementAndGet(); // 会话已重建/替换：旧任务不发布副作用（T04/R07）
+                    return;
+                }
+                STARTED_TASKS.incrementAndGet();
                 String namespace = waitForVirtualServerUid(client);
                 if (namespace == null) {
                     namespace = fallbackNamespace == null || fallbackNamespace.isBlank()
                             ? "unknown" : fallbackNamespace;
+                }
+                if (!sessionCurrent(ctx)) {
+                    ABORTED_TASKS.incrementAndGet(); // namespace 解析后再次校验（T04/R07）
+                    return;
                 }
                 String tsUid = client.getClientUid();
                 byte[] skin = downloadSkin(mcUuid);
@@ -67,11 +102,19 @@ public final class AvatarPipeline {
                 if (result == Ts3FileTransfer.Result.CONFIRMED) {
                     // F10：client_flag_avatar 命令也要确认成功后才写 marker —— 上传与
                     // 生效是两个独立确认。命令失败（权限/错误）时下次重试上传。
+                    if (!sessionCurrent(ctx)) {
+                        ABORTED_TASKS.incrementAndGet(); // 原子提交前再次校验会话（不写 marker）
+                        return;
+                    }
                     try {
                         client.sendCommand("clientupdate client_flag_avatar=" + name);
                     } catch (Exception cmdError) {
                         TeamspeakSvcClient.LOGGER.warn("[teamspeak-svc] client_flag_avatar failed: {} — marker not written",
                                 cmdError.getMessage());
+                        return;
+                    }
+                    if (!sessionCurrent(ctx)) {
+                        ABORTED_TASKS.incrementAndGet(); // marker 写入前的最终校验
                         return;
                     }
                     writeMarker(marker, name);

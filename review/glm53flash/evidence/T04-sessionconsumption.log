@@ -1,0 +1,23 @@
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS C1: session A connects
+PASS C1: chat task queued, not yet consumed
+PASS C1: session B replaces A
+PASS C1: queued chat from session A never reaches the new session's chat
+PASS C2: live chat queued
+PASS C2: current session's chat reaches the MC chat
+PASS C3: avatar task for the dead session aborts (no side effects)
+PASS C4: control session connects
+PASS C4: live-session avatar task passes the initial gate
+PASS C4: live-session avatar task is not aborted while the session stays current
+Session consumption regression: all checks passed
+注: 某些输入文件使用了未经检查或不安全的操作。
+注: 有关详细信息, 请使用 -Xlint:unchecked 重新编译。
+PASS I1: proof request queued, not sent
+PASS I1: old session's queued proof request never sends
+PASS I1: the live session's proof request sends exactly once
+PASS I2: claim captured for the dead session is not written into the new session
+PASS I3: current session's claim is applied normally
+PASS I4: no claim applies after the session was torn down
+Identity consumption regression: all checks passed

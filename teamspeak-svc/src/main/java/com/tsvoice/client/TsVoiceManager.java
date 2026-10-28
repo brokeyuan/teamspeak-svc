@@ -87,6 +87,8 @@ public final class TsVoiceManager {
     /** MC 连接变化（进入/离开服务器）。PAUSED/OFF 与显式选择不被换服自动覆盖（E14）。 */
     public static void onServerChanged(String address) {
         currentAddress = address == null ? "" : address;
+        // MC 上下文代际递增（T04）：排队的旧 MC 关联任务（聊天显示等）执行时失效。
+        com.tsvoice.client.connection.BackendCoordinator.onMcContextChanged(currentAddress);
         beacon = null;
         pendingBeacon = null;
         GroupChannelMapper.reset();
@@ -648,10 +650,13 @@ public final class TsVoiceManager {
                     ? route.routeEpoch() : Long.MIN_VALUE;
         });
         // 回调绑定来源 client 与会话代际（投递/处理双检）：被替换会话的迟到回调
-        // 在此整体丢弃，不得查询全局"当前 client"解释自己的 clid/文本。
+        // 在此整体丢弃，不得查询全局"当前 client"解释自己的 clid/文本。聊天显示
+        // 属 MC 关联输出，额外绑定 MC 上下文代际（T04/R07）。
         c.setTextListener((invokerName, message) -> {
             if (active(gen) && client == c) {
-                onTsText(invokerName, message);
+                onTsText(new com.tsvoice.client.connection.VoiceState.CallbackContext(
+                        sessionToken, com.tsvoice.client.connection.BackendCoordinator.currentContextEpoch(), c),
+                        invokerName, message);
             }
         });
         c.setVoiceListener(frame -> {
@@ -824,17 +829,30 @@ public final class TsVoiceManager {
     }
 
     /** TS 频道文字消息 → MC 聊天栏（chatBridgeEnabled 开时）。 */
-    private static void onTsText(String invokerName, String message) {
+    private static void onTsText(com.tsvoice.client.connection.VoiceState.CallbackContext ctx,
+                                 String invokerName, String message) {
         if (!chatBridgeOn() || invokerName == null || message == null || message.isBlank()) {
             return;
         }
         Minecraft mc = Minecraft.getInstance();
         mc.execute(() -> {
+            // 二次消费检查（R07/T04）：排队与执行之间会话或 MC 上下文可能已更换。
+            if (!isCurrentCallback(ctx)) {
+                return;
+            }
             if (mc.player != null) {
                 mc.player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
                         "[TS] " + invokerName + ": " + message));
             }
         });
+    }
+
+    /** 回调二次消费检查：会话 token 仍有效、MC 上下文未变、来源 client 仍是当前 client。 */
+    static boolean isCurrentCallback(com.tsvoice.client.connection.VoiceState.CallbackContext ctx) {
+        return ctx != null
+                && com.tsvoice.client.connection.BackendCoordinator.isCurrent(ctx.session())
+                && com.tsvoice.client.connection.BackendCoordinator.currentContextEpoch() == ctx.contextEpoch()
+                && client == ctx.source();
     }
 
     private static boolean chatBridgeOn() {

@@ -7,6 +7,7 @@ if (!(Test-Path 'review/lib/gson.jar')) {
     Copy-Item -LiteralPath $jar.FullName -Destination 'review/lib/gson.jar'
 }
 & javac -encoding UTF-8 -cp 'review/lib/*' -d "$base/classes" `
+    'review/p2-frontend/stubs/com/tsvoice/client/ts3voice/Ts3VoiceClient.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/client/connection/VoiceState.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/client/connection/SelectionPolicy.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/client/frontend/FrontendCapabilities.java' `
