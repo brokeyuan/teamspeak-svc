@@ -114,6 +114,11 @@ public class TeamspeakSvcClient implements ClientModInitializer {
         ClientIdentityService.register();
         PayloadTypeRegistry.clientboundPlay().register(BeaconPayload.TYPE, BeaconPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(GroupInfoPayload.TYPE, GroupInfoPayload.CODEC);
+        // T12/N6：能力公告 payload 注册（与可选服务端公告 mod 同 ID 互通）
+        com.tsvoice.client.net.CapabilitiesPayloads.register();
+        ClientPlayNetworking.registerGlobalReceiver(com.tsvoice.client.net.CapabilitiesPayloads.CapabilitiesPayload.TYPE,
+                (payload, context) -> context.client().execute(() ->
+                        TsVoiceManager.onCapabilitiesAnnouncementFrame(payload.frame())));
 
         // 信标：新 endpoint 需要玩家显式授权；只有已记住的 endpoint 自动采用
         // T06/R09：issuer 信任变化立即刷新 Ghost 展示（降级不改稳定 UUID，不停音频）。
@@ -139,6 +144,19 @@ public class TeamspeakSvcClient implements ClientModInitializer {
             String address = client.getCurrentServer() != null ? client.getCurrentServer().ip : "";
             ClientIdentityService.clearVerified();
             TsVoiceManager.onServerChanged(address);
+            // T12/N6：进入世界即开始发现窗口；hello 只在当前连接支持该通道时发送
+            //（服务端装了可选公告 mod 才有通道）。帧在发送前做上限校验。
+            try {
+                byte[] hello = TsVoiceManager.beginCapabilityDiscovery();
+                if (hello != null && hello.length <= com.tsvoice.protocol.capability.CapabilityWire.MAX_FRAME_BYTES
+                        && ClientPlayNetworking.canSend(
+                        com.tsvoice.client.net.CapabilitiesPayloads.CapabilitiesHelloPayload.TYPE)) {
+                    ClientPlayNetworking.send(new com.tsvoice.client.net.CapabilitiesPayloads
+                            .CapabilitiesHelloPayload(hello));
+                }
+            } catch (Throwable t) {
+                LOGGER.debug("[teamspeak-svc] capabilities hello failed: {}", t.toString());
+            }
         });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             ClientIdentityService.clearVerified();

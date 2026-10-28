@@ -64,6 +64,20 @@ public final class TsVoiceManager {
     private static volatile com.tsvoice.client.frontend.FrontendLease frontendLease;
     /** 书签独立昵称（T09/N4）：null=默认 "[MC] 玩家名"；不写入身份或凭据。 */
     private static volatile String sessionNicknameOverride;
+    /**
+     * 能力发现状态机（T12/N6）：hello/公告/TTL/授权的生命周期；候选只作为 AUTO
+     * 语义下的服务器推荐，手动书签/PAUSED/OFF 一律不受影响。
+     */
+    private static final com.tsvoice.client.connection.CapabilityDiscovery capabilityDiscovery =
+            new com.tsvoice.client.connection.CapabilityDiscovery(System::nanoTime);
+    /** 最近一次连接失败的统一类别（T12/N6：认证/密码/权限不当作 UDP 不通）。 */
+    private static volatile com.tsvoice.client.connection.VoiceState.FailureKind lastFailureKind;
+    /**
+     * 最近一次被接受的公告帧原文（T12/N6 重复响应防护）：字节完全相同的重放
+     * 不再进入状态机（幂等拒绝）；同 nonce 的更新公告（不同字节）仍按 T11 语义
+     * 替换候选集。换服时随 context 失效。
+     */
+    private static volatile byte[] lastAcceptedAnnouncementFrame;
 
     /** 会话是否持有前端 mic 租约（诊断/回归观测用）。 */
     public static boolean frontendLeaseHeld() {
@@ -111,7 +125,90 @@ public final class TsVoiceManager {
         beacon = null;
         pendingBeacon = null;
         GroupChannelMapper.reset();
+        // T12/N6：换服失效全部公告/授权与在途请求；手动 TS/PAUSED/OFF 意图不动。
+        capabilityDiscovery.onContextChanged(
+                com.tsvoice.client.connection.BackendCoordinator.currentContextEpoch());
+        lastAcceptedAnnouncementFrame = null;
         evaluateActivation();
+    }
+
+    // ---- 能力发现（T12/N6）：生产链 hello → 公告 → 授权 → 候选选择 ----
+
+    /**
+     * 开始发现窗口并返回 hello 帧（nonce 由状态机生成，响应必须回带）。
+     * Fabric 层仅在当前连接支持该通道时实际发送（ClientPlayNetworking.canSend）。
+     */
+    public static byte[] beginCapabilityDiscovery() {
+        long nonce = capabilityDiscovery.begin();
+        return com.tsvoice.protocol.capability.CapabilityWire.encode(
+                new com.tsvoice.protocol.capability.CapabilityWire.Capabilities(nonce,
+                        com.tsvoice.protocol.capability.CapabilityWire.CURRENT_MAJOR,
+                        com.tsvoice.protocol.capability.CapabilityWire.CURRENT_MINOR,
+                        0, "", java.util.List.of()));
+    }
+
+    /**
+     * 公告帧消费（Fabric receiver 在主线程委托）：有界校验 → 解码 → 绑定当前
+     * context 与请求 nonce 的状态机登记。返回是否产生了候选。
+     */
+    public static boolean onCapabilitiesAnnouncementFrame(byte[] frame) {
+        if (frame == null || frame.length > com.tsvoice.protocol.capability.CapabilityWire.MAX_FRAME_BYTES) {
+            return false;
+        }
+        com.tsvoice.protocol.capability.CapabilityWire.Capabilities capabilities;
+        try {
+            capabilities = com.tsvoice.protocol.capability.CapabilityWire.decode(frame);
+        } catch (Exception e) {
+            TeamspeakSvcClient.LOGGER.debug("[teamspeak-svc] malformed capabilities frame: {}", e.getMessage());
+            return false;
+        }
+        if (java.util.Arrays.equals(frame, lastAcceptedAnnouncementFrame)) {
+            return false; // 字节级重复响应：状态已登记，幂等拒绝
+        }
+        boolean accepted = capabilityDiscovery.onAnnouncement(
+                com.tsvoice.client.connection.BackendCoordinator.currentContextEpoch(),
+                capabilities.requestNonce(), capabilities);
+        if (accepted) {
+            lastAcceptedAnnouncementFrame = frame.clone();
+        }
+        if (accepted && !capabilityDiscovery.hasAuthorizedTsRecommendation()) {
+            authorizeAnnouncedCandidates();
+        }
+        return accepted;
+    }
+
+    /**
+     * 公告候选授权（N6）：公告来自玩家已加入的 MC 服务器本身 —— 与信标同源的
+     * 信任模型：只有 endpoint 已被信标流程显式信任的候选自动授权；其余保持
+     * 未授权并记录（显式授权入口随 M7 界面交付），绝不把未授权候选送入选择。
+     */
+    public static void authorizeAnnouncedCandidates() {
+        var entry = ServerConfigStore.get(currentAddress);
+        var received = capabilityDiscovery.receivedCandidates();
+        var trusted = received.stream().filter(c -> {
+            var candidate = c.candidate();
+            boolean hostTrusted = entry.trustedBeaconHost != null
+                    && entry.trustedBeaconHost.equals(candidate.host());
+            boolean portTrusted = entry.trustedBeaconPort == null
+                    || entry.trustedBeaconPort.equals(candidate.port());
+            return hostTrusted && portTrusted;
+        }).toList();
+        if (trusted.isEmpty()) {
+            TeamspeakSvcClient.LOGGER.info(
+                    "[teamspeak-svc] capabilities announcement received: {} candidate(s) — none pre-trusted, awaiting explicit authorization",
+                    received.size());
+            return;
+        }
+        boolean ok = capabilityDiscovery.authorize(
+                com.tsvoice.client.connection.BackendCoordinator.currentContextEpoch(), trusted);
+        TeamspeakSvcClient.LOGGER.info("[teamspeak-svc] capabilities announcement: {} trusted candidate(s) authorized={}",
+                trusted.size(), ok);
+    }
+
+    /** 当前已授权且未过期的公告 TS 候选（选择策略输入；诊断用）。 */
+    public static java.util.List<com.tsvoice.client.connection.CapabilityDiscovery.AnnouncedCandidate>
+    authorizedAnnouncedCandidates() {
+        return capabilityDiscovery.authorizedCandidates();
     }
 
     /** 收到本服信标；新 endpoint 必须由玩家显式授权后才可用于连接。 */
@@ -283,6 +380,24 @@ public final class TsVoiceManager {
                     entry.channel != null ? entry.channel : "Minecraft",
                     "manual", tcp, password, channelPassword);
         }
+        // T12/N6：已授权公告推荐 —— AUTO 语义下的服务器推荐 TS 目标，优先于全局
+        // 自动配置、低于本服/信标/书签。无公告不影响既有配置（只淘汰公告候选）；
+        // 公告 endpoint 绝不继承其他 endpoint 的凭据。
+        if (enabled && capabilityDiscovery.hasAuthorizedTsRecommendation()) {
+            var candidate = capabilityDiscovery.authorizedCandidates().stream()
+                    .filter(c -> c.candidate().kind()
+                            == com.tsvoice.protocol.capability.CapabilityWire.CandidateKind.TS_ENDPOINT
+                            || c.candidate().kind()
+                            == com.tsvoice.protocol.capability.CapabilityWire.CandidateKind.TUNNEL)
+                    .findFirst();
+            if (candidate.isPresent()) {
+                var target = candidate.get().candidate();
+                boolean tunnel = target.kind()
+                        == com.tsvoice.protocol.capability.CapabilityWire.CandidateKind.TUNNEL;
+                return new SessionConfig(target.host(), target.port(),
+                        "Minecraft", "announcement", tunnel, null, null);
+            }
+        }
         if (enabled && global != null && global.isConfigured() && global.autoConnect) {
             password = configuredPassword(entry.serverPassword, global.serverPassword);
             channelPassword = configuredPassword(entry.channelPassword, global.channelPassword);
@@ -290,6 +405,46 @@ public final class TsVoiceManager {
                     password, channelPassword);
         }
         return null;
+    }
+
+    /**
+     * 连接失败 → 统一 FailureKind（T12/N6）：认证/密码/权限/封禁/版本不再被
+     * 当作"UDP 不通"，也不得经跨网络切换绕过 —— 这些类别终止重试等待用户处理。
+     */
+    static com.tsvoice.client.connection.VoiceState.FailureKind classifyConnectFailure(Throwable t) {
+        String message = t == null ? "" : String.valueOf(t.getMessage() == null ? t : t.getMessage()).toLowerCase();
+        if (t instanceof java.net.UnknownHostException || message.contains("unknown host")
+                || message.contains("unknownhostexception")) {
+            return com.tsvoice.client.connection.VoiceState.FailureKind.DNS_FAILED;
+        }
+        if (message.contains("invalid server password") || message.contains("bad login")
+                || message.contains("authentication")) {
+            return com.tsvoice.client.connection.VoiceState.FailureKind.AUTH_DENIED;
+        }
+        if (message.contains("invalid channel password") || message.contains("channel password")) {
+            return com.tsvoice.client.connection.VoiceState.FailureKind.CHANNEL_PASSWORD;
+        }
+        if (message.contains("permission") || message.contains("insufficient")) {
+            return com.tsvoice.client.connection.VoiceState.FailureKind.PERMISSION_DENIED;
+        }
+        if (message.contains("banned")) {
+            return com.tsvoice.client.connection.VoiceState.FailureKind.BANNED;
+        }
+        if (message.contains("unsupported") || message.contains("protocol mismatch")
+                || message.contains("old client")) {
+            return com.tsvoice.client.connection.VoiceState.FailureKind.UNSUPPORTED_PROTOCOL;
+        }
+        return com.tsvoice.client.connection.VoiceState.FailureKind.NETWORK_TIMEOUT;
+    }
+
+    /** 失败类别是否终止自动重试（等待用户修改入口：凭据/地址/授权）。 */
+    static boolean isTerminalFailure(com.tsvoice.client.connection.VoiceState.FailureKind kind) {
+        return kind == com.tsvoice.client.connection.VoiceState.FailureKind.AUTH_DENIED
+                || kind == com.tsvoice.client.connection.VoiceState.FailureKind.CHANNEL_PASSWORD
+                || kind == com.tsvoice.client.connection.VoiceState.FailureKind.PERMISSION_DENIED
+                || kind == com.tsvoice.client.connection.VoiceState.FailureKind.BANNED
+                || kind == com.tsvoice.client.connection.VoiceState.FailureKind.UNSUPPORTED_PROTOCOL
+                || kind == com.tsvoice.client.connection.VoiceState.FailureKind.FRONTEND_UNAVAILABLE;
     }
 
     /**
@@ -629,6 +784,7 @@ public final class TsVoiceManager {
     private static void sessionLoop(long gen) {
         try {
             long backoffMs = INITIAL_BACKOFF_MS;
+        int backoffAttempt = 0;
             while (active(gen)) {
                 try {
                     Ts3VoiceClient c = connect(gen);
@@ -651,8 +807,22 @@ public final class TsVoiceManager {
                             com.tsvoice.client.connection.VoiceState.BackendKind.TS3, false);
                 } catch (Exception e) {
                     if (gen == sessionGeneration) {
-                        state = State.RECONNECTING;
+                        var failureKind = classifyConnectFailure(e);
+                        lastFailureKind = failureKind;
                         lastError = e.getMessage() == null ? e.toString() : e.getMessage();
+                        if (isTerminalFailure(failureKind)) {
+                            // 认证/密码/权限/封禁/版本：无界重试没有意义 —— 停在 ERROR
+                            // 等待用户修改凭据/地址/授权，不静默跨传输或跨后端绕过。
+                            state = State.ERROR;
+                            com.tsvoice.client.connection.TsChannelRoute.onConnectionLost(sessionToken);
+                            com.tsvoice.client.connection.BackendCoordinator.publishRoute(sessionToken,
+                                    com.tsvoice.client.connection.VoiceState.BackendKind.TS3, false);
+                            TeamspeakSvcClient.LOGGER.error(
+                                    "[teamspeak-svc] TS connect failed terminally ({}): {} — waiting for user action",
+                                    failureKind, lastError);
+                            return;
+                        }
+                        state = State.RECONNECTING;
                         com.tsvoice.client.connection.TsChannelRoute.onConnectionLost(sessionToken);
                         com.tsvoice.client.connection.BackendCoordinator.publishRoute(sessionToken,
                                 com.tsvoice.client.connection.VoiceState.BackendKind.TS3, false);
@@ -721,7 +891,9 @@ public final class TsVoiceManager {
                     Thread.currentThread().interrupt();
                     return;
                 }
-                backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF_MS);
+                // T12/N6：计划退避基值 2→4→…→60s + ±20% jitter（统一走选择策略）
+                backoffMs = com.tsvoice.client.connection.SelectionPolicy.backoffMillis(
+                        backoffAttempt++, java.util.concurrent.ThreadLocalRandom.current());
             }
         } finally {
             synchronized (TsVoiceManager.class) {

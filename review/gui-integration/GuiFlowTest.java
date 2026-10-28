@@ -296,6 +296,104 @@ public class GuiFlowTest {
                 "C6: dead-session state torn down (no live route to poison)");
         TsVoiceManager.switchToSvc();
 
+        // ---- D: capability discovery chain (T12/N6) ----
+        // D1: hello frame is bounded and carries the discovery's request nonce
+        TsVoiceManager.onServerChanged("cap.mc");
+        byte[] hello = TsVoiceManager.beginCapabilityDiscovery();
+        check(hello != null && hello.length <= com.tsvoice.protocol.capability.CapabilityWire.MAX_FRAME_BYTES,
+                "D1: the hello frame respects the wire limit");
+        long helloNonce = com.tsvoice.protocol.capability.CapabilityWire.decode(hello).requestNonce();
+        check(helloNonce != 0, "D1: the hello carries a request nonce");
+
+        // D2: full chain - announcement (nonce+context bound) -> trust-based
+        // authorization -> session config selection above the global fallback
+        ServerConfigStore.Entry capEntry = ServerConfigStore.get("cap.mc");
+        capEntry.trustedBeaconHost = "127.0.0.1";
+        capEntry.trustedBeaconPort = 9987;
+        var response = new com.tsvoice.protocol.capability.CapabilityWire.Capabilities(
+                helloNonce,
+                com.tsvoice.protocol.capability.CapabilityWire.CURRENT_MAJOR,
+                com.tsvoice.protocol.capability.CapabilityWire.CURRENT_MINOR,
+                30, "svc-1",
+                java.util.List.of(new com.tsvoice.protocol.capability.CapabilityWire.Candidate(
+                        com.tsvoice.protocol.capability.CapabilityWire.CandidateKind.TS_ENDPOINT,
+                        "127.0.0.1", 9987, java.util.List.of())));
+        check(TsVoiceManager.onCapabilitiesAnnouncementFrame(
+                        com.tsvoice.protocol.capability.CapabilityWire.encode(response)),
+                "D2: the announcement (matching nonce+context) is accepted");
+        check(!TsVoiceManager.authorizedAnnouncedCandidates().isEmpty(),
+                "D2: the pre-trusted endpoint is auto-authorized");
+        TsVoiceManager.SessionConfig announced = TsVoiceManager.resolveSessionConfig();
+        check(announced != null && "announcement".equals(announced.source())
+                        && "127.0.0.1".equals(announced.host()) && announced.port() == 9987
+                        && announced.password() == null && announced.channelPassword() == null,
+                "D2: the authorized announcement feeds session selection without inheriting credentials");
+        var decision = com.tsvoice.client.connection.SelectionPolicy.candidates(
+                com.tsvoice.client.connection.SelectionPolicy.IntentKind.AUTO,
+                com.tsvoice.client.connection.SelectionPolicy.TransportPolicy.AUTO, true, false);
+        check(decision.backend() == com.tsvoice.client.connection.VoiceState.BackendKind.TS3,
+                "D2: AUTO with an authorized recommendation selects TS");
+
+        // D3: negative space - wrong nonce, stale context, oversized, replay, zero TTL
+        var wrongNonce = new com.tsvoice.protocol.capability.CapabilityWire.Capabilities(
+                helloNonce + 1, 1, 0, 30, "svc-1",
+                java.util.List.of(new com.tsvoice.protocol.capability.CapabilityWire.Candidate(
+                        com.tsvoice.protocol.capability.CapabilityWire.CandidateKind.TS_ENDPOINT,
+                        "127.0.0.1", 9987, java.util.List.of())));
+        check(!TsVoiceManager.onCapabilitiesAnnouncementFrame(
+                        com.tsvoice.protocol.capability.CapabilityWire.encode(wrongNonce)),
+                "D3: a wrong-nonce announcement is rejected");
+        check(!TsVoiceManager.onCapabilitiesAnnouncementFrame(
+                        com.tsvoice.protocol.capability.CapabilityWire.encode(response)),
+                "D3: replaying the same announcement is rejected");
+        TsVoiceManager.onServerChanged("cap2.mc"); // context bump invalidates the window
+        check(!TsVoiceManager.onCapabilitiesAnnouncementFrame(
+                        com.tsvoice.protocol.capability.CapabilityWire.encode(response)),
+                "D3: an announcement from the old MC context is rejected");
+        check(!TsVoiceManager.onCapabilitiesAnnouncementFrame(
+                        new byte[com.tsvoice.protocol.capability.CapabilityWire.MAX_FRAME_BYTES + 1]),
+                "D3: oversized frames are rejected before allocation");
+        TsVoiceManager.onServerChanged("cap.mc");
+        byte[] hello2 = TsVoiceManager.beginCapabilityDiscovery();
+        long nonce2 = com.tsvoice.protocol.capability.CapabilityWire.decode(hello2).requestNonce();
+        var zeroTtl = new com.tsvoice.protocol.capability.CapabilityWire.Capabilities(
+                nonce2, 1, 0, 0, "svc-1", java.util.List.of());
+        check(!TsVoiceManager.onCapabilitiesAnnouncementFrame(
+                        com.tsvoice.protocol.capability.CapabilityWire.encode(zeroTtl)),
+                "D3: a zero-TTL announcement produces no candidates");
+
+        // D4: without an announcement the existing configs are untouched
+        check(TsVoiceManager.authorizedAnnouncedCandidates().isEmpty(),
+                "D4: no announcement means no announcement candidates");
+        ModConfig global = TeamspeakSvcClient.config();
+        String oldHost = global.tsHost;
+        boolean oldAuto = global.autoConnect;
+        global.tsHost = "global.local";
+        global.autoConnect = true;
+        TsVoiceManager.SessionConfig fallback = TsVoiceManager.resolveSessionConfig();
+        check(fallback != null && "manual".equals(fallback.source()) && "global.local".equals(fallback.host()),
+                "D4: without announcements the global auto target still applies");
+        global.tsHost = oldHost;
+        global.autoConnect = oldAuto;
+
+        // D5: failure classification (auth/password are not 'UDP unreachable')
+        check(com.tsvoice.client.connection.VoiceState.FailureKind.AUTH_DENIED
+                        == TsVoiceManager.classifyConnectFailure(new Exception("invalid server password"))
+                && TsVoiceManager.isTerminalFailure(com.tsvoice.client.connection.VoiceState.FailureKind.AUTH_DENIED),
+                "D5: auth failures classify as terminal AUTH_DENIED");
+        check(com.tsvoice.client.connection.VoiceState.FailureKind.DNS_FAILED
+                        == TsVoiceManager.classifyConnectFailure(new java.net.UnknownHostException("x"))
+                && !TsVoiceManager.isTerminalFailure(com.tsvoice.client.connection.VoiceState.FailureKind.DNS_FAILED),
+                "D5: DNS failures are retryable");
+        check(com.tsvoice.client.connection.VoiceState.FailureKind.NETWORK_TIMEOUT
+                        == TsVoiceManager.classifyConnectFailure(new Exception("connection refused")),
+                "D5: generic transport failures stay retryable");
+        long backoff = com.tsvoice.client.connection.SelectionPolicy.backoffMillis(0,
+                java.util.random.RandomGenerator.of("L64X128MixRandom"));
+        check(backoff >= 1_000L && backoff <= 2_400L + 1,
+                "D5: the retry backoff keeps the 2s base with +-20% jitter");
+
+        TsVoiceManager.switchToSvc();
         if (failures != 0) {
             throw new AssertionError(failures + " GUI flow checks failed");
         }

@@ -202,7 +202,9 @@ $prod = @("$client/TsVoiceManager.java", "$client/MicRedirector.java", "$client/
     "$client/ModConfig.java", "$client/ServerConfigStore.java", "$client/ConfigFileUtil.java",
     "$client/frontend/SvcFrontendAdapter.java", "$client/frontend/FrontendCapabilities.java",
     "$client/frontend/FrontendLease.java", "$client/frontend/Svc2625FrontendAdapter.java",
-    "$client/ClientStateReflector.java", "$client/VoiceStatusModel.java") |
+    "$client/ClientStateReflector.java", "$client/VoiceStatusModel.java",
+    "$client/connection/CapabilityDiscovery.java",
+    'ts3voice-core/src/main/java/com/tsvoice/protocol/capability/CapabilityWire.java') |
     Where-Object { Test-Path $_ }
 $svcClientStubs = Get-ChildItem -LiteralPath "$base/stubs/de" -Recurse -Filter '*.java' |
     Select-Object -ExpandProperty FullName
