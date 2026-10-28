@@ -52,6 +52,29 @@ public class SessionIsolationTest {
     }
 
     public static void main(String[] args) throws Exception {
+
+        // T08b: sessions acquire a frontend mic lease; inject a live isolated mic.
+        com.tsvoice.client.frontend.Svc2625FrontendAdapter.setMicSource(
+                new com.tsvoice.client.frontend.Svc2625FrontendAdapter.MicSource() {
+                    @Override
+                    public com.tsvoice.client.frontend.FrontendLease.MicHandle borrowNativeMic() {
+                        return null;
+                    }
+
+                    @Override
+                    public com.tsvoice.client.frontend.FrontendLease.MicHandle createIsolatedMic() {
+                        return new com.tsvoice.client.frontend.FrontendLease.MicHandle() {
+                            @Override
+                            public boolean isAlive() {
+                                return true;
+                            }
+
+                            @Override
+                            public void close() {
+                            }
+                        };
+                    }
+                });
         Files.createDirectories(java.nio.file.Path.of("review/p1-isolation/config/teamspeak-svc"));
         ModConfig global = TeamspeakSvcClient.config();
         global.autoConnect = false;

@@ -60,6 +60,14 @@ public final class TsVoiceManager {
     /** 当前会话的协调器 token：回调绑定它，旧会话回调据此整体丢弃。 */
     private static volatile com.tsvoice.client.connection.VoiceState.SessionToken sessionToken =
             new com.tsvoice.client.connection.VoiceState.SessionToken(0);
+    /** 前端 mic 租约（T08b）：会话启动获取、停止释放；SVC 断开由适配器关闭后按需重取。 */
+    private static volatile com.tsvoice.client.frontend.FrontendLease frontendLease;
+
+    /** 会话是否持有前端 mic 租约（诊断/回归观测用）。 */
+    public static boolean frontendLeaseHeld() {
+        com.tsvoice.client.frontend.FrontendLease lease = frontendLease;
+        return lease != null && !lease.isClosed();
+    }
     /** 前端自检失败：关键 SVC hook 缺失，TS 整体禁用（原版 SVC 不受影响）。 */
     private static volatile boolean frontendUnavailable = false;
     private static volatile String lastError = "";
@@ -345,10 +353,8 @@ public final class TsVoiceManager {
             state = pendingBeacon != null ? State.AWAITING_TRUST : State.DORMANT;
             return;
         }
-        if (!svcConnected) {
-            state = State.WAITING_SVC;
-            return;
-        }
+        // T08b：TS 不再等待 SVC 服务器连接 —— 前端自检（frontendUnavailable）决定
+        // 可用性；无 SVC 服务器时用 null-connection 隔离 mic 采集。
         boolean reconnect = sessionRunning && !resolved.equals(lastAppliedConfig);
         if (resolved.equals(lastAppliedConfig) && sessionRunning) {
             return; // 配置未变
@@ -448,8 +454,18 @@ public final class TsVoiceManager {
     }
 
     private static synchronized void startSession() {
-        if (sessionRunning || !svcConnected) {
+        if (sessionRunning || frontendUnavailable) {
             return;
+        }
+        // T08b：唯一采集资源 —— 先取前端租约再启动会话线程；租约失败 = FRONTEND_UNAVAILABLE。
+        if (frontendLease == null || frontendLease.isClosed()) {
+            frontendLease = com.tsvoice.client.frontend.Svc2625FrontendAdapter.instance()
+                    .acquire(sessionToken == null ? null : sessionToken);
+            if (frontendLease == null) {
+                lastError = "FRONTEND_UNAVAILABLE (mic lease unavailable)";
+                state = State.ERROR;
+                return;
+            }
         }
         sessionRunning = true;
         state = State.CONNECTING;
@@ -473,10 +489,34 @@ public final class TsVoiceManager {
         sessionThread = t;
     }
 
+    /** 会话循环的租约重取（管理器锁内串行；会话已停则为无操作）。 */
+    private static synchronized void reacquireFrontendLeaseIfNeeded() {
+        if (!sessionRunning) {
+            return;
+        }
+        com.tsvoice.client.frontend.FrontendLease lease = frontendLease;
+        if (lease != null && !lease.isClosed() && lease.micAlive()) {
+            return;
+        }
+        com.tsvoice.client.frontend.FrontendLease fresh =
+                com.tsvoice.client.frontend.Svc2625FrontendAdapter.instance().acquire(sessionToken);
+        if (fresh != null) {
+            frontendLease = fresh;
+        }
+    }
+
     private static synchronized void stopSession() {
         sessionGeneration++;
         sessionRunning = false;
         lastAppliedConfig = null;
+        com.tsvoice.client.frontend.FrontendLease lease = frontendLease;
+        frontendLease = null;
+        if (lease != null) {
+            try {
+                lease.close();
+            } catch (Exception ignored) {
+            }
+        }
         com.tsvoice.client.connection.TsChannelRoute.endSession(sessionToken);
         com.tsvoice.client.connection.BackendCoordinator.endSession(sessionToken);
         sessionToken = new com.tsvoice.client.connection.VoiceState.SessionToken(0);
@@ -569,6 +609,9 @@ public final class TsVoiceManager {
                         break;
                     }
                     long now = System.currentTimeMillis();
+                    // T08b：SVC 断开/重建后按所有权交接 —— 租约失效则重新获取
+                    //（与管理器锁串行，避免与会话启动的获取竞争）。
+                    reacquireFrontendLeaseIfNeeded();
                     if (now - lastGroupCheck >= 2_000L) {
                         lastGroupCheck = now;
                         try {

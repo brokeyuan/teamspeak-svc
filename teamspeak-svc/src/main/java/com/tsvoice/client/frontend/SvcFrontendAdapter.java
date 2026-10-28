@@ -2,9 +2,11 @@ package com.tsvoice.client.frontend;
 
 import com.tsvoice.client.connection.VoiceState;
 
+import java.util.UUID;
+
 /**
- * SVC 前端适配边界：隔离 2.6.25 内部 API 依赖，提供 mic 所有权与自检。
- * 实现（{@link Svc2625FrontendAdapter}）只允许使用经 inspect 验证过的入口；
+ * SVC 前端适配边界：隔离 2.6.25 内部 API 依赖，提供 mic 所有权、TS 下行注入与
+ * 自检。实现（{@link Svc2625FrontendAdapter}）只允许使用经 inspect 验证过的入口；
  * 版本敏感代码不得散落到其余代码路径。
  */
 public interface SvcFrontendAdapter {
@@ -21,4 +23,11 @@ public interface SvcFrontendAdapter {
 
     /** 释放当前租约（若由本适配器发放）；幂等。 */
     void release(FrontendLease lease);
+
+    /**
+     * TS 下行帧注入（T08c）：经 SVC 播放管线（抖动缓冲/解码/音量/输出设备）。
+     * 通道由调用方按参与者身份派生；StreamKey 用于所有权诊断。前端不可用或
+     * 注入管线缺失时返回 false（调用方丢帧并按 FRONTEND_UNAVAILABLE 呈现）。
+     */
+    boolean play(VoiceState.StreamKey stream, UUID channelUuid, byte[] opus, long sequence);
 }

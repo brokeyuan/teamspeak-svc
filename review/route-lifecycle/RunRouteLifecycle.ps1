@@ -190,9 +190,13 @@ $prod = @("$client/TsVoiceManager.java", "$client/MicRedirector.java", "$client/
     "$client/GroupChannelMapper.java", "$client/ts3voice/TsChannelSnapshot.java",
     "$client/config/TsBookmarkStore.java", "$client/config/EndpointCredentialStore.java",
     "$client/backend/SvcBackendAdapter.java",
-    "$client/ModConfig.java", "$client/ServerConfigStore.java", "$client/ConfigFileUtil.java") |
+    "$client/ModConfig.java", "$client/ServerConfigStore.java", "$client/ConfigFileUtil.java",
+    "$client/frontend/SvcFrontendAdapter.java", "$client/frontend/FrontendCapabilities.java",
+    "$client/frontend/FrontendLease.java", "$client/frontend/Svc2625FrontendAdapter.java") |
     Where-Object { Test-Path $_ }
-& javac -encoding UTF-8 -cp 'review/lib/*' -d "$base/classes" @prod @sources `
+$svcClientStubs = Get-ChildItem -LiteralPath "$base/stubs/de" -Recurse -Filter '*.java' |
+    Select-Object -ExpandProperty FullName
+& javac -encoding UTF-8 -cp 'review/lib/*' -d "$base/classes" @prod @sources $svcClientStubs `
     "$base/RouteLifecycleTest.java" "$base/BookmarkRouteTest.java" "$base/QueuedVoiceRouteTest.java"
 if ($LASTEXITCODE -ne 0) { throw 'Route lifecycle regression compilation failed' }
 & java -cp "$base/classes;review/lib/*" com.tsvoice.client.RouteLifecycleTest

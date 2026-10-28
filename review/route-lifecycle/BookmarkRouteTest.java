@@ -191,8 +191,17 @@ public class BookmarkRouteTest {
             c2.throwOnJoin = true;
         });
         TsVoiceManager.manualConnect("bm-bad");
-        check(waitForState(TsVoiceManager.State.CONNECTED, 5000), "B6: second bookmark session connects");
+        boolean b6Connected = waitForState(TsVoiceManager.State.CONNECTED, 5000);
+        if (!b6Connected) {
+            System.err.println("[dbg] B6 state=" + TsVoiceManager.getState()
+                    + " error=" + TsVoiceManager.getLastError());
+        }
+        check(b6Connected && TsVoiceManager.currentClient() != null,
+                "B6: second bookmark session connects");
         Ts3VoiceClient bad = TsVoiceManager.currentClient();
+        if (bad == null) {
+            throw new AssertionError("B6: session did not start: " + TsVoiceManager.getLastError());
+        }
         check(waitFor(() -> TsChannelRoute.statusReason().contains("failed"), 5000),
                 "B6: failed join request pauses with a reason, no guessed channel");
         check(!BackendCoordinator.route().transmitReady(), "B6: no transmit permission after the rejected move");

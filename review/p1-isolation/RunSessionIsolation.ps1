@@ -92,11 +92,15 @@ $client = 'teamspeak-svc/src/main/java/com/tsvoice/client'
 # when proving the old code fails.
 $prod = @("$client/TsVoiceManager.java", "$client/audio/MicRouteGate.java", "$client/connection/VoiceState.java",
     "$client/connection/BackendCoordinator.java", "$client/connection/SelectionPolicy.java", "$client/connection/TsChannelRoute.java",
+    "$client/frontend/SvcFrontendAdapter.java", "$client/frontend/FrontendCapabilities.java",
+    "$client/frontend/FrontendLease.java", "$client/frontend/Svc2625FrontendAdapter.java",
     "$client/ts3voice/TsChannelSnapshot.java",
     "$client/config/TsBookmarkStore.java", "$client/config/EndpointCredentialStore.java", "$client/backend/SvcBackendAdapter.java",
     "$client/ModConfig.java", "$client/ServerConfigStore.java", "$client/ConfigFileUtil.java") |
     Where-Object { Test-Path $_ }
-& javac -encoding UTF-8 -cp 'review/lib/*' -d "$base/classes" @prod @sources "$base/SessionIsolationTest.java"
+$svcStubs = Get-ChildItem -LiteralPath "$base/stubs/de" -Recurse -Filter '*.java' |
+    Select-Object -ExpandProperty FullName
+& javac -encoding UTF-8 -cp 'review/lib/*' -d "$base/classes" @prod @sources $svcStubs "$base/SessionIsolationTest.java"
 if ($LASTEXITCODE -ne 0) { throw 'Session isolation regression compilation failed' }
 & java -cp "$base/classes;review/lib/*" com.tsvoice.client.SessionIsolationTest
 if ($LASTEXITCODE -ne 0) { throw 'Session isolation regression failed' }

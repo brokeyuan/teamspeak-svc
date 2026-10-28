@@ -1,0 +1,18 @@
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS F1: SVC stubs satisfy the critical hooks
+PASS F2: first acquire succeeds
+PASS F2: isolated mic is self-owned
+PASS F2: second acquire while owned is rejected (single mic)
+PASS F2: release closes the lease
+PASS F2: acquire works again after release
+PASS F3: failing mic source yields null (FRONTEND_UNAVAILABLE)
+PASS F3: reservation is released on failure (no deadlock)
+PASS F4: SVC disconnect closes the self-owned isolated mic
+PASS F4: borrowed lease flagged
+PASS F4: borrowed mic is returned to SVC lifecycle without closing
+PASS F5: play() injects via the SVC pipeline
+PASS F5: verified injection counted
+PASS F6: play() with a null frame refuses
+Frontend lease regression: all checks passed

@@ -20,13 +20,26 @@ public class ClientStateTests {
                 (p,m,a)->m.getName().equals("getId")?groupId:null);
         TeamspeakSvcClient.api=(VoicechatClientApi)Proxy.newProxyInstance(VoicechatClientApi.class.getClassLoader(),
                 new Class[]{VoicechatClientApi.class},(p,m,a)->m.getName().equals("getGroup")?group:null);
-        Method current=TsAudioInjector.class.getDeclaredMethod("clientVoicechat");current.setAccessible(true);
+        // T08c: the injection entry lives on the frontend adapter and resolves the
+        // CURRENT SVC client on every frame.
+        var adapter=com.tsvoice.client.frontend.Svc2625FrontendAdapter.instance();
+        java.util.UUID ch=java.util.UUID.randomUUID();
         ClientVoicechat first=new ClientVoicechat(), second=new ClientVoicechat();
-        ClientManager.current=first; current.invoke(null);
+        ClientManager.current=first;
+        adapter.play(new com.tsvoice.client.connection.VoiceState.StreamKey(
+                new com.tsvoice.client.connection.VoiceState.ParticipantKey("s","u"),1),ch,new byte[]{1},1);
+        check(first.frames==1,"SVC instance replacement uses current client even before cleanup");
         ClientManager.current=second;
-        check(current.invoke(null)==second,"SVC instance replacement uses current client even before cleanup");
+        adapter.play(new com.tsvoice.client.connection.VoiceState.StreamKey(
+                new com.tsvoice.client.connection.VoiceState.ParticipantKey("s","u"),1),ch,new byte[]{1},2);
+        check(second.frames==1 && first.frames==1,"SVC reconnect uses current client after cleanup");
+        first.frames=0; second.frames=0; // reset shared counters for the later sections
         TsAudioInjector.removeAll();
-        check(current.invoke(null)==second,"SVC reconnect uses current client after cleanup");
+        ClientManager.current=second;
+        adapter.play(new com.tsvoice.client.connection.VoiceState.StreamKey(
+                new com.tsvoice.client.connection.VoiceState.ParticipantKey("s","u"),1),ch,new byte[]{1},3);
+        check(second.frames==1 && first.frames==0,
+                "SVC reconnect uses current client after cleanup (counters were reset)");
 
         Ts3VoiceClient c=new Ts3VoiceClient(Ts3Identity.generate(0,1),"review","");
         c.onCommand("cliententerview clid=1 ctid=7 client_unique_identifier="+c.getMyUid()+" client_nickname=Me",false);

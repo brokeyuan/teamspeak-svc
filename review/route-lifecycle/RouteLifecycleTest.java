@@ -95,6 +95,29 @@ public class RouteLifecycleTest {
         ModConfig global = TeamspeakSvcClient.config();
         global.autoConnect = false;
         TeamspeakSvcClient.api = api(encoder());
+        // T08b: sessions acquire a frontend lease at start; the harness injects a
+        // live isolated-mic source so sessions run without real SVC hardware.
+        com.tsvoice.client.frontend.Svc2625FrontendAdapter.setMicSource(
+                new com.tsvoice.client.frontend.Svc2625FrontendAdapter.MicSource() {
+                    @Override
+                    public com.tsvoice.client.frontend.FrontendLease.MicHandle borrowNativeMic() {
+                        return null;
+                    }
+
+                    @Override
+                    public com.tsvoice.client.frontend.FrontendLease.MicHandle createIsolatedMic() {
+                        return new com.tsvoice.client.frontend.FrontendLease.MicHandle() {
+                            @Override
+                            public boolean isAlive() {
+                                return true;
+                            }
+
+                            @Override
+                            public void close() {
+                            }
+                        };
+                    }
+                });
         short[] pcm = new short[960];
         boolean[] cancelled = new boolean[1];
 
@@ -127,6 +150,8 @@ public class RouteLifecycleTest {
         // ---- C: connect completes -> the main channel must be confirmed before sending ----
         releaseAttempt1.countDown();
         check(waitForState(TsVoiceManager.State.CONNECTED, 5000), "C: session reaches CONNECTED");
+        check(TsVoiceManager.frontendLeaseHeld(),
+                "C: the session holds a frontend mic lease (T08b, no SVC server required)");
         Ts3VoiceClient connected1 = TsVoiceManager.currentClient();
         connected1.channelNames.put(5, "Minecraft");
         GroupChannelMapper.tick(connected1); // production legacy mapper resolves the main target
@@ -149,6 +174,8 @@ public class RouteLifecycleTest {
 
         // ---- D: explicit disconnect must NOT hand the microphone to SVC ----
         TsVoiceManager.manualDisconnect();
+        check(!TsVoiceManager.frontendLeaseHeld(),
+                "D: disconnect releases the frontend mic lease");
         cancelled[0] = false;
         MicRedirector.onMicSound(event(pcm, cancelled));
         check(cancelled[0], "D: after explicit disconnect the frame is dropped, not sent to SVC");

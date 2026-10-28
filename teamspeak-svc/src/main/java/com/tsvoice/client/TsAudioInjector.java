@@ -5,7 +5,6 @@ import com.tsvoice.client.ts3voice.Ts3VoiceClient;
 import de.maxhenkel.voicechat.api.Group;
 import de.maxhenkel.voicechat.api.VoicechatClientApi;
 
-import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -49,14 +48,7 @@ public final class TsAudioInjector {
     private static final AtomicLong injectedFrames = new AtomicLong(0);
     private static volatile boolean codecWarned = false;
     private static volatile boolean firstTsFrameLogged = false;
-    private static volatile boolean clientNullLogged = false;
-    private static volatile boolean injectErrorLogged = false;
     private static volatile boolean volumeMigrationUnavailableLogged = false;
-
-    private static Method processSoundPacket;
-    private static java.lang.reflect.Constructor<?> groupCtor;
-    private static volatile boolean reflectionReady = false;
-    private static volatile boolean reflectionFailed = false;
 
     private TsAudioInjector() {
     }
@@ -255,73 +247,25 @@ public final class TsAudioInjector {
         }
     }
 
-    // ---- SVC 包注入 ----
+    // ---- SVC 包注入（T08c：版本敏感入口收敛到前端适配器） ----
 
-    private static synchronized boolean ensureReflection() {
-        if (reflectionReady) {
-            return true;
-        }
-        if (reflectionFailed) {
-            return false;
-        }
-        try {
-            Class<?> soundPacketClass = Class.forName("de.maxhenkel.voicechat.voice.common.SoundPacket");
-            Class<?> clientClass = Class.forName("de.maxhenkel.voicechat.voice.client.ClientVoicechat");
-            processSoundPacket = clientClass.getMethod("processSoundPacket", soundPacketClass);
-            groupCtor = Class.forName("de.maxhenkel.voicechat.voice.common.GroupSoundPacket")
-                    .getConstructor(UUID.class, UUID.class, byte[].class, long.class, String.class);
-            reflectionReady = true;
-            TeamspeakSvcClient.LOGGER.info("[teamspeak-svc] Ghost audio uses SVC packet pipeline (jitter buffer + PLC/FEC)");
-            return true;
-        } catch (Throwable e) {
-            reflectionFailed = true;
-            TeamspeakSvcClient.LOGGER.error("[teamspeak-svc] TS audio disabled (SVC packet reflection failed): {}", e.toString());
-            return false;
-        }
-    }
-
-    private static Object clientVoicechat() {
-        try {
-            Class<?> clientManager = Class.forName("de.maxhenkel.voicechat.voice.client.ClientManager");
-            return clientManager.getMethod("getClient").invoke(null);
-        } catch (Throwable e) {
-            return null;
-        }
-    }
-
-    /** 注入一帧；首次成功后快照 SVC 通道对象作为本流的所有权凭据并登记到注册表。 */
+    /** 注入一帧：经前端适配器的 SVC 播放管线；首次成功后快照通道对象登记所有权。 */
     private static GhostAudio injectSoundPacket(VoiceState.ParticipantKey key, GhostAudio ghost,
                                                 long sequence, byte[] opus) {
-        if (!ensureReflection()) {
+        if (!com.tsvoice.client.frontend.Svc2625FrontendAdapter.instance()
+                .play(ghost.streamKey(), ghost.channelUuid(), opus, sequence)) {
+            // FRONTEND_UNAVAILABLE for playback：帧丢弃，原因由状态层呈现
             return ghost;
         }
-        Object client = clientVoicechat();
-        if (client == null) {
-            if (!clientNullLogged) {
-                clientNullLogged = true;
-                TeamspeakSvcClient.LOGGER.warn("[teamspeak-svc] SVC ClientVoicechat not ready — TS audio dropped");
-            }
-            return ghost;
-        }
-        try {
-            Object packet = groupCtor.newInstance(ghost.channelUuid(), ghost.channelUuid(),
-                    opus, sequence, (String) null);
-            processSoundPacket.invoke(client, packet);
-            injectedFrames.incrementAndGet();
-            if (ghost.ownedChannel() == null) {
-                Object channel = ClientStateReflector.ownedAudioChannel(ghost.channelUuid());
-                if (channel != null) {
-                    GhostAudio owned = ghost.withOwnedChannel(channel);
-                    ghosts.put(key, owned);
-                    ClientStateReflector.registerOwnedChannel(ghost.channelUuid(), channel);
-                    TsPlaybackRegistry.register(owned.streamKey(), owned.channelUuid(), channel);
-                    return owned;
-                }
-            }
-        } catch (Throwable t) {
-            if (!injectErrorLogged) {
-                injectErrorLogged = true;
-                TeamspeakSvcClient.LOGGER.warn("[teamspeak-svc] SVC packet injection failed: {}", t.toString());
+        injectedFrames.incrementAndGet();
+        if (ghost.ownedChannel() == null) {
+            Object channel = ClientStateReflector.ownedAudioChannel(ghost.channelUuid());
+            if (channel != null) {
+                GhostAudio owned = ghost.withOwnedChannel(channel);
+                ghosts.put(key, owned);
+                ClientStateReflector.registerOwnedChannel(ghost.channelUuid(), channel);
+                TsPlaybackRegistry.register(owned.streamKey(), owned.channelUuid(), channel);
+                return owned;
             }
         }
         return ghost;

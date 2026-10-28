@@ -136,7 +136,7 @@ $sources = foreach ($item in $stubs.GetEnumerator()) {
     $path
 }
 $client = 'teamspeak-svc/src/main/java/com/tsvoice/client'
-$prod = @("$client/TsVoiceManager.java", "$client/audio/MicRouteGate.java",
+$prod = @("$client/TsVoiceManager.java", "$client/audio/MicRouteGate.java", "$client/frontend/SvcFrontendAdapter.java", "$client/frontend/FrontendCapabilities.java", "$client/frontend/FrontendLease.java", "$client/frontend/Svc2625FrontendAdapter.java",
     "$client/connection/VoiceState.java", "$client/connection/BackendCoordinator.java",
     "$client/connection/SelectionPolicy.java", "$client/connection/TsChannelRoute.java",
     "$client/ts3voice/TsChannelSnapshot.java",

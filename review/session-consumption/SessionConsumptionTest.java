@@ -55,6 +55,29 @@ public class SessionConsumptionTest {
     }
 
     public static void main(String[] args) throws Exception {
+
+        // T08b: sessions acquire a frontend mic lease; inject a live isolated mic.
+        com.tsvoice.client.frontend.Svc2625FrontendAdapter.setMicSource(
+                new com.tsvoice.client.frontend.Svc2625FrontendAdapter.MicSource() {
+                    @Override
+                    public com.tsvoice.client.frontend.FrontendLease.MicHandle borrowNativeMic() {
+                        return null;
+                    }
+
+                    @Override
+                    public com.tsvoice.client.frontend.FrontendLease.MicHandle createIsolatedMic() {
+                        return new com.tsvoice.client.frontend.FrontendLease.MicHandle() {
+                            @Override
+                            public boolean isAlive() {
+                                return true;
+                            }
+
+                            @Override
+                            public void close() {
+                            }
+                        };
+                    }
+                });
         TeamspeakSvcClient.config().autoConnect = false;
         OpusEncoder encoder = (OpusEncoder) Proxy.newProxyInstance(OpusEncoder.class.getClassLoader(),
                 new Class<?>[]{OpusEncoder.class}, (p, m, a) -> {
@@ -79,6 +102,10 @@ public class SessionConsumptionTest {
         TsVoiceManager.onSvcConnected();
         check(waitFor(() -> TsVoiceManager.getState() == TsVoiceManager.State.CONNECTED, 5000),
                 "C1: session A connects");
+        if (TsVoiceManager.getState() != TsVoiceManager.State.CONNECTED) {
+            System.err.println("[dbg] C1 state=" + TsVoiceManager.getState()
+                    + " error=" + TsVoiceManager.getLastError());
+        }
         Ts3VoiceClient sessionA = TsVoiceManager.currentClient();
         sessionA.textListener.accept("Alice", "hello from A");
         check(!net.minecraft.client.Minecraft.MESSAGES.isEmpty() == false

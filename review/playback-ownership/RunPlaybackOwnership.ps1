@@ -25,6 +25,10 @@ if (Test-Path 'teamspeak-svc/src/main/java/com/tsvoice/client/TsPlaybackRegistry
     'teamspeak-svc/src/main/java/com/tsvoice/client/connection/VoiceState.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/client/connection/BackendCoordinator.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/client/connection/SelectionPolicy.java' `
+    'teamspeak-svc/src/main/java/com/tsvoice/client/frontend/SvcFrontendAdapter.java' `
+    'teamspeak-svc/src/main/java/com/tsvoice/client/frontend/FrontendCapabilities.java' `
+    'teamspeak-svc/src/main/java/com/tsvoice/client/frontend/FrontendLease.java' `
+    'teamspeak-svc/src/main/java/com/tsvoice/client/frontend/Svc2625FrontendAdapter.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/client/ClientStateReflector.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/client/TsAudioInjector.java' `
     $prodExtra `
