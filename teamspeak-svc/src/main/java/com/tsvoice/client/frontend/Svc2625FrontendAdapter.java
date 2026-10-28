@@ -442,6 +442,37 @@ public final class Svc2625FrontendAdapter implements SvcFrontendAdapter {
     }
 
     /**
+     * N3/D03：OFF（关闭全部语音）时清空原生 SVC 表内的播放通道 —— 既有排队帧
+     * 与正在使用的输出资源一并释放。反射访问 ClientVoicechat.getAudioChannels；
+     * 环境缺失/未连接时为无操作。本扩展自有的独立播放通道由注册表退役路径负责。
+     */
+    public void flushNativePlaybackChannels() {
+        try {
+            Object client = Class.forName("de.maxhenkel.voicechat.voice.client.ClientManager")
+                    .getMethod("getClient").invoke(null);
+            if (client == null) {
+                return;
+            }
+            @SuppressWarnings("unchecked")
+            java.util.Map<UUID, Object> channels =
+                    (java.util.Map<UUID, Object>) client.getClass()
+                            .getMethod("getAudioChannels").invoke(client);
+            if (channels == null) {
+                return;
+            }
+            synchronized (channels) {
+                for (Object channel : channels.values()) {
+                    closePlaybackChannel(channel);
+                }
+                channels.clear();
+            }
+        } catch (Throwable t) {
+            TeamspeakSvcClient.LOGGER.debug(
+                    "[teamspeak-svc] flush native playback channels failed: {}", t.toString());
+        }
+    }
+
+    /**
      * SVC 原生连接断开：关闭自有租约（借用资源交还 SVC 生命周期）；协调器随后
      * 重新申请（原生 mic 已死时自动切换为隔离 mic）。自有播放通道不依赖 SVC
      * 网络会话，保持有效。

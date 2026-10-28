@@ -1,4 +1,5 @@
 package de.maxhenkel.voicechat.voice.client;
 public class ClientManager {
- public static Object getClient(){return new ClientVoicechat();}
+ private static final ClientVoicechat CLIENT = new ClientVoicechat();
+ public static ClientVoicechat getClient(){return CLIENT;}
 }

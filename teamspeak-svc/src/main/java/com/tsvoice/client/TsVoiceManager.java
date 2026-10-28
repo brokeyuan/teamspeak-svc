@@ -464,6 +464,10 @@ public final class TsVoiceManager {
     public static void disableAllVoice() {
         explicitBookmarkId = null;
         com.tsvoice.client.connection.BackendCoordinator.disableAllVoice();
+        // N3/D03：意图立即生效（原生接收 mixin 直读协调器），既有原生 SVC 播放
+        // 通道的排队帧与输出资源一并释放；恢复时 SVC 按需重建通道，用户静音/音量不动。
+        com.tsvoice.client.frontend.Svc2625FrontendAdapter.instance()
+                .flushNativePlaybackChannels();
         com.tsvoice.client.backend.SvcBackendAdapter.setVoiceMuted(true);
         stopSession();
         state = State.VOICE_OFF;

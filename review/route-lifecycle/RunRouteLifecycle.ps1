@@ -24,7 +24,7 @@ public class FabricLoader {public static FabricLoader getInstance(){return new F
 'net/minecraft/client/Minecraft.java'=@'
 package net.minecraft.client;
 public class Minecraft {
- public Player player;public static Minecraft getInstance(){return new Minecraft();}public void execute(Runnable r){r.run();}
+ public Player player;private final Thread fakeThread=Thread.currentThread();public static Minecraft getInstance(){return new Minecraft();}public void execute(Runnable r){r.run();}public boolean isSameThread(){return Thread.currentThread()==fakeThread;}
  public User getUser(){return new User();}public static class User{public String getName(){return "Test";}}
  public static class Player{public java.util.UUID getUUID(){return java.util.UUID.randomUUID();}public void sendSystemMessage(Object msg){}}
 }
@@ -181,10 +181,6 @@ public class Ts3VoiceClient {
  public void sendChannelText(String message){}
 }
 '@
-'com/tsvoice/client/ClientStateReflector.java'=@'
-package com.tsvoice.client;
-public class ClientStateReflector {public static void refreshGroups(de.maxhenkel.voicechat.api.VoicechatClientApi a,de.maxhenkel.voicechat.api.Group g){}}
-'@
 'com/tsvoice/client/net/GroupInfoPayload.java'=@'
 package com.tsvoice.client.net;
 public record GroupInfoPayload(java.util.UUID id,String name,String password,int typeOrd){}
@@ -205,13 +201,14 @@ $prod = @("$client/TsVoiceManager.java", "$client/MicRedirector.java", "$client/
     "$client/backend/SvcBackendAdapter.java",
     "$client/ModConfig.java", "$client/ServerConfigStore.java", "$client/ConfigFileUtil.java",
     "$client/frontend/SvcFrontendAdapter.java", "$client/frontend/FrontendCapabilities.java",
-    "$client/frontend/FrontendLease.java", "$client/frontend/Svc2625FrontendAdapter.java") |
+    "$client/frontend/FrontendLease.java", "$client/frontend/Svc2625FrontendAdapter.java",
+    "$client/ClientStateReflector.java") |
     Where-Object { Test-Path $_ }
 $svcClientStubs = Get-ChildItem -LiteralPath "$base/stubs/de" -Recurse -Filter '*.java' |
     Select-Object -ExpandProperty FullName
 & javac -encoding UTF-8 -cp 'review/lib/*' -d "$base/classes" @prod @sources $svcClientStubs `
     "$base/RouteLifecycleTest.java" "$base/BookmarkRouteTest.java" "$base/QueuedVoiceRouteTest.java" `
-    "$base/RouteMoveLifecycleTest.java"
+    "$base/RouteMoveLifecycleTest.java" "$base/OffGateTest.java"
 if ($LASTEXITCODE -ne 0) { throw 'Route lifecycle regression compilation failed' }
 & java -cp "$base/classes;review/lib/*" com.tsvoice.client.RouteLifecycleTest
 if ($LASTEXITCODE -ne 0) { throw 'Route lifecycle regression failed' }
@@ -221,6 +218,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Bookmark route regression failed' }
 if ($LASTEXITCODE -ne 0) { throw 'Queued voice route regression failed' }
 & java -cp "$base/classes;review/lib/*" com.tsvoice.client.connection.RouteMoveLifecycleTest
 if ($LASTEXITCODE -ne 0) { throw 'Route move lifecycle regression failed' }
+& java -cp "$base/classes;review/lib/*" com.tsvoice.client.OffGateTest
+if ($LASTEXITCODE -ne 0) { throw 'Off gate regression failed' }
 # Connection-level linearization: REAL Ts3Connection/Ts3Crypt/Ts3Packet/TsTransport
 # against a controllable blocking transport; ts3voice-core protocol sources via
 # -sourcepath, client callback surface stubbed (connection layer only).

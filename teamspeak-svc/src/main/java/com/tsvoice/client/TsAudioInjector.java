@@ -258,21 +258,19 @@ public final class TsAudioInjector {
             return ghost;
         }
         injectedFrames.incrementAndGet();
-        if (ghost.ownedChannel() == null) {
-            // N2/D01：独立播放通道由前端适配器直接拥有；SVC 表内通道（历史路径）
-            // 仍经反射快照。两者都登记同一所有权链（registry retire 双路关闭）。
-            Object channel = com.tsvoice.client.frontend.Svc2625FrontendAdapter.instance()
-                    .ownedPlaybackChannel(ghost.channelUuid());
-            if (channel == null) {
-                channel = ClientStateReflector.ownedAudioChannel(ghost.channelUuid());
-            }
-            if (channel != null) {
-                GhostAudio owned = ghost.withOwnedChannel(channel);
-                ghosts.put(key, owned);
-                ClientStateReflector.registerOwnedChannel(ghost.channelUuid(), channel);
-                TsPlaybackRegistry.register(owned.streamKey(), owned.channelUuid(), channel);
-                return owned;
-            }
+        // N2/N3：适配器自有通道按需重建（client 实例更换、OFF 清空后恢复等）——
+        // 快照与当前通道对象不一致时重新登记所有权，保证退役路径覆盖现役对象。
+        Object channel = com.tsvoice.client.frontend.Svc2625FrontendAdapter.instance()
+                .ownedPlaybackChannel(ghost.channelUuid());
+        if (channel == null) {
+            channel = ClientStateReflector.ownedAudioChannel(ghost.channelUuid());
+        }
+        if (channel != null && channel != ghost.ownedChannel()) {
+            GhostAudio owned = ghost.withOwnedChannel(channel);
+            ghosts.put(key, owned);
+            ClientStateReflector.registerOwnedChannel(ghost.channelUuid(), channel);
+            TsPlaybackRegistry.register(owned.streamKey(), owned.channelUuid(), channel);
+            return owned;
         }
         return ghost;
     }

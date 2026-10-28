@@ -36,4 +36,15 @@ public final class SvcBackendAdapter {
     public static boolean isVoiceMuted() {
         return voiceMuted;
     }
+
+    /**
+     * 原生 SVC 下行是否被本扩展的 OFF 意图压制（N3/D03；mixin 在
+     * {@code ClientVoicechat.processSoundPacket} 头部读取）。直接派生自协调器
+     * 的当前意图 —— 不保存第二份状态，OFF 之外（含 PAUSED）一律放行原生接收，
+     * 且与用户在 SVC 里的静音/音量设置完全无关。
+     */
+    public static boolean isNativeReceiveSuppressed() {
+        return com.tsvoice.client.connection.BackendCoordinator.snapshot()
+                .selection().intent() == com.tsvoice.client.connection.SelectionPolicy.IntentKind.OFF;
+    }
 }
