@@ -31,7 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class ClientIdentityService {
     private record VerifiedIdentity(UUID mcUuid, long revision, long expiresAtEpochSeconds,
-                                    String claimKey) {
+                                    String claimKey, String issuerKeyId) {
     }
 
     private static volatile Ts3VoiceClient client;
@@ -97,6 +97,29 @@ public final class ClientIdentityService {
     /** 显式解除信任；已记录的墓碑与高水位不清除。 */
     public static void unpinTrustedIssuer(PublicKey issuer) {
         trustDirectory.untrust(issuer);
+        // T06/R09：解除信任立即降级该 issuer 的全部已验证关联 —— 查询路径也会
+        // 复核信任，但已展示的身份必须主动通知显示层按策略降级。
+        String keyId = com.tsvoice.protocol.SignedPlayerClaim.issuerKeyId(issuer.getEncoded());
+        verified.values().removeIf(entry -> keyId.equals(entry.issuerKeyId()));
+        fireIdentityChange();
+    }
+
+    /** 显示层身份变更通知（Ghost 皮肤/名字随下一次渲染降级；不影响音频与稳定 UUID）。 */
+    public static void setIdentityChangeListener(Runnable listener) {
+        identityChangeListener = listener;
+    }
+
+    private static volatile Runnable identityChangeListener;
+
+    private static void fireIdentityChange() {
+        Runnable listener = identityChangeListener;
+        if (listener != null) {
+            try {
+                listener.run();
+            } catch (Exception e) {
+                TeamspeakSvcClient.LOGGER.debug("[teamspeak-svc] identity change listener failed: {}", e.getMessage());
+            }
+        }
     }
 
     public static void beginProof(Ts3VoiceClient tsClient, Ts3Identity tsIdentity) {
@@ -149,7 +172,9 @@ public final class ClientIdentityService {
         }
         VerifiedIdentity verifiedIdentity = verified.get(key(tsVirtualServerUid, tsClientUid));
         if (verifiedIdentity == null
-                || verifiedIdentity.expiresAtEpochSeconds() <= System.currentTimeMillis() / 1000L) {
+                || verifiedIdentity.expiresAtEpochSeconds() <= System.currentTimeMillis() / 1000L
+                // T06/R09：查询时复核 issuer 信任 —— 解除信任后存量关联立即失效。
+                || !trustDirectory.isTrusted(verifiedIdentity.issuerKeyId())) {
             return null;
         }
         return verifiedIdentity.mcUuid();
@@ -204,7 +229,7 @@ public final class ClientIdentityService {
             recordWatermark(claimKey, claim.revision());
             verified.put(key(claim.tsVirtualServerUid(), claim.tsClientUid()),
                     new VerifiedIdentity(claim.mcUuid(), claim.revision(),
-                            claim.expiresAtEpochSeconds(), claimKey));
+                            claim.expiresAtEpochSeconds(), claimKey, claim.issuerKeyId()));
         } catch (Exception e) {
             TeamspeakSvcClient.LOGGER.debug("[teamspeak-svc] Ignoring invalid identity claim: {}", e.getMessage());
         }
@@ -218,8 +243,11 @@ public final class ClientIdentityService {
         // 墓碑至少需覆盖声明 TTL 窗口（24h+偏差）；本实现无限期保留最高 revision，
         // 严格强于该下限，且只由显式解除信任操作清除。
         recordWatermark(payload.claimKey(), payload.revision());
-        verified.values().removeIf(entry -> entry.claimKey().equals(payload.claimKey())
+        boolean removed = verified.values().removeIf(entry -> entry.claimKey().equals(payload.claimKey())
                 && payload.revision() >= entry.revision());
+        if (removed) {
+            fireIdentityChange();
+        }
     }
 
     private static void recordWatermark(String claimKey, long revision) {

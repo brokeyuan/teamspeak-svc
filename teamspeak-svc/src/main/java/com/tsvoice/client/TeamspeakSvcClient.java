@@ -116,6 +116,15 @@ public class TeamspeakSvcClient implements ClientModInitializer {
         PayloadTypeRegistry.clientboundPlay().register(GroupInfoPayload.TYPE, GroupInfoPayload.CODEC);
 
         // 信标：新 endpoint 需要玩家显式授权；只有已记住的 endpoint 自动采用
+        // T06/R09：issuer 信任变化立即刷新 Ghost 展示（降级不改稳定 UUID，不停音频）。
+        ClientIdentityService.setIdentityChangeListener(() ->
+                Minecraft.getInstance().execute(() -> {
+                    try {
+                        TsAudioInjector.syncAllGhostVisibility(TsVoiceManager.currentClient());
+                    } catch (Exception e) {
+                        LOGGER.debug("[teamspeak-svc] identity change refresh failed: {}", e.getMessage());
+                    }
+                }));
         TsVoiceManager.setUntrustedBeaconListener(payload ->
                                     Minecraft.getInstance().setScreenAndShow(new BeaconTrustScreen(payload)));
         ClientPlayNetworking.registerGlobalReceiver(BeaconPayload.TYPE, (payload, context) ->

@@ -61,6 +61,17 @@ public class ClientIdentityServiceRegression {
                 new net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.Context());
     }
 
+    static void unpinIssuer(PublicKey key) {
+        try {
+            Method m = ClientIdentityService.class.getMethod("unpinTrustedIssuer", PublicKey.class);
+            m.invoke(null, key);
+        } catch (NoSuchMethodException e) {
+            // old code has no unpin: the R09 assertions fail below
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     static void pinIssuer(PublicKey key) {
         try {
             Method m = ClientIdentityService.class.getMethod("pinTrustedIssuer", PublicKey.class);
@@ -205,6 +216,64 @@ public class ClientIdentityServiceRegression {
         deliver(new IdentityPayloads.SignedClaim(reproof.encode(), issuer.getPublic().getEncoded()));
         check(!mapContains("fixture-server", tsClientUid),
                 "watermark still blocks an equal-revision replay after reconnect");
+
+        // ---- R09 (T06): unpinning must immediately degrade every verified mapping ----
+        java.security.KeyPair r09Issuer = ServerTrustDirectory.generateIssuerKeyPair();
+        java.security.KeyPair keepIssuer = ServerTrustDirectory.generateIssuerKeyPair();
+        UUID r09Uuid = UUID.randomUUID();
+        UUID keepUuid = UUID.randomUUID();
+        pinIssuer(r09Issuer.getPublic());
+        pinIssuer(keepIssuer.getPublic());
+        // Same trusted issuer verifies identities on two virtual servers.
+        SignedPlayerClaim r09a = SignedPlayerClaim.issue(r09Issuer, r09Uuid, "fixture-server",
+                "r09-uid-a", 20, now - 1, now + 3600);
+        SignedPlayerClaim r09b = SignedPlayerClaim.issue(r09Issuer, r09Uuid, "other-server",
+                "r09-uid-b", 21, now - 1, now + 3600);
+        // A different issuer's mapping must survive the unpin of r09Issuer.
+        SignedPlayerClaim keep = SignedPlayerClaim.issue(keepIssuer, keepUuid, "fixture-server",
+                "keep-uid", 22, now - 1, now + 3600);
+        deliver(new IdentityPayloads.SignedClaim(r09a.encode(), r09Issuer.getPublic().getEncoded()));
+        deliver(new IdentityPayloads.SignedClaim(r09b.encode(), r09Issuer.getPublic().getEncoded()));
+        deliver(new IdentityPayloads.SignedClaim(keep.encode(), keepIssuer.getPublic().getEncoded()));
+        check(r09Uuid.equals(ClientIdentityService.getVerifiedMcUuid("fixture-server", "r09-uid-a")),
+                "R09: trusted claim elevates before unpin");
+        boolean[] displayNotified = new boolean[1];
+        try {
+            // Reflective so the suite compiles against code without the notification API.
+            ClientIdentityService.class
+                    .getMethod("setIdentityChangeListener", Runnable.class)
+                    .invoke(null, (Runnable) () -> displayNotified[0] = true);
+        } catch (NoSuchMethodException e) {
+            // old code has no change notification: the assertion below fails
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        unpinIssuer(r09Issuer.getPublic());
+        check(ClientIdentityService.getVerifiedMcUuid("fixture-server", "r09-uid-a") == null,
+                "R09: query degrades immediately after unpin (same server)");
+        check(ClientIdentityService.getVerifiedMcUuid("other-server", "r09-uid-b") == null,
+                "R09: query degrades immediately after unpin (second server)");
+        check(keepUuid.equals(ClientIdentityService.getVerifiedMcUuid("fixture-server", "keep-uid")),
+                "R09: another issuer's mapping survives the unpin");
+        check(displayNotified[0], "R09: display layer is notified of the identity change");
+
+        // Replaying the old claim stays rejected even after re-pinning...
+        pinIssuer(r09Issuer.getPublic());
+        deliver(new IdentityPayloads.SignedClaim(r09a.encode(), r09Issuer.getPublic().getEncoded()));
+        check(ClientIdentityService.getVerifiedMcUuid("fixture-server", "r09-uid-a") == null,
+                "R09: replaying the unpinned claim after re-pin stays rejected");
+        // ...only a fresh claim within the revision policy re-elevates.
+        SignedPlayerClaim r09Fresh = SignedPlayerClaim.issue(r09Issuer, r09Uuid, "fixture-server",
+                "r09-uid-a", 23, now - 1, now + 3600);
+        deliver(new IdentityPayloads.SignedClaim(r09Fresh.encode(), r09Issuer.getPublic().getEncoded()));
+        check(r09Uuid.equals(ClientIdentityService.getVerifiedMcUuid("fixture-server", "r09-uid-a")),
+                "R09: a fresh higher-revision claim re-elevates after re-pin");
+        // The expiry is still honored at query time.
+        SignedPlayerClaim r09Expiry = SignedPlayerClaim.issue(r09Issuer, r09Uuid, "fixture-server",
+                "r09-uid-exp", 24, now - 7200, now - 3600);
+        deliver(new IdentityPayloads.SignedClaim(r09Expiry.encode(), r09Issuer.getPublic().getEncoded()));
+        check(ClientIdentityService.getVerifiedMcUuid("fixture-server", "r09-uid-exp") == null,
+                "R09: expired claims never resolve at query time");
 
         if (failures != 0) {
             throw new AssertionError(failures + " client identity checks failed");
