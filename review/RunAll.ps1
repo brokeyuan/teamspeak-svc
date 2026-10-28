@@ -50,7 +50,7 @@ if ($coreProc.ExitCode -eq 0) {
     Get-Content $coreErr -Tail 6 -ErrorAction SilentlyContinue | ForEach-Object { Write-Output "  $_" }
 }
 
-# ---- Phase 2: harness suites (21 = 20 previous + upload-confirmation)
+# ---- Phase 2: harness suites (22 = 20 previous + upload-confirmation + gui-integration)
 $suites = @(
     'review/channel-fixes/RunProtocol.ps1',
     'review/channel-fixes/RunMapper.ps1',
@@ -72,7 +72,8 @@ $suites = @(
     'review/p3-channel/RunCommandTracker.ps1',
     'review/p4-discovery/RunFallbackPolicy.ps1',
     'review/server-fixes/RunServerChecks.ps1',
-    'review/upload-confirmation/RunUploadConfirmation.ps1'
+    'review/upload-confirmation/RunUploadConfirmation.ps1',
+    'review/gui-integration/RunGuiIntegration.ps1'
 )
 foreach ($suite in $suites) {
     $name = ($suite -replace '^review/', '' -replace '/Run', '__' -replace '\.ps1$', '')
@@ -98,5 +99,5 @@ if ($failed.Count -gt 0) {
     Write-Output ("Full per-suite logs: {0}" -f $logDir)
     exit 1
 }
-Write-Output ('CI-EQUIVALENT RESULT: PASS (core test + all 21 harness suites green)')
+Write-Output ('CI-EQUIVALENT RESULT: PASS (core test + all 22 harness suites green)')
 exit 0

@@ -401,6 +401,12 @@ public final class TsChannelRoute {
         synchronized (LOCK) {
             initialResolved = true;
         }
+        // T09/N4：锁定书签 —— 初始频道解析完成即登记锁定目标（此前 legalTarget
+        // 为 null，确认会被策略拒绝）；普通跟随书签无需登记。
+        if (BackendCoordinator.channelPolicy() == VoiceState.ChannelPolicy.LOCKED_TARGET) {
+            BackendCoordinator.setChannelTarget(currentToken(),
+                    VoiceState.ChannelPolicy.LOCKED_TARGET, cid);
+        }
         Integer currentRoute = BackendCoordinator.snapshot().route().channelId();
         if (!Objects.equals(currentRoute, cid)) {
             String password = com.tsvoice.client.TsVoiceManager.currentSessionConfig() != null

@@ -117,6 +117,15 @@ public class ConfigScreen extends Screen {
         String channelLine = Component.translatable("tsvoice.gui.channel").getString() + " "
                 + (cfg != null ? cfg.channel() : "-");
         addRenderableWidget(makeLabel(cx - 100, y, 200, Component.literal(channelLine), 0xFFE0E0E0));
+        y += 14;
+        // 麦克风受众（T09/N4，VoiceStatusModel 只读快照；许可仍由协调器/路由决定）
+        var status = VoiceStatusModel.snapshot();
+        String micLine = Component.translatable("tsvoice.gui.mic_target").getString() + " "
+                + Component.translatable("tsvoice.mictarget." + status.micTarget().toLowerCase()).getString()
+                + (status.micTargetDetail().isBlank() ? "" : " — " + status.micTargetDetail());
+        addRenderableWidget(makeLabel(cx - 100, y, 200, Component.literal(micLine),
+                "TS".equals(status.micTarget()) ? 0xFF55FF55
+                        : "SVC".equals(status.micTarget()) ? 0xFF55FFAA : 0xFFFFAA55));
         y += 20;
 
         // ===== 2. 配置区 =====
@@ -215,6 +224,25 @@ public class ConfigScreen extends Screen {
         }).bounds(cx - 100, y, 200, 20).build();
         addRenderableWidget(connectBtn);
 
+        y += 24;
+
+        // 三个独立语音操作（D1/T09）：断开 TS / 切换 SVC / 关闭全部语音 —— 不合并、
+        // 不隐含彼此；按钮文字即时反映当前状态。
+        addRenderableWidget(Button.builder(Component.translatable("tsvoice.gui.op.disconnect_ts"), b ->
+                TsVoiceManager.disconnectTeamSpeak()
+        ).bounds(cx - 100, y, 98, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("tsvoice.gui.op.switch_svc"), b ->
+                TsVoiceManager.switchToSvc()
+        ).bounds(cx + 2, y, 98, 20).build());
+        y += 24;
+        addRenderableWidget(Button.builder(Component.translatable("tsvoice.gui.op.off"), b ->
+                TsVoiceManager.disableAllVoice()
+        ).bounds(cx - 100, y, 98, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("tsvoice.gui.bookmarks.title"), b -> {
+            TsBookmarksScreen bookmarks = new TsBookmarksScreen();
+            bookmarks.setParent(this);
+            Minecraft.getInstance().setScreenAndShow(bookmarks);
+        }).bounds(cx + 2, y, 98, 20).build());
         y += 24;
 
         addRenderableWidget(Button.builder(Component.translatable("tsvoice.gui.done"), b -> {

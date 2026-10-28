@@ -62,6 +62,8 @@ public final class TsVoiceManager {
             new com.tsvoice.client.connection.VoiceState.SessionToken(0);
     /** 前端 mic 租约（T08b）：会话启动获取、停止释放；SVC 断开由适配器关闭后按需重取。 */
     private static volatile com.tsvoice.client.frontend.FrontendLease frontendLease;
+    /** 书签独立昵称（T09/N4）：null=默认 "[MC] 玩家名"；不写入身份或凭据。 */
+    private static volatile String sessionNicknameOverride;
 
     /** 会话是否持有前端 mic 租约（诊断/回归观测用）。 */
     public static boolean frontendLeaseHeld() {
@@ -451,6 +453,20 @@ public final class TsVoiceManager {
         disconnectTeamSpeak();
     }
 
+    /**
+     * 书签删除（T09/N4）：删除"正在使用"的书签不得静默换目标 —— 进入 PAUSED
+     * 并清除意图，等待用户明确选择下一个目标；删除其他书签不影响当前会话。
+     */
+    public static void onBookmarkDeleted(String bookmarkId) {
+        if (bookmarkId != null && bookmarkId.equals(explicitBookmarkId)) {
+            TeamspeakSvcClient.LOGGER.info(
+                    "[teamspeak-svc] Active bookmark '{}' deleted — pausing instead of silently retargeting",
+                    bookmarkId);
+            disconnectTeamSpeak();
+            explicitBookmarkId = null;
+        }
+    }
+
     /** 用户切回原生 SVC（独立操作）：TS 会话关闭，发言边界过后恢复原版发送。 */
     public static void switchToSvc() {
         explicitBookmarkId = null;
@@ -494,12 +510,18 @@ public final class TsVoiceManager {
         // 连接前先发布未就绪路由（R01）：后台连接期间发送许可保持关闭。
         com.tsvoice.client.connection.BackendCoordinator.publishRoute(sessionToken,
                 com.tsvoice.client.connection.VoiceState.BackendKind.TS3, false);
-        // 频道策略（T02）：显式书签默认 TS 原生跟随（初始频道=书签频道）；
-        // 其余配置沿用 legacy 群组映射，不退化既有行为。
+        // 频道策略（T02/T09）：显式书签默认 TS 原生跟随（初始频道=书签频道）；
+        // 书签声明 locked 时以书签频道为锁定目标；其余配置沿用 legacy 群组映射。
+        com.tsvoice.client.config.TsBookmarkStore.Bookmark activeBookmark =
+                explicitBookmarkId != null
+                        ? com.tsvoice.client.config.TsBookmarkStore.get(explicitBookmarkId) : null;
         com.tsvoice.client.connection.VoiceState.ChannelPolicy channelPolicy =
                 explicitBookmarkId != null
-                        ? com.tsvoice.client.connection.VoiceState.ChannelPolicy.TS_NATIVE_FOLLOW
+                        ? (activeBookmark != null && activeBookmark.lockedChannel()
+                        ? com.tsvoice.client.connection.VoiceState.ChannelPolicy.LOCKED_TARGET
+                        : com.tsvoice.client.connection.VoiceState.ChannelPolicy.TS_NATIVE_FOLLOW)
                         : com.tsvoice.client.connection.VoiceState.ChannelPolicy.LEGACY_GROUP_MAPPING;
+        sessionNicknameOverride = activeBookmark != null ? activeBookmark.effectiveNickname() : null;
         String initialChannel = explicitBookmarkId != null && activeConfig != null
                 ? activeConfig.channel() : null;
         com.tsvoice.client.connection.TsChannelRoute.beginSession(sessionToken, channelPolicy, initialChannel);
@@ -725,7 +747,9 @@ public final class TsVoiceManager {
             TeamspeakSvcClient.LOGGER.info("[teamspeak-svc] TS identity ready (uid={})", identity.getClientUid());
         }
 
-        String nickname = "[MC] " + Minecraft.getInstance().getUser().getName();
+        String nickname = sessionNicknameOverride != null
+                ? sessionNicknameOverride
+                : "[MC] " + Minecraft.getInstance().getUser().getName();
         Ts3VoiceClient c = new Ts3VoiceClient(identity, nickname, "", cfg.tcp());
         c.setServerPassword(cfg.password());
         // writer 最终写出点的路由代际来源（R08/T03）：路由未就绪/已失效时全部语音丢弃。

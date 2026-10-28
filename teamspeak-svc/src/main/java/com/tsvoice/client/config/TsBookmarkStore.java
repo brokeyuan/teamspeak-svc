@@ -20,9 +20,26 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 public final class TsBookmarkStore {
 
-    /** transportPolicy: null / "udp" / "tcp"。credentialRef 由凭据存储解释。 */
+    /**
+     * TS 书签（schema v3）：与 MC 服务器配置解绑的独立连接目标。
+     * 凭据不保存在此 —— {@link EndpointCredentialStore} 按规范化 endpoint 隔离保存。
+     * 手动书签优先于服务器公告（server-bridge 信标只能休眠"自动"路径，不能覆盖显式意图）。
+     *
+     * <p>v3 新增（T09/N4）：{@code nickname}（独立昵称，null=默认 "[MC] 玩家名"）、
+     * {@code identityRef}（身份引用，保留扩展位，私钥绝不写入书签）、
+     * {@code channelPolicy}（null/"follow"=服务器确认的频道可跟随；"locked"=锁定
+     * 书签频道）。旧 v2 数据（缺字段）按默认值迁移，无需重写文件。</p>
+     */
     public record Bookmark(String id, String label, String host, Integer port, String channel,
-                           String transportPolicy, String credentialRef, boolean autoConnect) {
+                           String transportPolicy, String credentialRef, boolean autoConnect,
+                           String nickname, String identityRef, String channelPolicy) {
+        /** v2 兼容构造器：旧调用方与旧 schema 字段按默认值补齐。 */
+        public Bookmark(String id, String label, String host, Integer port, String channel,
+                        String transportPolicy, String credentialRef, boolean autoConnect) {
+            this(id, label, host, port, channel, transportPolicy, credentialRef, autoConnect,
+                    null, null, null);
+        }
+
         public Bookmark {
             if (id == null || id.isBlank()) {
                 throw new IllegalArgumentException("Bookmark id required");
@@ -34,6 +51,16 @@ public final class TsBookmarkStore {
 
         public int effectivePort() {
             return port != null ? port : 9987;
+        }
+
+        /** 独立昵称（未设置时返回 null，调用方用默认昵称）。 */
+        public String effectiveNickname() {
+            return nickname == null || nickname.isBlank() ? null : nickname.trim();
+        }
+
+        /** 频道策略：locked → LOCKED_TARGET；其余（null/follow/未知值）→ 默认跟随。 */
+        public boolean lockedChannel() {
+            return "locked".equalsIgnoreCase(channelPolicy);
         }
     }
 
@@ -61,11 +88,29 @@ public final class TsBookmarkStore {
                     new TypeToken<List<Bookmark>>() {
                     }.getType());
             if (parsed != null) {
+                boolean legacySchema = false;
                 for (Bookmark bookmark : parsed) {
                     try {
                         bookmarks.add(bookmark);
+                        legacySchema |= bookmark.nickname() == null
+                                && bookmark.identityRef() == null
+                                && bookmark.channelPolicy() == null;
                     } catch (RuntimeException ignored) {
                         // 跳过损坏条目，其余书签仍可用
+                    }
+                }
+                if (legacySchema) {
+                    // v2 → v3 一次性迁移备份（保留旧文件原文；原子写且不覆盖已有备份）
+                    Path backup = path.resolveSibling("bookmarks.v2-backup.json");
+                    if (!Files.exists(backup)) {
+                        try {
+                            ConfigFileUtil.writePrivate(backup, Files.readString(path));
+                            TeamspeakSvcClient.LOGGER.info(
+                                    "[teamspeak-svc] Bookmarks migrated v2→v3 (backup: {})", backup.getFileName());
+                        } catch (Exception e) {
+                            TeamspeakSvcClient.LOGGER.warn(
+                                    "[teamspeak-svc] v2 backup failed: {}", e.getMessage());
+                        }
                     }
                 }
             }
