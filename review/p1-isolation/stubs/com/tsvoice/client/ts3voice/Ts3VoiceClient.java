@@ -48,6 +48,10 @@ public class Ts3VoiceClient {
     public boolean isConnected() { return connected; }
     public int getMyClid() { return 1; }
     public int getMyChannelId() { return -1; }
+    public com.tsvoice.client.ts3voice.TsChannelSnapshot channelSnapshot() {
+        return new com.tsvoice.client.ts3voice.TsChannelSnapshot(null);
+    }
+    public void joinChannel(int cid, String channelPassword) {}
     public void sendCommand(String cmd) throws Ts3VoiceException {}
     public void requestChannelList() throws Ts3VoiceException {}
     public void requestServerInfo() throws Ts3VoiceException {}

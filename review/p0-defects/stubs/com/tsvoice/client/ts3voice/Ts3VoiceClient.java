@@ -18,10 +18,13 @@ public class Ts3VoiceClient {
   return connected;
  }
  public int getMyClid(){return 1;}
+ public int getMyChannelId(){return 1;}
+ public com.tsvoice.client.ts3voice.TsChannelSnapshot channelSnapshot(){return new com.tsvoice.client.ts3voice.TsChannelSnapshot(null);}
  public void sendCommand(String cmd) throws Ts3VoiceException{}
  public void requestChannelList() throws Ts3VoiceException{}
  public void requestServerInfo() throws Ts3VoiceException{}
  public String getVirtualServerUid(){return "fixture-server";}
+ public void joinChannel(int cid,String channelPassword){}
  public void setChannelMembershipListener(java.util.function.IntConsumer l){}
  public void publishMcUuid(java.util.UUID id){}
  public void sendVoice(byte[] opus,int codec){

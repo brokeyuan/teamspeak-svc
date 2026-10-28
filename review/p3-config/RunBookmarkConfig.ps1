@@ -88,6 +88,9 @@ public class Ts3VoiceClient {
  public void disconnect(){}
  public boolean isConnected(){return true;}
  public int getMyClid(){return 1;}
+ public int getMyChannelId(){return 1;}
+ public com.tsvoice.client.ts3voice.TsChannelSnapshot channelSnapshot(){return new com.tsvoice.client.ts3voice.TsChannelSnapshot(null);}
+ public void joinChannel(int cid,String channelPassword){}
  public void sendCommand(String cmd) throws Ts3VoiceException{}
  public void requestChannelList() throws Ts3VoiceException{}
  public void requestServerInfo() throws Ts3VoiceException{}
@@ -132,7 +135,8 @@ $sources = foreach ($item in $stubs.GetEnumerator()) {
 $client = 'teamspeak-svc/src/main/java/com/tsvoice/client'
 $prod = @("$client/TsVoiceManager.java", "$client/audio/MicRouteGate.java",
     "$client/connection/VoiceState.java", "$client/connection/BackendCoordinator.java",
-    "$client/connection/SelectionPolicy.java",
+    "$client/connection/SelectionPolicy.java", "$client/connection/TsChannelRoute.java",
+    "$client/ts3voice/TsChannelSnapshot.java",
     "$client/backend/SvcBackendAdapter.java",
     "$client/config/TsBookmarkStore.java", "$client/config/EndpointCredentialStore.java",
     "$client/ModConfig.java", "$client/ServerConfigStore.java", "$client/ConfigFileUtil.java")

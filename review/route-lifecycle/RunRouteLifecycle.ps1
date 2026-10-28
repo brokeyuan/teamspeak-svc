@@ -37,10 +37,6 @@ public class Component {public static Component literal(String text){return new 
 package com.tsvoice.client.net;
 public record BeaconPayload(String host,int port,String channel,String backendMode,int tunnelPort){}
 '@
-'com/tsvoice/client/GroupChannelMapper.java'=@'
-package com.tsvoice.client;
-public class GroupChannelMapper {public static boolean ready;public static void reset(){} public static void tick(com.tsvoice.client.ts3voice.Ts3VoiceClient c){}public static boolean isReadyForVoice(com.tsvoice.client.ts3voice.Ts3VoiceClient c){return ready;}public record SessionInfo(String channelName){}}
-'@
 'com/tsvoice/client/TsAudioInjector.java'=@'
 package com.tsvoice.client;
 public class TsAudioInjector {
@@ -82,6 +78,7 @@ public class Ts3Identity {
 '@
 'com/tsvoice/client/ts3voice/Ts3VoiceClient.java'=@'
 package com.tsvoice.client.ts3voice;
+import java.util.*;
 public class Ts3VoiceClient {
  public static final int CODEC_OPUS_VOICE=4;
  // Connect scripts: each new instance polls the next script and runs it from connect().
@@ -90,6 +87,11 @@ public class Ts3VoiceClient {
  public boolean connected;
  public int sent;
  public boolean throwOnSend;
+ public boolean throwOnJoin;
+ public int myChannel=1;
+ public int joinCalls; public int lastJoinCid; public String lastJoinPassword;
+ public Map<Integer,String> channelNames=new java.util.concurrent.ConcurrentHashMap<>();
+ public Map<Integer,Integer> channelParents=new java.util.concurrent.ConcurrentHashMap<>();
  public java.util.function.Consumer<Ts3VoiceClient> onConnect;
  public java.util.function.BiConsumer<String,String> textListener;
  public java.util.function.Consumer<TsVoiceIn> voiceListener;
@@ -107,7 +109,40 @@ public class Ts3VoiceClient {
  public void disconnect(){connected=false;}
  public boolean isConnected(){return connected;}
  public int getMyClid(){return 1;}
- public int getMyChannelId(){return 1;}
+ public int getMyChannelId(){return myChannel;}
+ public com.tsvoice.client.ts3voice.TsChannelSnapshot channelSnapshot(){
+  com.tsvoice.client.ts3voice.TsChannelSnapshot snap=new com.tsvoice.client.ts3voice.TsChannelSnapshot("fixture-server");
+  List<com.tsvoice.client.ts3voice.TsChannelSnapshot.Channel> list=new ArrayList<>();
+  for(Map.Entry<Integer,String> e:channelNames.entrySet()){
+   list.add(new com.tsvoice.client.ts3voice.TsChannelSnapshot.Channel(e.getKey(),
+       channelParents.getOrDefault(e.getKey(),0),e.getValue(),false,0,1,10));
+  }
+  snap.replaceAll(list);return snap;
+ }
+ public Integer getChannelIdByName(String name){
+  Integer found=null;
+  for(Map.Entry<Integer,String> e:channelNames.entrySet()){
+   if(e.getValue().equalsIgnoreCase(name)){if(found!=null)return null;found=e.getKey();}
+  }
+  return found;
+ }
+ public Integer getSubChannelIdByName(String name,int parent){
+  Integer found=null;
+  for(Map.Entry<Integer,String> e:channelNames.entrySet()){
+   if(e.getValue().equalsIgnoreCase(name)&&channelParents.getOrDefault(e.getKey(),0)==parent){if(found!=null)return null;found=e.getKey();}
+  }
+  return found;
+ }
+ public void joinChannel(int cid,String channelPassword){
+  if(throwOnJoin){throw new RuntimeException("server rejected move");}
+  joinCalls++;lastJoinCid=cid;lastJoinPassword=channelPassword;
+ }
+ public void createChannel(String name,int parent,String password){}
+ public void findChannel(String name){}
+ public void simulateSelfMove(int cid){
+  int prev=myChannel;myChannel=cid;
+  if(prev!=cid&&membershipListener!=null){membershipListener.accept(1);}
+ }
  public void sendCommand(String cmd) throws Ts3VoiceException{}
  public void requestChannelList() throws Ts3VoiceException{}
  public void requestServerInfo() throws Ts3VoiceException{}
@@ -123,6 +158,14 @@ public class Ts3VoiceClient {
  public void sendChannelText(String message){}
 }
 '@
+'com/tsvoice/client/ClientStateReflector.java'=@'
+package com.tsvoice.client;
+public class ClientStateReflector {public static void refreshGroups(de.maxhenkel.voicechat.api.VoicechatClientApi a,de.maxhenkel.voicechat.api.Group g){}}
+'@
+'com/tsvoice/client/net/GroupInfoPayload.java'=@'
+package com.tsvoice.client.net;
+public record GroupInfoPayload(java.util.UUID id,String name,String password,int typeOrd){}
+'@
 }
 $sources = foreach ($item in $stubs.GetEnumerator()) {
     $path = Join-Path "$base/stubs" $item.Key
@@ -133,13 +176,17 @@ $sources = foreach ($item in $stubs.GetEnumerator()) {
 $client = 'teamspeak-svc/src/main/java/com/tsvoice/client'
 $prod = @("$client/TsVoiceManager.java", "$client/MicRedirector.java", "$client/audio/MicRouteGate.java",
     "$client/connection/VoiceState.java", "$client/connection/BackendCoordinator.java",
-    "$client/connection/SelectionPolicy.java",
+    "$client/connection/SelectionPolicy.java", "$client/connection/TsChannelRoute.java",
+    "$client/GroupChannelMapper.java", "$client/ts3voice/TsChannelSnapshot.java",
     "$client/config/TsBookmarkStore.java", "$client/config/EndpointCredentialStore.java",
     "$client/backend/SvcBackendAdapter.java",
     "$client/ModConfig.java", "$client/ServerConfigStore.java", "$client/ConfigFileUtil.java") |
     Where-Object { Test-Path $_ }
-& javac -encoding UTF-8 -cp 'review/lib/*' -d "$base/classes" @prod @sources "$base/RouteLifecycleTest.java"
+& javac -encoding UTF-8 -cp 'review/lib/*' -d "$base/classes" @prod @sources `
+    "$base/RouteLifecycleTest.java" "$base/BookmarkRouteTest.java"
 if ($LASTEXITCODE -ne 0) { throw 'Route lifecycle regression compilation failed' }
 & java -cp "$base/classes;review/lib/*" com.tsvoice.client.RouteLifecycleTest
 if ($LASTEXITCODE -ne 0) { throw 'Route lifecycle regression failed' }
+& java -cp "$base/classes;review/lib/*" com.tsvoice.client.BookmarkRouteTest
+if ($LASTEXITCODE -ne 0) { throw 'Bookmark route regression failed' }
 exit $LASTEXITCODE

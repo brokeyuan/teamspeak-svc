@@ -456,6 +456,15 @@ public final class TsVoiceManager {
         // 连接前先发布未就绪路由（R01）：后台连接期间发送许可保持关闭。
         com.tsvoice.client.connection.BackendCoordinator.publishRoute(sessionToken,
                 com.tsvoice.client.connection.VoiceState.BackendKind.TS3, false);
+        // 频道策略（T02）：显式书签默认 TS 原生跟随（初始频道=书签频道）；
+        // 其余配置沿用 legacy 群组映射，不退化既有行为。
+        com.tsvoice.client.connection.VoiceState.ChannelPolicy channelPolicy =
+                explicitBookmarkId != null
+                        ? com.tsvoice.client.connection.VoiceState.ChannelPolicy.TS_NATIVE_FOLLOW
+                        : com.tsvoice.client.connection.VoiceState.ChannelPolicy.LEGACY_GROUP_MAPPING;
+        String initialChannel = explicitBookmarkId != null && activeConfig != null
+                ? activeConfig.channel() : null;
+        com.tsvoice.client.connection.TsChannelRoute.beginSession(sessionToken, channelPolicy, initialChannel);
         Thread t = new Thread(() -> sessionLoop(gen), "teamspeak-svc-voice");
         t.setDaemon(true);
         t.start();
@@ -466,6 +475,7 @@ public final class TsVoiceManager {
         sessionGeneration++;
         sessionRunning = false;
         lastAppliedConfig = null;
+        com.tsvoice.client.connection.TsChannelRoute.endSession(sessionToken);
         com.tsvoice.client.connection.BackendCoordinator.endSession(sessionToken);
         sessionToken = new com.tsvoice.client.connection.VoiceState.SessionToken(0);
         Thread t = sessionThread;
@@ -532,12 +542,14 @@ public final class TsVoiceManager {
                         disconnectQuiet(c);
                         return;
                     }
+                    // 握手成功 ≠ 发送许可：路由就绪只能由频道确认（confirmChannel）发布（3.3）。
                     com.tsvoice.client.connection.BackendCoordinator.publishRoute(sessionToken,
-                            com.tsvoice.client.connection.VoiceState.BackendKind.TS3, true);
+                            com.tsvoice.client.connection.VoiceState.BackendKind.TS3, false);
                 } catch (Exception e) {
                     if (gen == sessionGeneration) {
                         state = State.RECONNECTING;
                         lastError = e.getMessage() == null ? e.toString() : e.getMessage();
+                        com.tsvoice.client.connection.TsChannelRoute.onConnectionLost(sessionToken);
                         com.tsvoice.client.connection.BackendCoordinator.publishRoute(sessionToken,
                                 com.tsvoice.client.connection.VoiceState.BackendKind.TS3, false);
                     }
@@ -558,6 +570,9 @@ public final class TsVoiceManager {
                     if (now - lastGroupCheck >= 2_000L) {
                         lastGroupCheck = now;
                         try {
+                            // 频道确认对账（含书签初始目标解析）先于 legacy 映射；
+                            // 两者都只提交目标/观察，许可仍由协调器发布。
+                            com.tsvoice.client.connection.TsChannelRoute.tick(c);
                             GroupChannelMapper.tick(c);
                             TsAudioInjector.reconcile(c);
                         } catch (Exception e) {
@@ -581,6 +596,7 @@ public final class TsVoiceManager {
                         return;
                     }
                     state = State.RECONNECTING;
+                    com.tsvoice.client.connection.TsChannelRoute.onConnectionLost(sessionToken);
                     com.tsvoice.client.connection.BackendCoordinator.publishRoute(sessionToken,
                             com.tsvoice.client.connection.VoiceState.BackendKind.TS3, false);
                     lost = client;
@@ -661,10 +677,13 @@ public final class TsVoiceManager {
         } catch (Exception e) {
             TeamspeakSvcClient.LOGGER.debug("[teamspeak-svc] identity proof request failed: {}", e.getMessage());
         }
-        // TS 用户在频道间移动 → Ghost 可见性实时同步（进我频道=出现，离开=消失）
+        // TS 用户在频道间移动 → Ghost 可见性实时同步；我方移动 → 提交共用路由确认。
         c.setChannelMembershipListener(clid -> {
             if (!active(gen) || client != c) {
                 return;
+            }
+            if (clid == c.getMyClid()) {
+                com.tsvoice.client.connection.TsChannelRoute.observeSelf(c);
             }
             try {
                 TsAudioInjector.syncAllGhostVisibility(c);
@@ -702,8 +721,8 @@ public final class TsVoiceManager {
         if (c == null || !c.isConnected()) {
             return false;
         }
-        if (!GroupChannelMapper.isReadyForVoice(c)) {
-            // 仍接管麦克风，防止回落 SVC/旧 TS 频道泄露群组切换中的语音。
+        if (!com.tsvoice.client.connection.TsChannelRoute.isReadyForVoice(c)) {
+            // 仍接管麦克风，防止回落 SVC/旧 TS 频道泄露频道切换中的语音。
             return true;
         }
         try {
@@ -725,7 +744,7 @@ public final class TsVoiceManager {
         if (c == null || !c.isConnected()) {
             return false;
         }
-        if (!GroupChannelMapper.isReadyForVoice(c)) {
+        if (!com.tsvoice.client.connection.TsChannelRoute.isReadyForVoice(c)) {
             return false;
         }
         try {

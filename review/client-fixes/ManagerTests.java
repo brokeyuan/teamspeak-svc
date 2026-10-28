@@ -56,9 +56,16 @@ public class ManagerTests {
   ServerConfigStore.get("manager-sendmic").host="127.0.0.1";
   TsVoiceManager.onServerChanged("manager-sendmic");
   check(com.tsvoice.client.audio.MicRouteGate.tsSelected(),"sendMic precondition: TS route committed via activation");
+  // T02 契约：许可来自共用确认路由；先覆盖"未确认消费"，再经生产确认路径放行。
+  var micToken=com.tsvoice.client.connection.BackendCoordinator.beginSession();
+  com.tsvoice.client.connection.TsChannelRoute.beginSession(micToken,
+      com.tsvoice.client.connection.VoiceState.ChannelPolicy.LEGACY_GROUP_MAPPING,null);
   GroupChannelMapper.ready=false;
   check(TsVoiceManager.sendMic(new byte[]{1}) && c.sent==0,"unconfirmed channel consumes microphone frame without TS send or SVC fallback");
-  GroupChannelMapper.ready=true;
+  com.tsvoice.client.connection.BackendCoordinator.setChannelTarget(micToken,
+      com.tsvoice.client.connection.VoiceState.ChannelPolicy.TS_NATIVE_FOLLOW,null);
+  check(com.tsvoice.client.connection.BackendCoordinator.confirmChannel(micToken,"fixture-server",c.getMyChannelId()),
+      "confirmChannel approves the observed self channel");
   check(TsVoiceManager.sendMic(new byte[]{1}) && c.sent==1,"confirmed channel forwards one microphone frame");
   if(failures!=0)throw new AssertionError(failures+" manager checks failed");
  }

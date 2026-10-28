@@ -97,7 +97,6 @@ public class RouteLifecycleTest {
         TeamspeakSvcClient.api = api(encoder());
         short[] pcm = new short[960];
         boolean[] cancelled = new boolean[1];
-        GroupChannelMapper.ready = true;
 
         // ---- A: no TS config anywhere: SVC native path untouched ----
         TsVoiceManager.onServerChanged("route.mc");
@@ -125,15 +124,28 @@ public class RouteLifecycleTest {
         MicRedirector.onMicSound(event(pcm, cancelled));
         check(cancelled[0], "B: frame consumed while TS connecting (no SVC leak)");
 
-        // ---- C: connect completes -> exactly the TS path carries the frame ----
+        // ---- C: connect completes -> the main channel must be confirmed before sending ----
         releaseAttempt1.countDown();
         check(waitForState(TsVoiceManager.State.CONNECTED, 5000), "C: session reaches CONNECTED");
         Ts3VoiceClient connected1 = TsVoiceManager.currentClient();
-        long sentBefore = connected1 == null ? -1 : connected1.sent;
+        connected1.channelNames.put(5, "Minecraft");
+        GroupChannelMapper.tick(connected1); // production legacy mapper resolves the main target
+        check(connected1.joinCalls == 1 && connected1.lastJoinCid == 5
+                        && !BackendCoordinator.route().transmitReady(),
+                "C: clientmove requested; no transmit permission before server confirmation");
         cancelled[0] = false;
         MicRedirector.onMicSound(event(pcm, cancelled));
-        check(cancelled[0] && connected1 != null && connected1.sent == sentBefore + 1,
-                "C: connected session carries the frame to TS only");
+        check(cancelled[0] && connected1.sent == 0,
+                "C: frame consumed while the channel move is unconfirmed");
+        connected1.simulateSelfMove(5);
+        check(BackendCoordinator.route().transmitReady()
+                        && Integer.valueOf(5).equals(BackendCoordinator.route().channelId()),
+                "C: server-confirmed self channel grants the transmit route");
+        long sentBefore = connected1.sent;
+        cancelled[0] = false;
+        MicRedirector.onMicSound(event(pcm, cancelled));
+        check(cancelled[0] && connected1.sent == sentBefore + 1,
+                "C: confirmed session carries the frame to TS only");
 
         // ---- D: explicit disconnect must NOT hand the microphone to SVC ----
         TsVoiceManager.manualDisconnect();
@@ -159,13 +171,19 @@ public class RouteLifecycleTest {
         MicRedirector.onMicSound(event(pcm, cancelled));
         check(cancelled[0], "E (R01): reconnecting TS consumes frames, gate not stuck on SVC_NATIVE");
 
-        // ---- F: reconnect completes -> TS path works again ----
+        // ---- F: reconnect completes -> the route is re-confirmed on the new session ----
         releaseAttempt2.countDown();
         check(waitForState(TsVoiceManager.State.CONNECTED, 5000), "F: reconnect reaches CONNECTED");
         Ts3VoiceClient connected2 = TsVoiceManager.currentClient();
+        connected2.channelNames.put(5, "Minecraft");
+        GroupChannelMapper.tick(connected2);
+        connected2.simulateSelfMove(5);
+        check(BackendCoordinator.route().transmitReady()
+                        && Integer.valueOf(5).equals(BackendCoordinator.route().channelId()),
+                "F: reconnected session re-confirms the channel route");
         cancelled[0] = false;
         MicRedirector.onMicSound(event(pcm, cancelled));
-        check(cancelled[0] && connected2 != null && connected2.sent == 1,
+        check(cancelled[0] && connected2.sent == 1,
                 "F: reconnected session carries the frame to TS only");
 
         // ---- G: disconnect survives server changes and SVC events without leaking ----

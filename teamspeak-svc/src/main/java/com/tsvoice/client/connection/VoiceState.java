@@ -40,6 +40,13 @@ public final class VoiceState {
     public record CoordinatorSnapshot(SelectionSnapshot selection, RouteSnapshot route) {
     }
 
+    /**
+     * 频道策略（3.4）：TS_NATIVE_FOLLOW 默认书签模式（接受服务器确认的 self 频道）；
+     * LOCKED_TARGET 用户明确锁定目标频道；LEGACY_GROUP_MAPPING 沿用 SVC 群组受众约束。
+     * 连接书签的默认频道不隐式开启 LOCKED_TARGET。
+     */
+    public enum ChannelPolicy { TS_NATIVE_FOLLOW, LOCKED_TARGET, LEGACY_GROUP_MAPPING }
+
     /** 失败类别（唯一枚举；SelectionPolicy.FailureKind 仅保留常量别名避免同义漂移）。 */
     public enum FailureKind {
         NETWORK_TIMEOUT, DNS_FAILED, AUTH_DENIED, CHANNEL_PASSWORD, PERMISSION_DENIED,

@@ -4,7 +4,7 @@ public class Ts3VoiceClient {
  public Ts3VoiceClient(Ts3Identity id,String n,String channel,boolean tcp){}
  public void setServerPassword(String password){}public void setTextListener(java.util.function.BiConsumer<String,String> l){}public void setVoiceListener(java.util.function.Consumer<TsVoiceIn> l){}
  public void connect(java.net.InetAddress host,int port,long timeout){}public void disconnect(){}public boolean isConnected(){return true;}
- public int getMyClid(){return 1;}public void sendCommand(String cmd)throws Ts3VoiceException{}public void requestChannelList()throws Ts3VoiceException{}public void requestServerInfo()throws Ts3VoiceException{}public String getVirtualServerUid(){return "fixture-server";}
+ public int getMyClid(){return 1;}public int getMyChannelId(){return 1;}public com.tsvoice.client.ts3voice.TsChannelSnapshot channelSnapshot(){return new com.tsvoice.client.ts3voice.TsChannelSnapshot(null);}public void joinChannel(int cid,String channelPassword){}public void sendCommand(String cmd)throws Ts3VoiceException{}public void requestChannelList()throws Ts3VoiceException{}public void requestServerInfo()throws Ts3VoiceException{}public String getVirtualServerUid(){return "fixture-server";}
  public void setChannelMembershipListener(java.util.function.IntConsumer l){}public void publishMcUuid(java.util.UUID id){}
  public void sendVoice(byte[] opus,int codec){sent++;}public String getUniqueIdOf(int clid){return "uid";}public String getNicknameOf(int clid){return "name";}public java.util.UUID getMcUuidOf(int clid){return null;}
  public void sendChannelText(String message){}

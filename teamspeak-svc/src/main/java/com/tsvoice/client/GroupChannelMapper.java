@@ -10,18 +10,23 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** SVC 群组到 TS 频道的映射；目标未确认时禁止把语音送入旧频道。 */
+/**
+ * SVC 群组到 TS 频道的映射（LEGACY_GROUP_MAPPING 模式的目标解析器）。
+ * T02 起 mapper 不再独占发送许可：它只解析群组模式的目标并提交给共用确认路由
+ * （{@link com.tsvoice.client.connection.TsChannelRoute}）；书签默认频道与
+ * TS_NATIVE_FOLLOW/LOCKED_TARGET 模式完全不经此处。目标未确认时禁止把语音
+ * 送入旧频道 —— 许可只能由协调器的 confirmChannel 发布。
+ */
 public final class GroupChannelMapper {
     private static final long MIRROR_UUID_PREFIX = 0x7473766380018000L;
     private static final Map<UUID, GroupInfoPayload> groupInfo = new ConcurrentHashMap<>();
-    private static volatile Routing routing;
+    private static volatile UUID lastGroupId;
     private static volatile Group lastGroup;
     private static volatile String lastLoggedTarget;
     private static long lastChannelRefreshMs;
     private static String lastCreateTarget;
     private static long lastCreateMs;
 
-    private record Routing(Ts3VoiceClient client, UUID groupId, int targetCid, String targetName, int parentCid) {}
     public record SessionInfo(String channelName) {}
     private GroupChannelMapper() {}
 
@@ -30,31 +35,34 @@ public final class GroupChannelMapper {
         if (payload != null) groupInfo.put(payload.id(), payload);
     }
 
-    /** 麦克风热路径：只读当前群组及已确认的目标，不发网络请求。 */
+    /**
+     * 麦克风热路径：同一有效路由 + legacy 群组约束仍然成立（活动群组与目标
+     * 解析时一致）。非 legacy 模式直接读共用路由，mapper 不参与判定。
+     */
     public static boolean isReadyForVoice(Ts3VoiceClient client) {
-        Routing selected = routing;
-        if (selected == null || selected.client() != client) return false;
+        if (!com.tsvoice.client.connection.TsChannelRoute.isReadyForVoice(client)) {
+            return false;
+        }
+        if (com.tsvoice.client.connection.TsChannelRoute.currentPolicy()
+                != com.tsvoice.client.connection.VoiceState.ChannelPolicy.LEGACY_GROUP_MAPPING) {
+            return true; // 非 legacy 模式：共用路由已足够
+        }
         try {
             VoicechatClientApi api = TeamspeakSvcClient.clientApi();
             if (api == null) return false;
             Group live = api.getGroup();
             UUID liveId = live == null ? null : live.getId();
-            if (!Objects.equals(liveId, selected.groupId()) || client.getMyChannelId() != selected.targetCid()) return false;
-            Integer cached = live == null || selected.targetCid() == selected.parentCid()
-                    ? client.getChannelIdByName(selected.targetName())
-                    : client.getSubChannelIdByName(selected.targetName(), selected.parentCid());
-            return cached != null && cached == selected.targetCid();
+            return Objects.equals(liveId, lastGroupId);
         } catch (Exception e) {
             return false;
         }
     }
 
     public static void tick(Ts3VoiceClient client) {
-        routing = null;
-        // P3 行为分模式：显式 TS 频道选择（书签意图）时不做周期映射 —— legacy
-        // 群组映射只在 SVC 群组路径（LEGACY_GROUP_MAPPING）下驱动频道移动，
-        // 手动 TS 频道选择（TS_CHANNEL_SELECTION）完全由用户/UI 控制。
-        if (TsVoiceManager.hasExplicitBookmarkIntent()) {
+        // 行为分模式：只在 legacy 群组映射策略下驱动频道移动 —— 显式书签
+        // （TS_NATIVE_FOLLOW/LOCKED_TARGET）的频道选择由共用路由服务处理。
+        if (com.tsvoice.client.connection.TsChannelRoute.currentPolicy()
+                != com.tsvoice.client.connection.VoiceState.ChannelPolicy.LEGACY_GROUP_MAPPING) {
             return;
         }
         try {
@@ -66,6 +74,7 @@ public final class GroupChannelMapper {
             UUID previousId = lastGroup == null ? null : lastGroup.getId();
             if (!Objects.equals(groupId, previousId)) {
                 lastGroup = group;
+                lastGroupId = groupId;
                 lastLoggedTarget = null;
                 lastCreateTarget = null;
                 ClientStateReflector.refreshGroups(api, group);
@@ -87,9 +96,7 @@ public final class GroupChannelMapper {
                 // Local OPEN groups intentionally remain in the main channel. TS-mirror
                 // groups are OPEN in SVC but must continue mapping to their TS channel.
                 if (!mirror && group.getType() == de.maxhenkel.voicechat.api.Group.Type.OPEN) {
-                    targetCid = mainCid;
-                    targetName = mainName;
-                    routing = new Routing(client, groupId, targetCid, targetName, mainCid);
+                    publishTarget(client, mainCid, mainCid);
                     return;
                 }
                 if (info == null && (mirror || TsVoiceManager.currentBeacon() != null)) {
@@ -120,14 +127,27 @@ public final class GroupChannelMapper {
                     return;
                 }
             }
-            if (targetCid != client.getMyChannelId()) {
-                client.joinChannel(targetCid, channelPassword);
-                return; // clientmove 仅提交请求；必须等 TS 通知确认后才开放语音。
-            }
-            routing = new Routing(client, groupId, targetCid, targetName, mainCid);
+            publishTarget(client, targetCid, mainCid);
         } catch (Exception e) {
             TeamspeakSvcClient.LOGGER.warn("[teamspeak-svc] group mapping failed: {}", e.toString());
         }
+    }
+
+    /**
+     * 提交 legacy 目标到共用确认路由：目标即当前频道时确认观察可直接批准；
+     * 否则发起移动请求（先撤销许可）。无论哪条路径都以观察到的实际频道为准。
+     */
+    private static void publishTarget(Ts3VoiceClient client, int targetCid, int parentCid) {
+        com.tsvoice.client.connection.TsChannelRoute.setLegacyTarget(client, targetCid);
+        if (targetCid != client.getMyChannelId()) {
+            String password = null;
+            var config = TsVoiceManager.currentSessionConfig();
+            password = config == null ? null : config.channelPassword();
+            // clientmove 仅提交请求；必须等 TS 通知确认后才开放语音。
+            com.tsvoice.client.connection.TsChannelRoute.requestMove(client, targetCid, password);
+        }
+        // 观察提交放在目标提交之后：同一 tick 内"目标==当前"即可获得批准。
+        com.tsvoice.client.connection.TsChannelRoute.observeSelf(client);
     }
 
     private static void refreshChannels(Ts3VoiceClient client, String name) {
@@ -165,12 +185,13 @@ public final class GroupChannelMapper {
     }
 
     public static void reset() {
-        routing = null;
         groupInfo.clear();
         lastGroup = null;
+        lastGroupId = null;
         lastLoggedTarget = null;
         lastChannelRefreshMs = 0;
         lastCreateTarget = null;
         lastCreateMs = 0;
+        com.tsvoice.client.connection.TsChannelRoute.onMapperReset();
     }
 }

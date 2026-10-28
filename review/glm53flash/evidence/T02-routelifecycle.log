@@ -1,0 +1,69 @@
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS A: no TS config: SVC native microphone path untouched
+PASS B: configured server reaches CONNECTING
+PASS B: session and route not ready while connecting
+PASS B: frame consumed while TS connecting (no SVC leak)
+PASS C: session reaches CONNECTED
+PASS C: clientmove requested; no transmit permission before server confirmation
+PASS C: frame consumed while the channel move is unconfirmed
+PASS C: server-confirmed self channel grants the transmit route
+PASS C: confirmed session carries the frame to TS only
+PASS D: after explicit disconnect the frame is dropped, not sent to SVC
+PASS E: reconnect after disconnect reaches CONNECTING
+PASS E (R01): reconnecting TS consumes frames, gate not stuck on SVC_NATIVE
+PASS F: reconnect reaches CONNECTED
+PASS F: reconnected session re-confirms the channel route
+PASS F: reconnected session carries the frame to TS only
+PASS G1: disconnect persists across MC server change (no SVC leak)
+PASS G2: returning to a configured server does not auto-resume voice
+PASS G3: SVC reconnect events do not override the pause
+PASS H: failed connect enters RECONNECTING
+PASS H: frames stay dropped while the TS session retries
+PASS I: switchToSvc closes the TS session
+PASS I1: SVC selected but speaking boundary not crossed: frame suppressed
+PASS I2: after the silence gap the SVC native path passes through
+PASS I3: PINNED_SVC is not overridden by SVC lifecycle events
+PASS J: explicit reconnect leaves VOICE_OFF
+PASS J: OFF override is cleared by the explicit reconnect
+PASS J: inbound TS frame reaches playback while voice is on
+PASS J: OFF records the voice-muted override
+PASS J: OFF suppresses mic frames (no SVC, no TS)
+PASS J: late inbound frame after OFF does not reach playback
+PASS J: OFF releases TS playback resources
+PASS J: OFF survives announcements, server changes and device events
+PASS K: explicit reconnect leaves VOICE_OFF with a live session
+PASS K: disconnect enters PAUSED with no active backend
+PASS K: server change does not clear the pause
+PASS K: explicit reconnect exits the pause
+PASS K: reconnect completes
+PASS L: activation re-runs do not steal an explicit selection
+PASS L: unchanged config keeps the session alive
+Route lifecycle regression: all checks passed
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS B1: bookmark connect reaches the network
+PASS B1: bookmark session connects
+PASS B1: bookmark intent committed with its own target reference
+PASS B1: initial bookmark channel joined via the confirmation service
+PASS B1: join request alone does not grant transmit permission
+PASS B1: legacy group mapper does not drive bookmark channels
+PASS B1: voice and channel text both blocked while the move is unconfirmed
+PASS B2: confirmed self channel publishes authority+cid route
+PASS B2: bookmark mode can send voice and channel text without any SVC group
+PASS B3: confirmed server move auto-follows and bumps the route epoch
+PASS B3: follow mode keeps sending from the new confirmed channel
+PASS B4: locked target confirmed and sendable
+PASS B4: admin move away from the locked channel pauses sending
+PASS B4: locked mismatch consumes frames without TS send
+PASS B4: returning to the locked target re-arms sending
+PASS B5: requesting another channel revokes the permit
+PASS B5: stale observation for cid 5 does not approve while cid 6 is pending
+PASS B5: the requested channel's own confirmation completes the move
+PASS B6: second bookmark session connects
+PASS B6: failed join request pauses with a reason, no guessed channel
+PASS B6: no transmit permission after the rejected move
+PASS B6: frames stay dropped after the rejected move
+Bookmark route regression: all checks passed

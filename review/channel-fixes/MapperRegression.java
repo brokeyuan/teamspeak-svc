@@ -11,6 +11,10 @@ public final class MapperRegression {
  static boolean ready(Ts3VoiceClient c){try{return (boolean)GroupChannelMapper.class.getMethod("isReadyForVoice",Ts3VoiceClient.class).invoke(null,c);}catch(Exception e){return true;}}
  static void select(UUID id,String name,boolean pass){groupId=id;groupName=name;password=pass;groupType="NORMAL";}
  public static void main(String[] args)throws Exception{
+  // T02：许可判定在共用确认路由 —— 用生产 API 建立会话（legacy 群组映射模式）。
+  var sessionToken=com.tsvoice.client.connection.BackendCoordinator.beginSession();
+  com.tsvoice.client.connection.TsChannelRoute.beginSession(sessionToken,
+      com.tsvoice.client.connection.VoiceState.ChannelPolicy.LEGACY_GROUP_MAPPING,null);
   TeamspeakSvcClient.api=(VoicechatClientApi)Proxy.newProxyInstance(VoicechatClientApi.class.getClassLoader(),new Class[]{VoicechatClientApi.class},(p,m,a)->m.getName().equals("getGroup")&&groupId!=null?(Group)Proxy.newProxyInstance(Group.class.getClassLoader(),new Class[]{Group.class},(p2,m2,a2)->switch(m2.getName()){case "getId"->groupId;case "getName"->groupName;case "hasPassword"->password;case "getType"->"OPEN".equals(groupType)?Group.Type.OPEN:"ISOLATED".equals(groupType)?Group.Type.ISOLATED:Group.Type.NORMAL;default->null;}):null);
   Ts3VoiceClient c=new Ts3VoiceClient();
   GroupChannelMapper.reset();select(UUID.randomUUID(),"Private",true);

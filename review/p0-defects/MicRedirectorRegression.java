@@ -89,6 +89,11 @@ public class MicRedirectorRegression {
     public static void main(String[] args) throws Exception {
         ModConfig global = TeamspeakSvcClient.config();
         global.autoConnect = false;
+        // T02：发送许可来自共用确认路由 —— 本套件经生产 API 建立会话；
+        // 确认（confirmChannel）推迟到健康路径前，先覆盖未就绪场景。
+        var sessionToken = com.tsvoice.client.connection.BackendCoordinator.beginSession();
+        com.tsvoice.client.connection.TsChannelRoute.beginSession(sessionToken,
+                com.tsvoice.client.connection.VoiceState.ChannelPolicy.LEGACY_GROUP_MAPPING, null);
         short[] pcm = new short[960];
 
         // TS not selected (no config): SVC native path must stay untouched.
@@ -169,6 +174,10 @@ public class MicRedirectorRegression {
         check(allCancelled, "encoder failure across held PTT: no frame leaks to SVC");
 
         // Healthy path: one encoded frame reaches TS and the event is cancelled.
+        // Route confirmed through the production confirmation path (T02).
+        com.tsvoice.client.connection.BackendCoordinator.setChannelTarget(sessionToken,
+                com.tsvoice.client.connection.VoiceState.ChannelPolicy.TS_NATIVE_FOLLOW, null);
+        com.tsvoice.client.connection.BackendCoordinator.confirmChannel(sessionToken, "fixture-server", 1);
         resetEncoderCache();
         Ts3VoiceClient healthy = new Ts3VoiceClient(new Ts3Identity(), "Test", "", false);
         healthy.connected = true;
