@@ -259,7 +259,11 @@
   - `rule` TR-14.1: 本地 CI 等价命令退出码全 0；P3 阶段提交存在。
 
 ## Task 15: P4 能力公告 wire（core 纯编解码）
-- **Status**: `pending`
+- **Status**: `completed`
+- **Completion Evidence**:
+  - **测试（capabilityWireTest，22 项通过，已接入 Gradle test）**：golden 帧 round-trip（nonce/版本/TTL/serviceId/三候选/未知 minor 字段原样承载）、确定性编码、畸形输入全部拒绝（null/空/截断/坏 magic/未知 major/超 TTL/尾随垃圾/长度字段越界）、编码侧验证（TTL>60、major=2、候选>8、host>253、端口>0xFFFF 全部 IllegalArgumentException）。
+  - **实现**：P/capability/CapabilityWire.java——帧头 TSCAP|major|minor|nonce(8)|ttl(4)|serviceId|candidateCount(2)；候选 = kind(1)|host|port(4)|extraCount(1)|extras；限制 MAX_FRAME=16KiB/候选≤8/host≤253/TTL≤60；未知 major 整帧拒绝；全部长度/端口/计数严格验证，无无界分配。零 Fabric 依赖。
+  - **设计修正记录**：候选附加字段初版为"读到帧尾"——多候选时无法区分本候选 extra 与下一候选（golden 测试当场暴露）；改为显式 extraCount 字节。TTL 突变测试的字节偏移经字节转储核对（大端 [14..17]）。
 - **Priority**: medium
 - **Depends On**: Task 10
 - **Description**:

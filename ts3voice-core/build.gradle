@@ -32,9 +32,18 @@ tasks.register('identityTrustTest', JavaExec) {
     mainClass = 'com.tsvoice.protocol.IdentityTrustRegression'
 }
 
+tasks.register('capabilityWireTest', JavaExec) {
+    group = 'verification'
+    description = 'Runs capability wire golden/malformed assertions; any failure exits nonzero.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.tsvoice.protocol.capability.CapabilityWireTest'
+}
+
 tasks.named('test') {
     // This project deliberately has no JUnit dependency. protocolTest is the verifier.
     failOnNoDiscoveredTests = false
     dependsOn protocolTest
     dependsOn identityTrustTest
+    dependsOn capabilityWireTest
 }
