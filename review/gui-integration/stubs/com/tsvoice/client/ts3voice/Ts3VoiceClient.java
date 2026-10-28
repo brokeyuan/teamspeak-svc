@@ -74,7 +74,7 @@ public class Ts3VoiceClient {
   lastMoveFuture=new java.util.concurrent.CompletableFuture<>();
   return lastMoveFuture;
  }
- public void createChannel(String name,int parent,String password){}
+ public int creates; public void createChannel(String name,int parent,String password){creates++;}
  public void findChannel(String name){}
  public void simulateSelfMove(int cid){
   int prev=myChannel;myChannel=cid;

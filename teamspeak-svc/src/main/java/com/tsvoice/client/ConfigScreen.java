@@ -244,6 +244,12 @@ public class ConfigScreen extends Screen {
             Minecraft.getInstance().setScreenAndShow(bookmarks);
         }).bounds(cx + 2, y, 98, 20).build());
         y += 24;
+        addRenderableWidget(Button.builder(Component.translatable("tsvoice.gui.channels.title"), b -> {
+            TsChannelsScreen channels = new TsChannelsScreen();
+            channels.setParent(this);
+            Minecraft.getInstance().setScreenAndShow(channels);
+        }).bounds(cx - 100, y, 200, 20).build());
+        y += 24;
 
         addRenderableWidget(Button.builder(Component.translatable("tsvoice.gui.done"), b -> {
             saveConfig();

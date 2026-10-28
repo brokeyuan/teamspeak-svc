@@ -329,6 +329,36 @@ public final class TsChannelRoute {
         return true;
     }
 
+    /**
+     * 用户显式切换频道策略（T10/N5 频道页）：FOLLOW（服务器确认的移动可跟随）或
+     * LOCKED（锁定指定频道）。锁定目标只能经本入口或书签语义设置。
+     */
+    public static boolean setChannelPolicy(VoiceState.SessionToken sessionToken,
+                                           VoiceState.ChannelPolicy policy) {
+        if (policy != VoiceState.ChannelPolicy.TS_NATIVE_FOLLOW
+                && policy != VoiceState.ChannelPolicy.LOCKED_TARGET) {
+            return false;
+        }
+        BackendCoordinator.setChannelTarget(sessionToken, policy,
+                policy == VoiceState.ChannelPolicy.TS_NATIVE_FOLLOW ? null : legalTargetOrConfirmed());
+        return true;
+    }
+
+    /** 锁定到指定频道（频道页"锁定当前频道"）：显式改靶，随后的确认按策略走。 */
+    public static boolean lockCurrentChannel(VoiceState.SessionToken sessionToken, int cid) {
+        if (cid < 0) {
+            return false;
+        }
+        BackendCoordinator.setChannelTarget(sessionToken, VoiceState.ChannelPolicy.LOCKED_TARGET, cid);
+        return true;
+    }
+
+    /** 锁定切换时保留既有合法目标（无则回退当前确认频道）。 */
+    private static Integer legalTargetOrConfirmed() {
+        VoiceState.RouteSnapshot route = BackendCoordinator.snapshot().route();
+        return route.channelId();
+    }
+
     /** legacy mapper 重置（换服/配置变化）：清除群组模式目标，待重新解析。 */
     public static void onMapperReset() {
         VoiceState.SessionToken current;

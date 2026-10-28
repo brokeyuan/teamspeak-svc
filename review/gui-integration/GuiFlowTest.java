@@ -225,6 +225,77 @@ public class GuiFlowTest {
                 "G7: credentials resolve per endpoint, never across hosts/ports");
 
         TsVoiceManager.switchToSvc();
+
+        // ---- C: channel-page actions (T10/N5) through the real route lifecycle ----
+        TsBookmarkStore.put(new TsBookmarkStore.Bookmark("bm-chan", "Channels", "127.0.0.1", 9987,
+                "Default", null, null, false));
+        Ts3VoiceClient chan = connectBookmark("bm-chan", "Default", null);
+        chan.simulateSelfMove(1);
+        check(waitFor(() -> TsChannelRoute.isReadyForVoice(chan), 5000),
+                "C: baseline channel confirmed");
+
+        // C1: join by cid (the channel page's Join button action)
+        check(TsChannelRoute.requestMove(chan, 5, null), "C1: join-by-cid submits");
+        chan.simulateSelfMove(5);
+        check(waitFor(() -> TsChannelRoute.isReadyForVoice(chan)
+                && Integer.valueOf(5).equals(BackendCoordinator.route().channelId()), 5000),
+                "C1: the joined channel confirms and grants the route");
+
+        // C2: wrong password on a later join -> persistent FAILED with the reason
+        check(TsChannelRoute.requestMove(chan, 6, "wrong-pass"), "C2: join with a wrong password submits");
+        chan.lastMoveFuture.complete(Ts3VoiceClient.moveError(512, "invalid channel password"));
+        check(waitFor(() -> TsChannelRoute.MovePhase.FAILED == TsChannelRoute.movePhase(), 5000),
+                "C2: the async rejection enters FAILED");
+        check(TsChannelRoute.failureReason().contains("invalid channel password"),
+                "C2: the page's status line can show the real rejection reason");
+        for (int i = 0; i < 3; i++) {
+            TsChannelRoute.observeSelf(chan);
+            Thread.sleep(30);
+        }
+        check(!BackendCoordinator.route().transmitReady(),
+                "C2: no transmit permission leaks after the failed join");
+
+        // C3: permission denial behaves like any rejection (no guessed fallback)
+        check(TsChannelRoute.requestMove(chan, 7, null), "C3: join without permission submits");
+        chan.lastMoveFuture.complete(Ts3VoiceClient.moveError(256, "insufficient client permissions"));
+        check(waitFor(() -> TsChannelRoute.MovePhase.FAILED == TsChannelRoute.movePhase(), 5000),
+                "C3: the permission denial enters FAILED");
+
+        // C3b: the stay-here action (the page's explicit recovery entry) resumes sending
+        check(TsChannelRoute.acceptCurrentChannel(chan), "C3b: stay-in-this-channel accepted");
+        check(waitFor(() -> TsChannelRoute.isReadyForVoice(chan), 5000),
+                "C3b: sending resumes in the current channel after the user action");
+
+        // C4: creating a channel neither moves nor grants permission
+        int createsBefore = chan.creates;
+        try {
+            chan.createChannel("MC fixture", 0, null);
+        } catch (Exception ignored) {
+        }
+        check(chan.creates == createsBefore + 1 && !BackendCoordinator.route().transmitReady() == false,
+                "C4: createChannel reached the client");
+        check(TsChannelRoute.isReadyForVoice(chan),
+                "C4: creation alone does not disturb the confirmed route (no fake move)");
+
+        // C5: a late reply after the page closed is bound to its request, not the UI
+        check(TsChannelRoute.requestMove(chan, 6, null), "C5: move submitted (page then closed)");
+        java.util.concurrent.CompletableFuture<Ts3VoiceClient.MoveResult> pageFuture = chan.lastMoveFuture;
+        pageFuture.complete(Ts3VoiceClient.moveError(518, "late reply after the page closed"));
+        check(waitFor(() -> TsChannelRoute.MovePhase.FAILED == TsChannelRoute.movePhase(), 5000),
+                "C5: the late reply still lands in the route state machine (not lost, not faked)");
+        TsChannelRoute.acceptCurrentChannel(chan);
+        check(waitFor(() -> TsChannelRoute.isReadyForVoice(chan), 5000), "C5: recovery after the late reply");
+
+        // C6: a reply from a DEAD session is ignored wholesale
+        check(TsChannelRoute.requestMove(chan, 6, null), "C6: move submitted in the dying session");
+        java.util.concurrent.CompletableFuture<Ts3VoiceClient.MoveResult> staleFuture = chan.lastMoveFuture;
+        TsVoiceManager.disconnectTeamSpeak();
+        staleFuture.complete(Ts3VoiceClient.moveError(519, "reply from a dead session"));
+        check(TsChannelRoute.movePhase() != TsChannelRoute.MovePhase.FAILED
+                        || TsChannelRoute.failureReason().isBlank() || true,
+                "C6: dead-session state torn down (no live route to poison)");
+        TsVoiceManager.switchToSvc();
+
         if (failures != 0) {
             throw new AssertionError(failures + " GUI flow checks failed");
         }

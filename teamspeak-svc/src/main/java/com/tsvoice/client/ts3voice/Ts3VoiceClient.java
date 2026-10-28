@@ -92,7 +92,8 @@ public final class Ts3VoiceClient {
     private final String myUid;
     private volatile String virtualServerUid;
 
-    private record ClientEntry(String uniqueId, String nickname) {
+    /** 频道页用户列表条目（uid + 昵称；仅展示用途）。 */
+    public record ClientEntry(String uniqueId, String nickname) {
     }
 
     /**
@@ -155,9 +156,14 @@ public final class Ts3VoiceClient {
         return myClid >= 0;
     }
 
-    /** 当前客户端表快照（自测用）。 */
-    public Map<Integer, ClientEntry> debugClients() {
+    /** 当前客户端表快照（频道页用户列表/自测用；clid → uid+昵称）。 */
+    public Map<Integer, ClientEntry> clientsSnapshot() {
         return Map.copyOf(clients);
+    }
+
+    /** 兼容别名（自测用）。 */
+    public Map<Integer, ClientEntry> debugClients() {
+        return clientsSnapshot();
     }
 
     /** 直接发送一条命令（自测/管理用）。 */
