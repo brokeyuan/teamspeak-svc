@@ -166,11 +166,9 @@ public final class MusicBotManager {
                 connection);
 
         MusicSession session = new MusicSession(host, port, nickname, null);
-        MusicSession.ProductionConnection production = new MusicSession.ProductionConnection(
-                identity, client, connection, null);
-        session.attachProductionConnection(production);
-        // close 桥：MusicSession 通过 AutoCloseable 断开 Bot 自己的连接
-        production.closer = client::disconnect;
+        // G3/P1-01：生产装配 —— writer 代际来源 = 可撤销许可；频道确认绑定
+        // 授权房间；sender/编码后复核/writer 共用同一份许可（无永久常量）。
+        MusicSendPermit permit = MusicBotAssembly.assemble(session, client, serverUid);
 
         // 编码器工厂：SVC 客户端 API（48kHz 单声道 20ms 帧）。
         session.setEncoderFactory(() -> {
@@ -182,23 +180,6 @@ public final class MusicBotManager {
             return enc == null ? null : new SvcApiEncoderAdapter(enc);
         });
 
-        // 发送桥：编码帧 → 玩家独立 Bot 的 sendVoice(CODEC_OPUS_MUSIC, routeEpoch)。
-        // Bot 的 route 许可：Bot 会话在位 + 授权频道绑定成立。
-        final long botRoute = botRouteEpoch(production);
-        session.startPlaybackForTestHookViaProducer(() ->
-                opus -> {
-                    // sendVoice 是 void：不抛即视为已提交网络层（许可由 Bot 会话
-                    // 常量代际承载；断线由独立连接自己的错误路径终止播放）。
-                    try {
-                        client.sendVoice(opus, MusicSession.CODEC_OPUS_MUSIC, botRoute);
-                        return true;
-                    } catch (com.tsvoice.client.ts3voice.Ts3VoiceException e) {
-                        TeamspeakSvcClient.LOGGER.debug(
-                                "[teamspeak-svc] music bot voice send failed: {}", e.getMessage());
-                        return false; // 帧丢弃，播放继续（引擎许可语义）
-                    }
-                });
-
         if (!ACTIVE.compareAndSet(null, session)) {
             try {
                 session.close();
@@ -208,19 +189,18 @@ public final class MusicBotManager {
         }
 
         // 建立连接（阻塞至握手完成；失败即整体回滚）。
+        session.markConnecting();
         try {
             client.connect(java.net.InetAddress.getByName(host), port, 15_000L);
         } catch (Exception e) {
             stopInternal(session);
             throw new BotStateException("music bot connect failed: " + e.getMessage());
         }
-        TeamspeakSvcClient.LOGGER.info("[teamspeak-svc] music bot connected (uid={}, host={}:{}, channel='{}')",
+        permit.connectedUnconfirmed(); // G3：连接已成 ≠ 可发送（频道未确认）
+        session.markConnected();
+        TeamspeakSvcClient.LOGGER.info(
+                "[teamspeak-svc] music bot connected (uid={}, host={}:{}, channel='{}', awaiting channel confirm)",
                 identity.getClientUid(), host, port, channel);
-    }
-
-    /** Bot 发送许可：会话在位即有效（频道确认后续轮增强；F5 记录边界）。 */
-    private static long botRouteEpoch(MusicSession.ProductionConnection pc) {
-        return 1L; // 独立 Bot 会话的代际空间与玩家会话分离；1 = Bot 会话常量许可
     }
 
     /** 供 start() 装配的内部钩子（把 sender 工厂交给 MusicSession）。 */
@@ -258,6 +238,11 @@ public final class MusicBotManager {
         if (currentIndex < 0 || currentIndex >= queue.size()) {
             currentIndex = 0;
         }
+        // G3：新一轮播放取得新许可代际（旧帧全部失效）
+        if (s.permitForTest() != null && !s.permitForTest().rearmForPlayback()) {
+            throw new BotStateException("music bot cannot play (permission revoked: "
+                    + s.permitForTest().snapshot().revokeReason() + ")");
+        }
         playTrack(s, queue.get(currentIndex));
     }
 
@@ -273,12 +258,20 @@ public final class MusicBotManager {
             throw new BotStateException("music bot is not running");
         }
         s.pause();
+        // G3：暂停撤销旧播放许可（代际推进；恢复时再武装取得新代际）
+        if (s.permitForTest() != null) {
+            s.permitForTest().revoke("paused");
+        }
     }
 
     public static synchronized void resume() {
         MusicSession s = ACTIVE.get();
         if (s == null) {
             throw new BotStateException("music bot is not running");
+        }
+        if (s.permitForTest() != null && !s.permitForTest().rearmForPlayback()) {
+            throw new BotStateException("music bot cannot resume (permission revoked: "
+                    + s.permitForTest().snapshot().revokeReason() + ")");
         }
         s.resume();
     }
@@ -297,6 +290,10 @@ public final class MusicBotManager {
             queue = List.copyOf(QUEUE);
         }
         s.cancel();
+        // G3：跳过撤销旧许可；下一轮播放再武装取得新代际（旧帧全部失效）
+        if (s.permitForTest() != null) {
+            s.permitForTest().revoke("skipped");
+        }
         playTrack(s, queue.get(currentIndex));
     }
 
@@ -304,6 +301,9 @@ public final class MusicBotManager {
         MusicSession s = ACTIVE.get();
         if (s != null) {
             s.cancel();
+            if (s.permitForTest() != null) {
+                s.permitForTest().revoke("stopped playback");
+            }
         }
         currentIndex = -1;
     }
@@ -313,6 +313,9 @@ public final class MusicBotManager {
         MusicSession s = ACTIVE.getAndSet(null);
         if (s != null) {
             s.cancel();
+            if (s.permitForTest() != null) {
+                s.permitForTest().revoke("bot closed");
+            }
             s.close();
         }
         currentIndex = -1;
