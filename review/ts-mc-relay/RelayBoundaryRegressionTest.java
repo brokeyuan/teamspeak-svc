@@ -71,9 +71,21 @@ public class RelayBoundaryRegressionTest {
         return TsRelayWire.encodeOpen(new TsRelayWire.OpenFrame(id, "ts", TsRelayWire.Purpose.PLAYER_VOICE));
     }
 
+    /** 真实 TS 包头 fixture：[MAC8][header5(type=VOICE)][payload]；MAC 置零。 */
+    static byte[] realVoice(int payloadLen) {
+        byte[] raw = new byte[13 + payloadLen];
+        raw[12] = 0x00;
+        return raw;
+    }
+    static byte[] realVoice(int payloadLen, byte firstPayloadByte) {
+        byte[] raw = realVoice(payloadLen);
+        raw[13] = firstPayloadByte;
+        return raw;
+    }
+
     static byte[] data(byte[] id, long epoch, byte[] b) {
         return TsRelayWire.encodeData(TsRelayWire.MessageType.DATA_C2S,
-                new TsRelayWire.DataFrame(id, epoch, 1, b));
+                new TsRelayWire.DataFrame(id, epoch, com.tsvoice.protocol.relay.TsDatagramKind.TRAFFIC_MEDIA, b));
     }
 
     static byte[] barrier(byte[] id, long epoch) {
@@ -92,11 +104,11 @@ public class RelayBoundaryRegressionTest {
             byte[] sid = o.relaySessionId();
             boolean barrierAccepted = runtime.onRouteBarrier("conn-a", barrier(sid, 100));
             check(barrierAccepted, "T33a: barrier for a live session is accepted");
-            boolean staleForwarded = runtime.onData("conn-a", data(sid, 99, new byte[]{1}));
+            boolean staleForwarded = runtime.onData("conn-a", data(sid, 99, realVoice(4, (byte) 1)));
             check(!staleForwarded, "T33a: DATA below the accepted route barrier is rejected");
-            boolean freshForwarded = runtime.onData("conn-a", data(sid, 100, new byte[]{2}));
+            boolean freshForwarded = runtime.onData("conn-a", data(sid, 100, realVoice(4, (byte) 2)));
             check(freshForwarded, "T33a: DATA at the barrier epoch is forwarded");
-            boolean newerForwarded = runtime.onData("conn-a", data(sid, 101, new byte[]{3}));
+            boolean newerForwarded = runtime.onData("conn-a", data(sid, 101, realVoice(4, (byte) 3)));
             check(newerForwarded, "T33a: DATA above the barrier epoch is forwarded");
             boolean barrierRegression = runtime.onRouteBarrier("conn-a", barrier(sid, 50));
             check(!barrierRegression, "T33a: barrier epoch regression is rejected (monotonic)");
@@ -116,14 +128,14 @@ public class RelayBoundaryRegressionTest {
             // 但 pps=1 协商必须生效 —— 连续 4 发不允许 4 全过）
             int ok = 0;
             for (int i = 0; i < 4; i++) {
-                if (runtime.onData("conn-b", data(sid, 1, new byte[]{8}))) {
+                if (runtime.onData("conn-b", data(sid, 1, realVoice(4)))) {
                     ok++;
                 }
             }
             check(ok < 4, "T33b: negotiated maxDatagramsPerSecond=1 rejects a 4-burst (got " + ok + " through)");
             // 恢复等待一秒后至少又能通过 1 个（token 回填）
             Thread.sleep(1100);
-            boolean refill = runtime.onData("conn-b", data(sid, 1, new byte[]{8}));
+            boolean refill = runtime.onData("conn-b", data(sid, 1, realVoice(4)));
             check(refill, "T33b: after one second the token refills (rate limit, not a ban)");
             runtime.close();
         }
@@ -137,15 +149,17 @@ public class RelayBoundaryRegressionTest {
             }, config(echo.socket.getLocalPort(), 4096, 256));
             var o = runtime.onOpen("conn-c", "player-c", open(3));
             byte[] sid = o.relaySessionId();
-            byte[] big = new byte[3000];
-            for (int i = 0; i < big.length; i++) big[i] = (byte) (i * 7);
+            byte[] payload = new byte[3000];
+            for (int i = 0; i < payload.length; i++) payload[i] = (byte) (i * 7);
+            byte[] big = realVoice(3000);
+            System.arraycopy(payload, 0, big, 13, payload.length);
             boolean acceptedUp = runtime.onData("conn-c", data(sid, 1, big));
             check(acceptedUp, "T35a: 3000-byte datagram accepted under the 4096 contract");
             long deadline = System.currentTimeMillis() + 2000;
             while (replies.isEmpty() && System.currentTimeMillis() < deadline) {
                 Thread.sleep(20);
             }
-            check(!replies.isEmpty() && replies.get(0).length == 3000
+            check(!replies.isEmpty() && replies.get(0).length == 3013
                             && java.util.Arrays.equals(replies.get(0), big),
                     "T35a: UDP reply comes back full-size (3000 bytes, no truncation)");
             runtime.close();
@@ -211,7 +225,7 @@ public class RelayBoundaryRegressionTest {
             check(o1.ok() && o2.ok(), "T33c: two connections open independently (T34 base)");
             // conn-d 的 barrier 不影响 conn-e
             runtime.onRouteBarrier("conn-d", barrier(o1.relaySessionId(), 50));
-            boolean unaffected = runtime.onData("conn-e", data(o2.relaySessionId(), 1, new byte[]{9}));
+            boolean unaffected = runtime.onData("conn-e", data(o2.relaySessionId(), 1, realVoice(4, (byte) 9)));
             check(unaffected, "T33c: one connection's barrier does not gate another session");
             runtime.close();
         }

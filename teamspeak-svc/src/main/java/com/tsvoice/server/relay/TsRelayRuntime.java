@@ -272,16 +272,26 @@ public final class TsRelayRuntime {
         if (data.datagram().length > MAX_DATAGRAM_BYTES) {
             return false; // codec 已拒绝超长，双保险
         }
-        // T33a：代际屏障实际执行 —— barrier 之下的旧代际帧拒绝（不只是记录）
-        if (!session.routeEpochPermitted(data.routeEpoch())) {
+        // G2：按真实包头分类（不解密不重写）；外层 trafficClass 必须与包头一致
+        //（0=旧版未分类仍按包头识别；1=CONTROL；2=MEDIA；不符/未知拒绝）。
+        com.tsvoice.protocol.relay.TsDatagramKind.Kind kind =
+                com.tsvoice.protocol.relay.TsDatagramKind.classify(
+                        data.datagram(), com.tsvoice.protocol.relay.TsDatagramKind.Direction.C2S);
+        if (!com.tsvoice.protocol.relay.TsDatagramKind.trafficClassConsistent(
+                data.trafficClass(), kind)) {
             return false;
         }
-        // T33b：协商 pps 限额实际执行（token bucket 拒绝；控制/媒体同桶计费）
+        // T33b/G2：pps 与 bytes 限额对控制与媒体统一计费（控制不是无限带宽旁路）
         if (!session.tryAcquireDatagram()) {
             return false;
         }
-        // F2：协商 bytes/s 限额实际执行（按数据报长度计费；超出即拒绝）
         if (!session.tryAcquireBytes(data.datagram().length)) {
+            return false;
+        }
+        // T33a：代际屏障只约束媒体 —— 控制流（COMMAND/ACK/PING/PONG/INIT1）
+        // 在 barrier 后仍必须送达，否则模式 B 的后续命令与保活中断。
+        if (kind == com.tsvoice.protocol.relay.TsDatagramKind.Kind.MEDIA
+                && !session.routeEpochPermitted(data.routeEpoch())) {
             return false;
         }
         try {

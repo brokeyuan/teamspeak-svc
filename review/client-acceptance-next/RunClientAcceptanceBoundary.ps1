@@ -13,8 +13,7 @@ New-Item -ItemType Directory -Path "$base/classes" -Force | Out-Null
     'teamspeak-svc/src/main/java/com/tsvoice/client/connection/SelectionPolicy.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/client/connection/BackendCoordinator.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/client/music/MusicSession.java' `
-
-                                                                        "$base/ClientAcceptanceBoundaryTest.java"
+    "$base/ClientAcceptanceBoundaryTest.java"
 if ($LASTEXITCODE -ne 0) { throw 'client-acceptance boundary compilation failed' }
 & java -cp "$base/classes;$base/stubs;review/music-0/classes;review/lib/*" com.tsvoice.ClientAcceptanceBoundaryTest
 if ($LASTEXITCODE -ne 0) { throw 'client-acceptance boundary regression failed' }

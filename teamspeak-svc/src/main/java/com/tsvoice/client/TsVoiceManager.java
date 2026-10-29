@@ -1321,9 +1321,10 @@ public final class TsVoiceManager {
             mcRelaySessionId = opened.relaySessionId();
             mcRelayTransport = transport;
             transport.setRelaySender((com.tsvoice.client.ts3voice.TsMcChannelTransport.RelayFrameSender)
-                    (datagram, routeEpoch) -> {
+                    (datagram, routeEpoch, trafficClass) -> {
+                // G2：transport 按入口给定 CONTROL/MEDIA 类别，帧内如实携带。
                 byte[] frame = TsRelayWire.encodeData(TsRelayWire.MessageType.DATA_C2S,
-                        new TsRelayWire.DataFrame(boundSessionId, routeEpoch, 0, datagram));
+                        new TsRelayWire.DataFrame(boundSessionId, routeEpoch, trafficClass, datagram));
                 ClientPlayNetworking.send(new TsRelayPayloads.RelayDataC2sPayload(frame));
             });
             transport.attachRelaySession(opened.relaySessionId(), opened.maxDatagramBytes());

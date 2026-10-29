@@ -285,7 +285,7 @@ $sources = foreach ($item in $stubs.GetEnumerator()) {
 $client = 'teamspeak-svc/src/main/java/com/tsvoice/client'
 $prod = @("$client/music/MusicBotLifecycle.java", "$client/TsVoiceManager.java", "$client/ts3voice/TsProtocolException.java", "$client/MicRedirector.java", "$client/audio/MicRouteGate.java",
     "$client/connection/VoiceState.java", "$client/connection/BackendCoordinator.java",
-    "$client/connection/SelectionPolicy.java", "$client/connection/TsChannelRoute.java", "$client/connection/CapabilityDiscovery.java", "$client/connection/VoiceTransport.java", "$client/ts3voice/TsMcChannelTransport.java", "ts3voice-core/src/main/java/com/tsvoice/protocol/relay/TsRelayWire.java", "ts3voice-core/src/main/java/com/tsvoice/protocol/capability/CapabilityWire.java",
+    "$client/connection/SelectionPolicy.java", "$client/connection/TsChannelRoute.java", "$client/connection/CapabilityDiscovery.java", "$client/connection/VoiceTransport.java", "$client/ts3voice/TsMcChannelTransport.java", "ts3voice-core/src/main/java/com/tsvoice/protocol/relay/TsRelayWire.java", "ts3voice-core/src/main/java/com/tsvoice/protocol/relay/TsDatagramKind.java", "ts3voice-core/src/main/java/com/tsvoice/protocol/capability/CapabilityWire.java",
     "$client/GroupChannelMapper.java", "$client/ts3voice/TsChannelSnapshot.java",
     "$client/ts3voice/TsCommandTracker.java",
     "$client/AvatarPipeline.java",

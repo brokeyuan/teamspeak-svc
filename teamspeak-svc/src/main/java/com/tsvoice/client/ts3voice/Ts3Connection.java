@@ -311,7 +311,9 @@ public final class Ts3Connection {
     private void sendRaw(Ts3Packet packet, PacketType type, long routeEpoch) throws Ts3VoiceException {
         // 入队而非直接发送（F09）：写线程负责 transport.send；队列满时语音丢最旧、
         // 控制命令抛错（调用方可见），绝不静默无界积压。
-        if (type == PacketType.VOICE) {
+        // G2：VOICE_WHISPER 同为媒体 —— 必须走带代际的语音队列，不得落入
+        // 控制队列绕过媒体屏障。
+        if (type == PacketType.VOICE || type == PacketType.VOICE_WHISPER) {
             OutgoingFrame frame = new OutgoingFrame(packet.raw, System.nanoTime(), routeEpoch);
             while (!voiceQueue.offer(frame)) {
                 if (voiceQueue.poll() == null) {

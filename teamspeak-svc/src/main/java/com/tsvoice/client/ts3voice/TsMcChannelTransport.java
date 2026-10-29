@@ -86,9 +86,20 @@ public final class TsMcChannelTransport implements TsTransport {
 
     @Override
     public void send(byte[] data) throws IOException {
-        // 无代际重载（兼容入口）：代际不可知，交给携带重载处理为"无代际帧"
-        //（服务端 barrier=0 语义：从未收到 barrier 的会话放行所有代际）。
-        send(data, 0);
+        // 控制入口（写线程的 COMMAND/ACK/PING 路径）：G2 显式 CONTROL 类别，
+        // epoch 恒 0（控制不受媒体代际约束，但仍受服务端速率/额度约束）。
+        if (closed.get()) {
+            throw new IOException("transport closed");
+        }
+        byte[] session = relaySessionId;
+        if (session == null || state != State.OPEN) {
+            throw new IOException("relay session not attached");
+        }
+        if (data == null || data.length == 0 || data.length > negotiatedMaxDatagramBytes) {
+            throw new IOException("datagram out of negotiated bounds: "
+                    + (data == null ? 0 : data.length) + " > " + negotiatedMaxDatagramBytes);
+        }
+        relaySender.accept(data, 0, com.tsvoice.protocol.relay.TsDatagramKind.TRAFFIC_CONTROL);
     }
 
     @Override
@@ -106,25 +117,27 @@ public final class TsMcChannelTransport implements TsTransport {
         }
         // F2：交给 MC 网络层，帧携带入队时绑定的路由代际（写线程在最终写出点
         // 已复核过的值原样入帧 —— 不在此处读取"当前"代际重贴标签）。
-        relaySender.accept(data, routeEpoch);
+        // G2：本入口只承载媒体（写线程的带代际语音帧）。
+        relaySender.accept(data, routeEpoch, com.tsvoice.protocol.relay.TsDatagramKind.TRAFFIC_MEDIA);
     }
 
-    /** MC 网络层发送桥（携带帧代际；manager 接线，MC netty 线程安全路径）。 */
-    private volatile RelayFrameSender relaySender = (data, epoch) -> {
+    /** MC 网络层发送桥（携带帧代际与类别；manager 接线）。 */
+    private volatile RelayFrameSender relaySender = (data, epoch, tc) -> {
         throw new IllegalStateException("relay sender not wired");
     };
 
-    /** 双参发送桥（F2）：data + 入队时代际。 */
+    /** 三参发送桥（G2）：data + 入队时代际 + trafficClass。 */
     public interface RelayFrameSender {
-        void accept(byte[] data, long routeEpoch);
+        void accept(byte[] data, long routeEpoch, int trafficClass);
     }
 
     public void setRelaySender(java.util.function.Consumer<byte[]> sender) {
-        this.relaySender = sender == null ? null : (data, epoch) -> sender.accept(data);
+        this.relaySender = sender == null ? null
+                : (data, epoch, tc) -> sender.accept(data);
     }
 
     public void setRelaySender(RelayFrameSender sender) {
-        this.relaySender = sender == null ? (data, epoch) -> {
+        this.relaySender = sender == null ? (data, epoch, tc) -> {
             throw new IllegalStateException("relay sender not wired");
         } : sender;
     }
