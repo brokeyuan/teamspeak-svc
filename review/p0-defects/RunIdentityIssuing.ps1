@@ -2,6 +2,15 @@ $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
 $base = 'review/p0-defects'
 $stubs = @{
+ 'com/tsvoice/client/music/MusicBotLifecycle.java' = @'
+package com.tsvoice.client.music;
+/** Harness stub: the real MusicBotManager is compiled by gradle and the
+ *  client-acceptance boundary suite; these suites only verify voice lifecycle. */
+public class MusicBotLifecycle {
+ public static void onPlayerVoiceLifecycleChange(String reason) {}
+}
+'@
+
     'net/fabricmc/fabric/api/networking/v1/ServerPlayNetworking.java' = @'
 package net.fabricmc.fabric.api.networking.v1;
 public class ServerPlayNetworking {

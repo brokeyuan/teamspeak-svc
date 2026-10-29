@@ -1,0 +1,16 @@
+package com.tsvoice.protocol.music;
+import java.util.*;import java.util.concurrent.atomic.*;
+public class MusicBoundaryProbe {
+ public static void main(String[] args)throws Exception{
+  AtomicLong clock=new AtomicLong(1000000000L);List<Integer> got=Collections.synchronizedList(new ArrayList<>());
+  MusicEngine e=new MusicEngine(frame->{got.add((int)frame[0]);clock.addAndGet(MusicEngine.FRAME_NANOS);return true;},clock::get,2);
+  e.play(new PcmSource(){int i;boolean closed;public short[]readFrame(){if(closed)throw new IllegalStateException();if(++i>6)return null;short[]b=new short[FRAME_SAMPLES];b[0]=(short)i;return b;}public void close(){closed=true;}});
+  long until=System.nanoTime()+1000000000L;while(e.state()!=MusicEngine.State.ENDED&&System.nanoTime()<until)Thread.sleep(1);
+  System.out.println("source frames=[1, 2, 3, 4, 5, 6], submitted="+got+", queue drops="+e.framesDroppedByQueue());
+  if(got.equals(List.of(1,2,3,4,5,6)))throw new AssertionError("observed missing-frame bug no longer exists");
+  System.out.println("REPRODUCED: full queue consumes source frame before capacity check; silent content loss");
+  e.close();e.play(new PcmSource(){public short[]readFrame(){return null;}public void close(){}});
+  if(e.state()==MusicEngine.State.CLOSED)throw new AssertionError("observed closed-engine reopen no longer exists");
+  System.out.println("REPRODUCED: play() reopens an engine after terminal close()");e.close();
+ }
+}

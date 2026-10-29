@@ -1,0 +1,18 @@
+package com.tsvoice.server;
+import java.nio.file.*;
+import java.util.List;
+public class IntegratedReloadProbe {
+ public static void main(String[] args)throws Exception {
+  Path p=Files.createTempDirectory("tsvoice-integrated-reload-audit");
+  ServerConfig c=new ServerConfig();c.capabilities.enabled=true;c.capabilities.serviceInstanceId="audit";c.capabilities.ttlSeconds=30;c.capabilities.targets=List.of(new ServerConfig.Target("ts_endpoint","ts.real",9987));c.integratedServerEnabled=false;
+  ServerConfig.save(c,ServerConfig.file(p));
+  try(ServerRuntime r=ServerRuntime.start(p)){
+   r.applyIntegratedServerGate();
+   if(r.status().state()!=ServerRuntime.State.DISABLED)throw new AssertionError("initial gate missing");
+   System.out.println("initial integrated state="+r.status().state());
+   r.reload();System.out.println("after reload state="+r.status().state()+", integratedServerEnabled="+c.integratedServerEnabled);
+   if(!r.announcing())throw new AssertionError("expected observed reload bypass no longer exists");
+   System.out.println("REPRODUCED: reload bypasses the integrated-server opt-in gate");
+  }
+ }
+}

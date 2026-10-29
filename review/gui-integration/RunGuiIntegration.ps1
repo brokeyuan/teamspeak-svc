@@ -118,6 +118,7 @@ import java.io.IOException;
 public interface TsTransport extends AutoCloseable {
  void connect(java.net.InetAddress address,int port) throws IOException;
  void send(byte[] data) throws IOException;
+ default void send(byte[] data, long routeEpoch) throws IOException {send(data);}
  byte[] receive(int maxLen) throws IOException;
  boolean isClosed();
  @Override void close();
@@ -130,7 +131,7 @@ public final class TsRelayPayloads {
  public record RelayOpenedPayload(byte[] frame){public static final Type<RelayOpenedPayload> TYPE=new Type<>("teamspeak-svc","relay_opened_v1");public Type<RelayOpenedPayload> type(){return TYPE;}}
  public record RelayDataC2sPayload(byte[] frame){public static final Type<RelayDataC2sPayload> TYPE=new Type<>("teamspeak-svc","relay_data_c2s_v1");public Type<RelayDataC2sPayload> type(){return TYPE;}}
  public record RelayDataS2cPayload(byte[] frame){public static final Type<RelayDataS2cPayload> TYPE=new Type<>("teamspeak-svc","relay_data_s2c_v1");public Type<RelayDataS2cPayload> type(){return TYPE;}}
- public record RelayClosePayload(byte[] frame){public static final Type<RelayClosePayload> TYPE=new Type<>("teamspeak-svc","relay_close_v1");public Type<RelayClosePayload> type(){return TYPE;}}
+  public record RelayRouteBarrierC2sPayload(byte[] frame){public static final Type<RelayRouteBarrierC2sPayload> TYPE=new Type<>("teamspeak-svc","relay_route_barrier_c2s_v1");public Type<RelayRouteBarrierC2sPayload> type(){return TYPE;}}public record RelayClosePayload(byte[] frame){public static final Type<RelayClosePayload> TYPE=new Type<>("teamspeak-svc","relay_close_v1");public Type<RelayClosePayload> type(){return TYPE;}}
  public record RelayClosedPayload(byte[] frame){public static final Type<RelayClosedPayload> TYPE=new Type<>("teamspeak-svc","relay_closed_v1");public Type<RelayClosedPayload> type(){return TYPE;}}
  public record RelayErrorPayload(byte[] frame){public static final Type<RelayErrorPayload> TYPE=new Type<>("teamspeak-svc","relay_error_v1");public Type<RelayErrorPayload> type(){return TYPE;}}
  public static final class Type<P> {
@@ -275,7 +276,7 @@ $sources = foreach ($item in $stubs.GetEnumerator()) {
     $path
 }
 $client = 'teamspeak-svc/src/main/java/com/tsvoice/client'
-$prod = @("$client/TsVoiceManager.java", "$client/ts3voice/TsProtocolException.java", "$client/MicRedirector.java", "$client/audio/MicRouteGate.java",
+$prod = @("$client/music/MusicBotLifecycle.java", "$client/TsVoiceManager.java", "$client/ts3voice/TsProtocolException.java", "$client/MicRedirector.java", "$client/audio/MicRouteGate.java",
     "$client/connection/VoiceState.java", "$client/connection/BackendCoordinator.java",
     "$client/connection/SelectionPolicy.java", "$client/connection/TsChannelRoute.java",
     "$client/GroupChannelMapper.java", "$client/ts3voice/TsChannelSnapshot.java",

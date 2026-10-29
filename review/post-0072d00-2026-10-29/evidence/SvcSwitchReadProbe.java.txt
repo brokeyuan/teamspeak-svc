@@ -1,0 +1,11 @@
+import com.tsvoice.client.backend.SvcMcChannelSocket;
+import java.util.concurrent.*;
+public class SvcSwitchReadProbe {
+ public static void main(String[]args)throws Exception{
+  SvcMcChannelSocket s=new SvcMcChannelSocket();s.open();CompletableFuture<String> result=new CompletableFuture<>();
+  Thread reader=new Thread(()->{try{s.read();result.complete("frame");}catch(Exception e){result.complete(e.getClass().getName()+": "+e.getMessage());}},"audit-svc-read");reader.setDaemon(true);reader.start();
+  boolean inUdp=false;long deadline=System.nanoTime()+1000000000L;
+  while(!inUdp&&System.nanoTime()<deadline){for(StackTraceElement f:reader.getStackTrace())if(f.getMethodName().equals("readUdp"))inUdp=true;if(!inUdp)Thread.sleep(1);}
+  if(!inUdp)throw new AssertionError("UDP read not reached");s.activateMcChannel();s.onMcDatagram(new byte[]{1});String got=result.get(1,TimeUnit.SECONDS);System.out.println("result during UDP-to-MC switch="+got+", closed="+s.isClosed()+", mcMode="+s.isMcChannelMode());if(got.equals("frame"))throw new AssertionError("observed mode-switch exception no longer exists");System.out.println("REPRODUCED: internal UDP-to-MC switch escapes from read() as a socket exception");s.close();
+ }
+}

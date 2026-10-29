@@ -809,7 +809,7 @@ public final class TsVoiceManager {
         explicitBookmarkId = null;
         stopSession();
         // F5：断开 TS 停本机音乐 Bot（产品默认；不触碰他人/服务端 Bot）
-        com.tsvoice.client.music.MusicBotManager.onPlayerVoiceLifecycleChange("TS disconnected");
+        com.tsvoice.client.music.MusicBotLifecycle.onPlayerVoiceLifecycleChange("TS disconnected");
         if (paused) {
             state = State.PAUSED;
         } else if (activeConfig == null) {
@@ -843,7 +843,7 @@ public final class TsVoiceManager {
         com.tsvoice.client.backend.SvcBackendAdapter.setVoiceMuted(false);
         stopSession();
         // F5：切 SVC 停本机音乐 Bot（产品默认）
-        com.tsvoice.client.music.MusicBotManager.onPlayerVoiceLifecycleChange("switched to SVC");
+        com.tsvoice.client.music.MusicBotLifecycle.onPlayerVoiceLifecycleChange("switched to SVC");
         state = State.DORMANT;
     }
 
@@ -858,7 +858,7 @@ public final class TsVoiceManager {
         com.tsvoice.client.backend.SvcBackendAdapter.setVoiceMuted(true);
         stopSession();
         // F5：OFF 停本机音乐 Bot（已确认产品默认；不触碰他人/服务端 Bot）
-        com.tsvoice.client.music.MusicBotManager.onPlayerVoiceLifecycleChange("voice off");
+        com.tsvoice.client.music.MusicBotLifecycle.onPlayerVoiceLifecycleChange("voice off");
         state = State.VOICE_OFF;
     }
 

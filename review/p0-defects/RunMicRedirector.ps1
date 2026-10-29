@@ -7,6 +7,15 @@ if (!(Test-Path 'review/lib/gson.jar')) {
     Copy-Item -LiteralPath $jar.FullName -Destination 'review/lib/gson.jar'
 }
 $stubs = @{
+ 'com/tsvoice/client/music/MusicBotLifecycle.java' = @'
+package com.tsvoice.client.music;
+/** Harness stub: the real MusicBotManager is compiled by gradle and the
+ *  client-acceptance boundary suite; these suites only verify voice lifecycle. */
+public class MusicBotLifecycle {
+ public static void onPlayerVoiceLifecycleChange(String reason) {}
+}
+'@
+
     'com/tsvoice/client/TeamspeakSvcClient.java' = @'
 package com.tsvoice.client;
 public class TeamspeakSvcClient {

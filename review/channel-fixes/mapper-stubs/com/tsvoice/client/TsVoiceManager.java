@@ -5,4 +5,5 @@ public class TsVoiceManager {
  public static SessionConfig currentSessionConfig(){return new SessionConfig("main-secret");}
  public static Object currentBeacon(){return null;}
  public static boolean hasExplicitBookmarkIntent(){return false;}
+ public static boolean sendRelayRouteBarrier(){return false;}
 }
