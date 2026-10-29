@@ -42,3 +42,34 @@
 - 不做 MC relay 上的音乐通道（同上，等 Music-1 明确授权后开放第二个 purpose）。
 - 不做听感/音量验收（客户端暂缓范围）。
 - 不引入新库；如 Music-1 需要独立解码器（mp3/ogg）再按第 6 节记录。
+
+
+---
+
+## E7/T38 修订（2026-10-29，提交 2e9b08d 之后）
+
+81c687c 复核指出的 T38 方向纠正在本轮落地：
+
+1. **废止"玩家 Ts3VoiceClient 并行发送音乐"的实施方向**。原记录第 4 条
+   （"经 sendVoice 走既有路由" 由玩家会话承载）已被
+   `client/music/MusicSession`（独立身份/连接/transport/编码器/发送桥）
+   替代 —— 本类持有独立会话生命周期，绝不调用玩家全局 endSession、不覆盖
+   玩家 currentClient、不向玩家连接 writer 提交帧（回归
+   MusicSessionTest L1 断言）。
+2. **编码器策略修订**：官方 SVC API `createEncoder()` 是客户端实现之一，
+   不是唯一前提 —— `OpusEncoderAdapter` 是本扩展自有接口；共享引擎（core）
+   不依赖 SVC 在位，未来无 SVC 的 Music Host 用带许可/打包证据的实现实现
+   同一接口。编码不可用时 `startPlayback` 抛
+   `EncodingUnavailableException`（明确失败，不静默降级，不影响玩家语音）。
+   裸 libopus 绑定仍需按总任务书第 6 节单独记录版本/许可/装载证据 ——
+   当前未引入。
+3. **固定音频条件**：48kHz 单声道 20ms 帧（`PcmSource.FRAME_SAMPLES=960`）；
+   TS 频道侧使用 `CODEC_OPUS_MUSIC=5`。encode→decode 受控验证与真实频道
+   codec 协商仍属待验收（客户端暂缓范围），当前以"编码器适配 + 帧字节验证"
+   （MusicSessionTest W1）为已验证边界。
+4. **发送许可绑定音乐 session**：engine 代际（T37-4）+ 会话状态门
+   （`encodeAndSend` 只在 PLAYING/PAUSED 提交）双保险；暂停/取消/替换后
+   旧帧不再获得发送许可（MusicSessionTest C1）。
+5. **测试证据**：`review/music-0/RunMusicCore.ps1` 三个测试类
+   （MusicEngineTest / MusicEngineBoundaryTest / MusicSessionTest），
+   T37 反例与 T38 接线断言全部 PASS；headless、无 stub-through。

@@ -7,7 +7,8 @@ New-Item -ItemType Directory -Path "$base/classes" -Force | Out-Null
     'ts3voice-core/src/main/java/com/tsvoice/protocol/music/TestToneSource.java' `
     'ts3voice-core/src/main/java/com/tsvoice/protocol/music/WavPcmSource.java' `
     'ts3voice-core/src/main/java/com/tsvoice/protocol/music/MusicEngine.java' `
-    "$base/MusicEngineTest.java" "$base/MusicEngineBoundaryTest.java"
+    'teamspeak-svc/src/main/java/com/tsvoice/client/music/MusicSession.java' `
+    "$base/MusicEngineTest.java" "$base/MusicEngineBoundaryTest.java" "$base/MusicSessionTest.java"
 if ($LASTEXITCODE -ne 0) { throw 'Music-0 regression compilation failed' }
 & java -cp "$base/classes" com.tsvoice.MusicEngineTest
 if ($LASTEXITCODE -ne 0) { throw 'Music-0 regression failed' }
@@ -15,4 +16,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Music-0 regression failed' }
 # paused no-spin, generation isolation, source lifecycle, control-plane liveness)
 & java -cp "$base/classes" com.tsvoice.MusicEngineBoundaryTest
 if ($LASTEXITCODE -ne 0) { throw 'Music-0 boundary regression failed' }
+# E7/T38: independent music session (own identity/encoder/permit, no player coupling)
+& java -cp "$base/classes" com.tsvoice.client.music.MusicSessionTest
+if ($LASTEXITCODE -ne 0) { throw 'Music-0 session regression failed' }
 exit $LASTEXITCODE
