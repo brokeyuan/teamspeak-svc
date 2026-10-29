@@ -1,6 +1,38 @@
-2026-10-30 独立复核更正：**候选已交付，工程复核未通过；先修确定缺陷，不新增功能。**
-发现 Bot writer 许可不匹配、TS MC 中继屏障误挡控制包、干净副本麦克风 harness 缺 canSend；F2/F5 尚有未完成要求。
-以 [复核报告及修复顺序](../publish-audit-2026-10-30/REVIEW.md) 为当前状态。下文保留上一轮交付记录，不能再作为“全部完成”的依据。客户端结果仍待用户执行。
+基线 / 当前提交：
+`bdea14e`（PR #1 合并）→ 验收修复轮（2026-10-30，G0–G7）功能终点 `e0be650`、
+最终提交 `4a56e70`、打包 `f2546d7`。实施 worktree：
+`C:/Users/Administrator/Documents/Workspace/Brokeyuan/mods/teamspeak-svc-repair`
+（分支 `codex/acceptance-repair-20261030`）。原工作区保持 `5ec6f2b` + 用户未提交
+文档（未 reset/clean/pull）。
+
+当前阶段 / 当前任务：
+**候选已交付，等待用户客户端验收。** 候选：
+`dist/client-acceptance/4a56e70/teamspeak-svc-0.9.8+26.3.jar`
+SHA-256 `7DDE538B8A0EFA707AA326363211A4B91356D7BF891BBB2D31B55829396D1DE9`
+（39,421,864 字节）。工程门：干净副本 RunAll core+26 harness 全 PASS exit 0；
+core clean test 145 检查 PASS；mod clean build exit 0；隔离 dedicated 无SVC/
+有SVC（不含旧 Bridge）双矩阵实启/停止 exit 0。本轮权威状态与证据：
+`review/acceptance-repair-2026-10-30/{STATUS,DELIVERY,MANIFEST}.md` 与
+`evidence/`。上一候选 `80dd40f`（8585708a…）保留。
+
+验收材料：`review/acceptance-repair-2026-10-30/CLIENT-ACCEPTANCE.md`
+（A00–A12；冒烟 A00/A01/A02/A05）、`RESULTS.md`（全部"待用户执行"）。
+
+本轮闭环（publish-audit-2026-10-30 P1/P2 + F2/F5 缺口）：
+- P1-03 麦克风 harness canSend 契约 + 生产分支用例（G1）。
+- P1-02 中继控制/媒体隔离（TsDatagramKind 包头分类；barrier 只约束媒体；
+  VOICE_WHISPER 归媒体；统一计费）（G2）。
+- P1-01/P2-04 MusicSendPermit（四相+单调代际+可撤销）+ MusicBotAssembly 生产
+  装配；attach≠握手成功；频道确认绑定授权房间；移出即撤销+停播（G3）。
+- F2 缺口：OpenEstablisher 异步建立（4 worker/64 待办/重复拒/迟到 discard/
+  断连 revoke）；MusicBotManager.start 异步化（G4）。
+- F5 缺口：客户端 MUSIC_BOT 会话接线（purpose 参数化 OPEN/关联；UDP/MC 显式
+  模式）（G5）；MusicScreen + ConfigScreen 入口 + 本机收听音量/静音实际生效（G6）。
+
+仍有缺口（下一轮，不阻塞验收）：MC 提交侧无独立有界 drain 队列；远程点歌的
+可信 sender 元数据链未实现（明确不支持）。
+
+结束规则：**等待用户客户端验收；停止功能扩展。** 反馈后先修验收缺陷。
 
 基线 / 当前提交：
 `0072d00`（上一轮 E0–E9）→ 本轮（2026-10-29 验收候选任务书 F0–F7）：
