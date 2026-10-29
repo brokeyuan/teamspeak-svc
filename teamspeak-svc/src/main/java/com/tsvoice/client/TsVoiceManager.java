@@ -1280,11 +1280,15 @@ public final class TsVoiceManager {
         // 服务器不允许的目标会以 ERR_UNKNOWN_TARGET/ERR_TARGET_NOT_ALLOWED 拒绝。
         String targetId = com.tsvoice.client.config.EndpointCredentialStore
                 .normalizeEndpoint(cfg.host(), cfg.port());
+        int requestId = RELAY_REQUEST_IDS.getAndIncrement();
         byte[] open = TsRelayWire.encodeOpen(new TsRelayWire.OpenFrame(
-                RELAY_REQUEST_IDS.getAndIncrement(), targetId, TsRelayWire.Purpose.PLAYER_VOICE));
+                requestId, targetId, TsRelayWire.Purpose.PLAYER_VOICE));
         java.util.concurrent.CompletableFuture<TsRelayWire.OpenedFrame> waiter =
                 new java.util.concurrent.CompletableFuture<>();
-        PENDING_OPENS.put(targetId, waiter);
+        // T34：等待项按 requestId 登记，并绑定创建时的 MC 上下文与传输 ——
+        // 晚到/换服后的旧应答不能批准新尝试（onRelayOpenedFrame 逐一核对）。
+        long contextEpoch = com.tsvoice.client.connection.BackendCoordinator.currentContextEpoch();
+        PENDING_OPENS.put(requestId, new PendingOpen(waiter, contextEpoch, transport, targetId));
         try {
             ClientPlayNetworking.send(new TsRelayPayloads.RelayOpenPayload(open));
             TsRelayWire.OpenedFrame opened = waiter.get(CONNECT_TIMEOUT_MS,
@@ -1305,27 +1309,42 @@ public final class TsVoiceManager {
                     targetId, opened.maxDatagramBytes(), opened.maxDatagramsPerSecond(),
                     opened.maxBytesPerSecond());
         } finally {
-            PENDING_OPENS.remove(targetId, waiter);
+            PENDING_OPENS.remove(requestId);
         }
     }
 
-    /** 在途 OPEN 等待队列（targetId → waiter；fabric receiver 主线程完成）。 */
-    private static final java.util.concurrent.ConcurrentHashMap<
-            String, java.util.concurrent.CompletableFuture<TsRelayWire.OpenedFrame>> PENDING_OPENS =
+    /**
+     * 在途 OPEN 等待登记（T34）：requestId → 登记项。绑定创建时的 MC 上下文
+     * 代际、传输实例与目标 —— OPENED/ERROR 按 requestId 精确关联，不做任意
+     * waiter 遍历完成；换服/旧尝试的迟到应答不会被新尝试消费。
+     */
+    private record PendingOpen(java.util.concurrent.CompletableFuture<TsRelayWire.OpenedFrame> waiter,
+                               long contextEpoch, TsMcChannelTransport transport, String targetId) {
+    }
+
+    private static final java.util.concurrent.ConcurrentHashMap<Integer, PendingOpen> PENDING_OPENS =
             new java.util.concurrent.ConcurrentHashMap<>();
 
-    /** Fabric receiver（主线程）：OPENED 帧 → 完成在途等待。 */
+    /** Fabric receiver（主线程）：OPENED 帧 → 按 requestId 完成在途等待。 */
     public static void onRelayOpenedFrame(byte[] frame) {
         TsRelayWire.Decoded decoded = TsRelayWire.decode(frame);
         if (decoded == null || decoded.type() != TsRelayWire.MessageType.OPENED) {
             return;
         }
         TsRelayWire.OpenedFrame opened = decoded.opened();
-        // 服务端不回传 targetId；等待队列最多一个在途 OPEN（每连接 1 会话约束）。
-        for (var e : PENDING_OPENS.entrySet()) {
-            if (e.getValue().complete(opened)) {
-                return;
-            }
+        PendingOpen pending = PENDING_OPENS.get(opened.requestId());
+        if (pending == null) {
+            return; // 未知/已超时取消的 requestId：丢弃（不批准任何尝试）
+        }
+        long currentContext = com.tsvoice.client.connection.BackendCoordinator.currentContextEpoch();
+        if (pending.contextEpoch() != currentContext
+                || pending.transport() != mcRelayTransport && mcRelayTransport != null) {
+            // 换服后迟到的旧 OPENED / 已被其他尝试抢先 attach：拒绝并清登记
+            PENDING_OPENS.remove(opened.requestId());
+            return;
+        }
+        if (pending.waiter().complete(opened)) {
+            PENDING_OPENS.remove(opened.requestId());
         }
     }
 
@@ -1351,11 +1370,19 @@ public final class TsVoiceManager {
                 }
             }
             case ERROR -> {
-                // OPEN 阶段错误：失败在途等待（携带稳定错误码）
+                // OPEN 阶段错误：按 requestId 失败对应等待项（T34：不波及其他
+                // 在途尝试；requestId=0 的会话级错误按当前上下文清理全部）
                 TsRelayWire.ErrorFrame error = decoded.error();
-                if (error.stableErrorCode() != 0 && !PENDING_OPENS.isEmpty()) {
-                    for (var e : PENDING_OPENS.entrySet()) {
-                        e.getValue().completeExceptionally(new Ts3VoiceException(
+                if (error.requestId() != 0) {
+                    PendingOpen pending = PENDING_OPENS.remove(error.requestId());
+                    if (pending != null) {
+                        pending.waiter().completeExceptionally(new Ts3VoiceException(
+                                "relay open rejected: code=" + error.stableErrorCode()
+                                        + " " + error.message()));
+                    }
+                } else if (error.stableErrorCode() != 0) {
+                    for (var e : PENDING_OPENS.values()) {
+                        e.waiter().completeExceptionally(new Ts3VoiceException(
                                 "relay open rejected: code=" + error.stableErrorCode()
                                         + " " + error.message()));
                     }

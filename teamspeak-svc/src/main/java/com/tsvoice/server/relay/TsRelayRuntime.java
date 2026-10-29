@@ -62,8 +62,9 @@ public final class TsRelayRuntime {
     private final Map<String, TsRelaySession> sessionsByConnection = new ConcurrentHashMap<>();
     /** 每 MC 连接的 OPEN 限流桶（connectionId → bucket）。 */
     private final Map<String, OpenBucket> openBuckets = new ConcurrentHashMap<>();
-    /** 在途 OPEN：requestId → (connectionId, targetId, createdAtMs)；迟到 OPENED 不复活。 */
-    private final Map<Integer, PendingOpen> pendingOpens = new ConcurrentHashMap<>();
+    /** 在途 OPEN：connection+requestId → 登记（T34：不同连接的同名 requestId
+     *  互不冲突；同一连接重复 requestId 拒绝）。迟到 OPENED 不复活已取消请求。 */
+    private final Map<String, PendingOpen> pendingOpens = new ConcurrentHashMap<>();
     private final AtomicLong requestIdCounter = new AtomicLong(1);
     private volatile boolean closed;
 
@@ -73,7 +74,13 @@ public final class TsRelayRuntime {
         long lastRefill = System.nanoTime();
     }
 
-    private record PendingOpen(String connectionId, String playerUuid, String targetId, long createdAtMs) {
+    private record PendingOpen(String connectionId, int requestId, String playerUuid,
+                               String targetId, long createdAtMs) {
+    }
+
+    /** 在途 OPEN 键（T34）：真实连接 + requestId。 */
+    private static String pendingOpenKey(String connectionId, int requestId) {
+        return connectionId + "#" + requestId;
     }
 
     public TsRelayRuntime(McSink sink, RelayConfig initialConfig) {
@@ -172,8 +179,9 @@ public final class TsRelayRuntime {
             }
             bucket.tokens -= 1;
         }
-        // 在途重复 requestId：幂等拒绝（迟到 OPENED 不复活已取消请求）
-        if (pendingOpens.containsKey(open.requestId())) {
+        // 在途重复 requestId：幂等拒绝（T34：按本连接的 requestId 判断 ——
+        // 不同连接从 1 开始计数是正常行为，不冲突）
+        if (pendingOpens.containsKey(pendingOpenKey(connectionId, open.requestId()))) {
             return failOpen(open, TsRelayWire.ERR_MALFORMED, "duplicate requestId");
         }
         // 目标 allowlist（DATA 不能携带 host/port —— 只按 targetId 查表）
@@ -203,8 +211,8 @@ public final class TsRelayRuntime {
         }
         sessions.put(hexKey(sessionId), session);
         sessionsByConnection.put(connectionId, session);
-        pendingOpens.put(open.requestId(), new PendingOpen(connectionId, playerUuid,
-                open.targetId(), System.currentTimeMillis()));
+        pendingOpens.put(pendingOpenKey(connectionId, open.requestId()), new PendingOpen(connectionId,
+                open.requestId(), playerUuid, open.targetId(), System.currentTimeMillis()));
         // 协商限额 = min(工程初值, 管理员配置)
         Limits negotiated = new Limits(
                 Math.min(MAX_DATAGRAM_BYTES, config.limits().maxDatagramBytes()),
@@ -381,6 +389,11 @@ public final class TsRelayRuntime {
         String key = hexKey(session.relaySessionId());
         boolean removed = sessions.remove(key, session);
         sessionsByConnection.remove(session.connectionId(), session);
+        // T34：会话终结（CLOSE/死亡/空闲/禁用）释放其 OPEN 登记 ——
+        // 同一连接之后可再次以相同 requestId OPEN。
+        pendingOpens.values().removeIf(p ->
+                p.connectionId().equals(session.connectionId())
+                        && p.targetId().equals(session.targetId()));
         if (removed) {
             session.close();
         }

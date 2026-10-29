@@ -152,18 +152,24 @@ public final class TeamspeakSvcMod implements ModInitializer {
                         if (target == null) {
                             return false;
                         }
-                        TsRelayWire.Decoded decoded = TsRelayWire.decode(datagram);
-                        if (decoded == null) {
-                            return false;
-                        }
+                        // T32/E3 唯一外层编码点：runtime 交来的字节可能是原始 TS
+                        // UDP 数据报（绝大多数）或 TSRL 控制帧（CLOSED/ERROR）。
+                        // 按 classifyUpstreamDatagram 分型后分别包装/透传 ——
+                        // 绝不把 raw TS 数据报当 TSRL 解码（81c687c 反例已除）。
+                        TsRelayWire.MessageType kind =
+                                TsRelayWire.classifyUpstreamDatagram(datagram);
                         try {
-                            switch (decoded.type()) {
+                            switch (kind) {
                                 case DATA_S2C -> ServerPlayNetworking.send(target,
-                                        new TsRelayPayloads.RelayDataS2cPayload(datagram));
+                                        new TsRelayPayloads.RelayDataS2cPayload(
+                                                TsRelayWire.encodeData(TsRelayWire.MessageType.DATA_S2C,
+                                                        new TsRelayWire.DataFrame(relaySessionId, 0, 0, datagram))));
                                 case CLOSED -> ServerPlayNetworking.send(target,
                                         new TsRelayPayloads.RelayClosedPayload(datagram));
+                                case ERROR -> ServerPlayNetworking.send(target,
+                                        new TsRelayPayloads.RelayErrorPayload(datagram));
                                 default -> {
-                                    return false; // sink 只承载 DATA_S2C/CLOSED
+                                    return false; // 无法归属的字节：拒绝投递
                                 }
                             }
                             return true;

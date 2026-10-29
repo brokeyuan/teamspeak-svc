@@ -278,6 +278,39 @@ public final class TsRelayWire {
         }
     }
 
+    /**
+     * 上行外层数据报分类（T32/E3 生产桥的唯一定型点）：runtime 的 UDP 回包是
+     * <b>原始 TS 数据报</b>，生产桥在投递前用本方法判定该字节是已封装的 TSRL
+     * 控制通知（CLOSED/ERROR —— runtime 控制路径直接给出 TSRL 帧）还是原始
+     * TS UDP 数据。返回：
+     * <ul>
+     *   <li>{@code DATA_S2C}：字节不是 TSRL 帧 —— 按 raw TS 数据报处理，桥
+     *       必须在此做唯一外层编码（包 DATA_S2C 后投递）；</li>
+     *   <li>{@code CLOSED} / {@code ERROR}：字节已是 TSRL 控制帧，桥原样投递；</li>
+     *   <li>{@code null}：无法判定（既非 TSRL 帧也无会话可归属）—— 桥拒绝。</li>
+     * </ul>
+     * 解析只做前缀/类型判定（前 6 字节），不要求整帧重解码。
+     */
+    public static MessageType classifyUpstreamDatagram(byte[] bytes) {
+        if (bytes == null || bytes.length == 0) {
+            return null;
+        }
+        if (bytes.length < MAGIC.length + 2) {
+            return MessageType.DATA_S2C; // 短于 TSRL 帧头：必然是原始 TS 数据报
+        }
+        for (int i = 0; i < MAGIC.length; i++) {
+            if (bytes[i] != MAGIC[i]) {
+                return MessageType.DATA_S2C; // 非 TSRL 前缀：原始 TS 数据报
+            }
+        }
+        if ((bytes[MAGIC.length] & 0xFF) != PROTOCOL_VERSION) {
+            return null;
+        }
+        MessageType type = MessageType.fromWire(bytes[MAGIC.length + 1] & 0xFF);
+        // 只有服务端 → 客户端方向的控制帧允许原样透传
+        return (type == MessageType.CLOSED || type == MessageType.ERROR) ? type : null;
+    }
+
     /** 解码；任何畸形输入返回 null（调用方丢弃整帧并按策略反馈 ERROR）。 */
     public static Decoded decode(byte[] frame) {
         if (frame == null || frame.length < MAGIC.length + 2 || frame.length > MAX_FRAME_BYTES) {
