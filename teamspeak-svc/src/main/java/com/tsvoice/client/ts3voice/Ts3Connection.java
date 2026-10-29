@@ -35,7 +35,7 @@ public final class Ts3Connection {
 
     private final Ts3Crypt crypt;
     /** 传输层（UDP 原生 / TCP 隧道），构造时决定。 */
-    private final TsTransport transport;
+    private TsTransport transport;
     private final Object sendLock = new Object();
     private Ts3VoiceClient client;
 
@@ -167,6 +167,14 @@ public final class Ts3Connection {
     /**
      * 启动连接：绑定 socket、发送 init0、启动接收/重发/写线程。
      */
+    /**
+     * G5：注入已建立的传输（MC 中继模式 —— transport 已 attach 中继会话）。
+     * 注入后 connect(InetAddress,int) 不再重建传输，直接沿用（UDP 模式不变）。
+     */
+    public void setTransportForTest(TsTransport injected) {
+        this.transport = injected;
+    }
+
     public void connect(InetAddress address, int port) throws Ts3VoiceException {
         writerThread = new Thread(this::writerLoop, "teamspeak-svc-voice-writer");
         writerThread.setDaemon(true);

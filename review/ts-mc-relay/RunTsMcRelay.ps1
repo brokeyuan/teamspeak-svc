@@ -11,7 +11,7 @@ New-Item -ItemType Directory -Path "$base/classes" -Force | Out-Null
     'teamspeak-svc/src/main/java/com/tsvoice/server/relay/TsRelaySession.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/client/ts3voice/TsTransport.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/client/ts3voice/TsMcChannelTransport.java' `
-    "$base/RelayRuntimeTest.java" "$base/RelayProductionBridgeTest.java" "$base/RelayBoundaryRegressionTest.java" "$base/RelayMusicBotPurposeTest.java" "$base/RelayProductionEpochTest.java" "$base/RelayControlMediaBarrierTest.java" "$base/RelayAsyncOpenTest.java"
+    "$base/RelayRuntimeTest.java" "$base/RelayProductionBridgeTest.java" "$base/RelayBoundaryRegressionTest.java" "$base/RelayMusicBotPurposeTest.java" "$base/RelayProductionEpochTest.java" "$base/RelayControlMediaBarrierTest.java" "$base/RelayAsyncOpenTest.java" "$base/RelayBotSecondSessionTest.java"
 if ($LASTEXITCODE -ne 0) { throw 'relay regression compilation failed' }
 & java -cp "$base/classes;review/lib/*" com.tsvoice.RelayRuntimeTest
 if ($LASTEXITCODE -ne 0) { throw 'relay runtime regression failed' }
@@ -33,4 +33,7 @@ if ($LASTEXITCODE -ne 0) { throw 'relay control/media barrier regression failed'
 # G4: async OPEN establisher (bounded workers/pending, duplicate rejection)
 & java -cp "$base/classes;review/lib/*" com.tsvoice.RelayAsyncOpenTest
 if ($LASTEXITCODE -ne 0) { throw 'relay async open regression failed' }
+# G5: bot controlled second relay session (purpose-scoped registry)
+& java -cp "$base/classes;review/lib/*" com.tsvoice.RelayBotSecondSessionTest
+if ($LASTEXITCODE -ne 0) { throw 'relay bot second session regression failed' }
 exit $LASTEXITCODE

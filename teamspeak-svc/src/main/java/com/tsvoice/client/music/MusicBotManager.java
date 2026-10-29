@@ -154,11 +154,30 @@ public final class MusicBotManager {
      */
     public static synchronized void start(String host, int port, String channel, String serverUid)
             throws Exception {
+        start(host, port, channel, serverUid, false, null);
+    }
+
+    /**
+     * G5：传输模式显式 —— udp（直连 TS）或 mc（经当前 MC 服务器的受控
+     * MUSIC_BOT 第二会话；targetId = 服务端 allowlist 键）。禁止 UI 选择了
+     * MC 却悄悄走 UDP。
+     *
+     * @param mcTargetId MC 模式下的中继 targetId（服务端 allowlist 键；UDP 模式忽略）
+     */
+    public static synchronized void start(String host, int port, String channel, String serverUid,
+                                          boolean viaMcChannel, String mcTargetId)
+            throws Exception {
         if (isActive()) {
             throw new BotStateException("music bot already running (use /tsvoice music stop)");
         }
-        if (host == null || host.isBlank()) {
-            throw new BotStateException("TS host required");
+        if (!viaMcChannel && (host == null || host.isBlank())) {
+            throw new BotStateException("TS host required (or use the MC-channel mode)");
+        }
+        if (viaMcChannel && (mcTargetId == null || mcTargetId.isBlank())) {
+            throw new BotStateException("MC-channel mode requires a relay targetId");
+        }
+        if (viaMcChannel && !com.tsvoice.client.TsVoiceManager.isMcRelayChannelSupported()) {
+            throw new BotStateException("this server does not support the TS relay channel");
         }
         if (START_IN_FLIGHT.get()) {
             throw new BotStateException("music bot start already in progress");
@@ -201,7 +220,17 @@ public final class MusicBotManager {
                     stopInternal(session);
                     return;
                 }
-                client.connect(java.net.InetAddress.getByName(host), port, 15_000L);
+                if (viaMcChannel) {
+                    // G5：受控第二会话 —— OPEN(purpose=MUSIC_BOT) → OPENED →
+                    // attach → TS 握手（经 MC 通道传输；客户端不解析 TS DNS）。
+                    com.tsvoice.client.ts3voice.TsMcChannelTransport botTransport =
+                            new com.tsvoice.client.ts3voice.TsMcChannelTransport();
+                    com.tsvoice.client.music.MusicRelayBridge.openMcRelaySessionForBot(botTransport, mcTargetId);
+                    connection.setTransportForTest(botTransport);
+                    client.connect(15_000L);
+                } else {
+                    client.connect(java.net.InetAddress.getByName(host), port, 15_000L);
+                }
                 if (STOP_REQUESTED.get()) {
                     stopInternal(session);
                     return;
@@ -209,8 +238,8 @@ public final class MusicBotManager {
                 permit.connectedUnconfirmed();
                 session.markConnected();
                 TeamspeakSvcClient.LOGGER.info(
-                        "[teamspeak-svc] music bot connected (uid={}, host={}:{}, channel='{}', awaiting channel confirm)",
-                        identity.getClientUid(), host, port, channel);
+                        "[teamspeak-svc] music bot connected (uid={}, host={}:{}, via={}, channel='{}', awaiting channel confirm)",
+                        identity.getClientUid(), host, viaMcChannel ? "MC_CHANNEL" : "UDP", channel);
             } catch (Exception e) {
                 if (session != null) {
                     stopInternal(session);

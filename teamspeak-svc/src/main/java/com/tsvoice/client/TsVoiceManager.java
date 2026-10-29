@@ -1277,6 +1277,11 @@ public final class TsVoiceManager {
     private static final java.util.concurrent.atomic.AtomicInteger RELAY_REQUEST_IDS =
             new java.util.concurrent.atomic.AtomicInteger(1);
 
+    /** G5：当前 MC 连接是否支持 TS 中继通道（Bot MC 模式前置检查）。 */
+    public static boolean isMcRelayChannelSupported() {
+        return ClientPlayNetworking.canSend(TsRelayPayloads.RelayOpenPayload.TYPE);
+    }
+
     /** G1 测试入口：驱动生产 openMcRelaySession（含 canSend 分支）。 */
     public static void openMcRelaySessionForTest(TsMcChannelTransport transport, SessionConfig cfg) throws Exception {
         openMcRelaySession(transport, cfg);
@@ -1294,22 +1299,47 @@ public final class TsVoiceManager {
      * 等待队列。客户端不解析 TS 主机名 —— targetId 由书签/配置提供。
      */
     private static void openMcRelaySession(TsMcChannelTransport transport, SessionConfig cfg) throws Exception {
+        openMcRelaySession(transport, cfg, TsRelayWire.Purpose.PLAYER_VOICE);
+    }
+
+    /**
+     * G5：purpose 参数化的 MC 中继会话建立（PLAYER_VOICE=玩家；MUSIC_BOT=独立
+     * Bot 第二会话）。等待项按 requestId+purpose 精确关联；Bot 会话不占用玩家
+     * 的 mcRelaySessionId/mcRelayTransport 全局。
+     */
+    public static void openMcRelaySession(TsMcChannelTransport transport, SessionConfig cfg,
+                                          TsRelayWire.Purpose purpose) throws Exception {
+        openMcRelaySession(transport, cfg, purpose,
+                cfg == null ? null
+                        : com.tsvoice.client.config.EndpointCredentialStore
+                        .normalizeEndpoint(cfg.host(), cfg.port()));
+    }
+
+    /** G5：Bot 入口 —— targetId 显式（服务端 allowlist 键），purpose=MUSIC_BOT。 */
+    public static void openMcRelaySessionForBot(TsMcChannelTransport transport, String targetId)
+            throws Exception {
+        openMcRelaySession(transport, null, TsRelayWire.Purpose.MUSIC_BOT, targetId);
+    }
+
+    private static void openMcRelaySession(TsMcChannelTransport transport, SessionConfig cfg,
+                                           TsRelayWire.Purpose purpose, String targetId) throws Exception {
         if (!ClientPlayNetworking.canSend(TsRelayPayloads.RelayOpenPayload.TYPE)) {
             throw new IllegalStateException("this server does not support the TS relay channel");
         }
         // targetId 约定：书签/手动配置的 host:port 规范化串（服务端 allowlist 键）。
         // 服务器不允许的目标会以 ERR_UNKNOWN_TARGET/ERR_TARGET_NOT_ALLOWED 拒绝。
-        String targetId = com.tsvoice.client.config.EndpointCredentialStore
-                .normalizeEndpoint(cfg.host(), cfg.port());
+        if (targetId == null || targetId.isBlank()) {
+            throw new IllegalStateException("relay targetId required");
+        }
         int requestId = RELAY_REQUEST_IDS.getAndIncrement();
         byte[] open = TsRelayWire.encodeOpen(new TsRelayWire.OpenFrame(
-                requestId, targetId, TsRelayWire.Purpose.PLAYER_VOICE));
+                requestId, targetId, purpose));
         java.util.concurrent.CompletableFuture<TsRelayWire.OpenedFrame> waiter =
                 new java.util.concurrent.CompletableFuture<>();
         // T34：等待项按 requestId 登记，并绑定创建时的 MC 上下文与传输 ——
         // 晚到/换服后的旧应答不能批准新尝试（onRelayOpenedFrame 逐一核对）。
         long contextEpoch = com.tsvoice.client.connection.BackendCoordinator.currentContextEpoch();
-        PENDING_OPENS.put(requestId, new PendingOpen(waiter, contextEpoch, transport, targetId));
+        PENDING_OPENS.put(requestId, new PendingOpen(waiter, contextEpoch, transport, targetId, purpose));
         try {
             ClientPlayNetworking.send(new TsRelayPayloads.RelayOpenPayload(open));
             TsRelayWire.OpenedFrame opened = waiter.get(CONNECT_TIMEOUT_MS,
@@ -1343,7 +1373,8 @@ public final class TsVoiceManager {
      * waiter 遍历完成；换服/旧尝试的迟到应答不会被新尝试消费。
      */
     private record PendingOpen(java.util.concurrent.CompletableFuture<TsRelayWire.OpenedFrame> waiter,
-                               long contextEpoch, TsMcChannelTransport transport, String targetId) {
+                               long contextEpoch, TsMcChannelTransport transport, String targetId,
+                               TsRelayWire.Purpose purpose) {
     }
 
     private static final java.util.concurrent.ConcurrentHashMap<Integer, PendingOpen> PENDING_OPENS =
@@ -1370,6 +1401,42 @@ public final class TsVoiceManager {
         if (pending.waiter().complete(opened)) {
             PENDING_OPENS.remove(opened.requestId());
         }
+    }
+
+    /**
+     * G5：Bot 专用 OPENED 分发 —— 按 requestId 精确完成 Bot 的在途 OPEN，
+     * 不触碰玩家的 mcRelaySessionId/mcRelayTransport（purpose 隔离）。
+     */
+    public static boolean completeBotRelayOpened(byte[] frame) {
+        TsRelayWire.Decoded decoded = TsRelayWire.decode(frame);
+        if (decoded == null || decoded.type() != TsRelayWire.MessageType.OPENED) {
+            return false;
+        }
+        TsRelayWire.OpenedFrame opened = decoded.opened();
+        PendingOpen pending = PENDING_OPENS.get(opened.requestId());
+        if (pending == null || pending.purpose() != TsRelayWire.Purpose.MUSIC_BOT) {
+            return false; // 不是 Bot 的等待项
+        }
+        return pending.waiter().complete(opened);
+    }
+
+    /** G5：Bot 专用 ERROR 分发（失败 Bot 的在途 OPEN）。 */
+    public static boolean completeBotRelayError(byte[] frame) {
+        TsRelayWire.Decoded decoded = TsRelayWire.decode(frame);
+        if (decoded == null || decoded.type() != TsRelayWire.MessageType.ERROR) {
+            return false;
+        }
+        TsRelayWire.ErrorFrame error = decoded.error();
+        if (error.requestId() == 0) {
+            return false;
+        }
+        PendingOpen pending = PENDING_OPENS.remove(error.requestId());
+        if (pending == null || pending.purpose() != TsRelayWire.Purpose.MUSIC_BOT) {
+            return false;
+        }
+        pending.waiter().completeExceptionally(new Ts3VoiceException(
+                "relay open rejected: code=" + error.stableErrorCode() + " " + error.message()));
+        return true;
     }
 
     /** Fabric receiver（主线程）：S2C 数据报/CLOSED → 传输投递。 */
