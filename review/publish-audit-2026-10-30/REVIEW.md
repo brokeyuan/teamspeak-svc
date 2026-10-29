@@ -70,4 +70,6 @@ P1-02 的探针使用真实 `TsMcChannelTransport`、真实 `TsRelayRuntime` 和
 
 推送到 `codex/client-acceptance-20261030` 开发分支，以草稿 PR 供审阅；不发布 GitHub Release，不标稳定版本，不把失败的候选自动合入 main。保留原功能与候选提交历史，并合并 GitHub 原始 README/LICENSE 提交，避免强推覆盖远端历史。原工作区业务代码、未提交用户资料、现有服务器保持不变。
 
+推送前补做完整可达历史扫描：`HistoryAudit.cjs` 检查每个文本 blob 的已知私钥/令牌格式、运行身份文件路径，并核对历史配置样例。三份 `review/*/config/.../{servers,endpoint-credentials}.json` 的非空字符串全部能对应测试源码；例如 `BookmarkMigrationTest.java:44` 和 `EndpointCredentialsTest.java:75` 明确构造相同测试凭据。原业务历史为1916个blob，其中1776个文本blob；发布分支包含文档后的最终数量见 `evidence/history-audit.json`。没有发现上述敏感格式或运行身份路径；这是一项有明确扫描范围的检查，不声称能识别任何形式的秘密。先前自动审批因历史证据不足拒绝推送，本次保留扫描脚本和结果供复核。
+
 参考用户指定的 Carpet 项目 AGENTS.md，采用简短玩家文档、中文 conventional commit、实际行号及证据分级；其中 Carpet 规则/11版本构建要求不适用于此 Fabric 单版本项目。本项目验收需对应 Java25/MC26.3/SVC版本、实际 Mixin 装载和客户端行为，不能用 artifact 检查替代启动。
