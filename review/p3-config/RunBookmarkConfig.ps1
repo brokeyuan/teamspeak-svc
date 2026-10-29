@@ -80,6 +80,8 @@ public class Ts3VoiceException extends Exception {
     'com/tsvoice/client/ts3voice/Ts3VoiceClient.java' = @'
 package com.tsvoice.client.ts3voice;
 public class Ts3VoiceClient {
+ public void setVoiceListenerForTestDispatch(TsVoiceIn frame){}
+
  public static final int CODEC_OPUS_VOICE=4;
  public int sent; public boolean connected;
  public record TsVoiceIn(int senderClid,int codec,int sequence,byte[] opus){}

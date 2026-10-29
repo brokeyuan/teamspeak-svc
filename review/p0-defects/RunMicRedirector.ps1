@@ -82,6 +82,8 @@ public class Ts3VoiceException extends Exception {
     'com/tsvoice/client/ts3voice/Ts3VoiceClient.java' = @'
 package com.tsvoice.client.ts3voice;
 public class Ts3VoiceClient {
+ public void setVoiceListenerForTestDispatch(TsVoiceIn frame){}
+
  public static final int CODEC_OPUS_VOICE=4;
  public boolean connected;
  public boolean throwOnSend;
@@ -162,7 +164,7 @@ $client = 'teamspeak-svc/src/main/java/com/tsvoice/client'
 $prod = @("$client/TsVoiceManager.java", "$client/ts3voice/TsProtocolException.java", "$client/MicRedirector.java", "$client/frontend/SvcFrontendAdapter.java", "$client/frontend/FrontendCapabilities.java", "$client/frontend/FrontendLease.java", "$client/frontend/Svc2625FrontendAdapter.java", "$client/audio/MicRouteGate.java", "$client/connection/VoiceState.java", "$client/connection/BackendCoordinator.java", "$client/connection/SelectionPolicy.java", "$client/connection/TsChannelRoute.java", "$client/connection/CapabilityDiscovery.java", "$client/connection/VoiceTransport.java", "$client/ts3voice/TsMcChannelTransport.java", "ts3voice-core/src/main/java/com/tsvoice/protocol/relay/TsRelayWire.java", "$client/ts3voice/TsChannelSnapshot.java", "ts3voice-core/src/main/java/com/tsvoice/protocol/capability/CapabilityWire.java",
     "$client/config/TsBookmarkStore.java", "$client/config/EndpointCredentialStore.java", "$client/backend/SvcBackendAdapter.java",
     "$client/ModConfig.java", "$client/ServerConfigStore.java", "$client/ConfigFileUtil.java") | Where-Object { Test-Path $_ }
-& javac -encoding UTF-8 -cp 'review/lib/*' -d "$base/classes" @prod @sources "$base/stubs/com/tsvoice/client/ts3voice/Ts3Crypt.java"    "$base/stubs/com/tsvoice/client/ts3voice/Ts3Connection.java"    "$base/stubs/com/tsvoice/client/ts3voice/TsTransport.java"    "$base/stubs/com/tsvoice/common/net/TsRelayPayloads.java"    "$base/stubs/net/fabricmc/fabric/api/client/networking/v1/ClientPlayNetworking.java" "$base/MicRedirectorRegression.java"
+& javac -encoding UTF-8 -cp 'review/lib/*' -d "$base/classes" @prod @sources "$base/stubs/com/tsvoice/client/ts3voice/Ts3Crypt.java"    "$base/stubs/com/tsvoice/client/ts3voice/Ts3Connection.java"    "$base/stubs/com/tsvoice/client/ts3voice/TsTransport.java"    "$base/stubs/com/tsvoice/common/net/TsRelayPayloads.java"    "$base/stubs/net/minecraft/network/protocol/common/custom/CustomPacketPayload.java" "$base/stubs/net/minecraft/resources/Identifier.java" "$base/stubs/net/fabricmc/fabric/api/client/networking/v1/ClientPlayNetworking.java" "$base/MicRedirectorRegression.java"
 if ($LASTEXITCODE -ne 0) { throw 'Mic redirect regression compilation failed' }
 & java -cp "$base/classes;review/lib/*" com.tsvoice.client.MicRedirectorRegression
 if ($LASTEXITCODE -ne 0) { throw 'Mic redirect regression failed' }

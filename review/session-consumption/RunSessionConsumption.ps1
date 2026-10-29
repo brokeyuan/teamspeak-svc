@@ -167,6 +167,8 @@ public final class ClientPlayNetworking {
 package com.tsvoice.client.ts3voice;
 import java.util.*;
 public class Ts3VoiceClient {
+ public void setVoiceListenerForTestDispatch(TsVoiceIn frame){}
+
  public static final int CODEC_OPUS_VOICE=4;
  public static final java.util.Deque<java.util.function.Consumer<Ts3VoiceClient>> connectScripts =
          new java.util.concurrent.ConcurrentLinkedDeque<>();

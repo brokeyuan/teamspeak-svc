@@ -96,6 +96,7 @@ $sources = foreach ($item in $stubs.GetEnumerator()) {
     $path
 }
 $core = Get-ChildItem -LiteralPath 'ts3voice-core/src/main/java/com/tsvoice/protocol' -Filter '*.java' | Select-Object -ExpandProperty FullName
+$core += Get-ChildItem -LiteralPath 'ts3voice-core/src/main/java/com/tsvoice/protocol/relay' -Filter '*.java' | Select-Object -ExpandProperty FullName
 $ts3voice = Get-ChildItem -LiteralPath 'teamspeak-svc/src/main/java/com/tsvoice/client/ts3voice' -Filter '*.java' |
     Where-Object { $_.Name -notin @('Ts3VoiceSelfTest.java', 'Ts3ChannelTest.java') } | Select-Object -ExpandProperty FullName
 & javac -encoding UTF-8 -cp 'review/lib/*' -d "$base/classes" @core @ts3voice @sources `

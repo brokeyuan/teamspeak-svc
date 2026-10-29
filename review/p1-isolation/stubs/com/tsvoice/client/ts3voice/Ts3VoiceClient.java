@@ -44,6 +44,11 @@ public class Ts3VoiceClient {
     public void setServerPassword(String password) {}
     public void setTextListener(TextListener listener) { this.textListener = listener; }
     public void setVoiceListener(Consumer<TsVoiceIn> listener) { this.voiceListener = listener; }
+    /** Test dispatch (E5): deliver a frame through the registered listener. */
+    public void setVoiceListenerForTestDispatch(TsVoiceIn frame) {
+        Consumer<TsVoiceIn> l = voiceListener;
+        if (l != null) l.accept(frame);
+    }
     public void setChannelMembershipListener(IntConsumer listener) { this.membershipListener = listener; }
     public void setOnDisconnected(Runnable callback) { this.onDisconnectedExternal = callback; }
 
