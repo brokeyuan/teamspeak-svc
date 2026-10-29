@@ -158,10 +158,12 @@ $prod = @("$client/TsVoiceManager.java", "$client/ts3voice/TsProtocolException.j
     "$base/stubs/com/tsvoice/client/ts3voice/TsTransport.java" `
     "$base/stubs/com/tsvoice/common/net/TsRelayPayloads.java" `
     "$base/stubs/net/fabricmc/fabric/api/client/networking/v1/ClientPlayNetworking.java" `
-    "$base/EndpointCredentialsTest.java" "$base/BookmarkMigrationTest.java"
+    "$base/EndpointCredentialsTest.java" "$base/BookmarkMigrationTest.java" "$base/S3TransportMigrationTest.java"
 if ($LASTEXITCODE -ne 0) { throw 'Bookmark config regression compilation failed' }
 & java -cp "$base/classes;review/lib/*" com.tsvoice.client.config.EndpointCredentialsTest
 if ($LASTEXITCODE -ne 0) { throw 'Endpoint credentials regression failed' }
 & java -cp "$base/classes;review/lib/*" com.tsvoice.client.BookmarkMigrationTest
 if ($LASTEXITCODE -ne 0) { throw 'Bookmark migration regression failed' }
+& java -cp "$base/classes;review/lib/*" com.tsvoice.client.config.S3TransportMigrationTest
+if ($LASTEXITCODE -ne 0) { throw 'S3 transport migration regression failed' }
 exit $LASTEXITCODE
