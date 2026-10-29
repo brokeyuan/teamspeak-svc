@@ -1,11 +1,10 @@
 基线 / 当前提交：
-`f32416c`（post-m7 复核基线）→ `a979efc`（S0 全部七项关闭）→ `527d85d`（STATUS）→ `dcea5d8`（S1 TS_MC_CHANNEL 完整工程路径）。
+`f32416c`（post-m7 复核基线）→ `a979efc`（S0 全部七项关闭）→ `527d85d`（STATUS）→ `dcea5d8`（S1 TS_MC_CHANNEL 完整工程路径）→ `f7c0d44`（STATUS）→ `07e96f2`（S2 SVC_MC_CHANNEL 自有适配）。
 本轮工作区还携带未提交的任务书/复核报告文档（用户提交进来的）。
 
 当前阶段 / 当前任务：
-S0 与 S1（TS_MC_CHANNEL）已完成并提交；下一步为 S2（SVC_MC_CHANNEL 与
-SVC-Extra 源码兼容验证），随后 S3/S4（工程体验收尾与 Music-0/1）。阶段是
-检查点不是停工点。
+S0/S1/S2 已完成并提交；下一步为 S3（四模式工程体验收尾）与 S4（Music-0/
+Music-1，按总任务书先做小型实施记录再执行）。P7 仍待负责人确认，不自动实施。
 
 已完成的生产路径（S0，提交 a979efc）：
 - R21/P1：confirmChannel 的代际分配并入全局 ROUTE_EPOCH 单点（原先局部 +1
@@ -67,6 +66,32 @@ S1 实际测试与证据：
   p4-discovery、server-fixes、m7-unified-release —— 全部 exit 0。
 - gradle build（mod）与 core 测试仍通过。
 
+已完成的生产路径（S2，提交 07e96f2）：
+- 上游核实（SVC-Extra @6669d6f，GPL-3.0，MC 26.2/loader 0.19.3/voicechat>=2.5.0，
+  逐文件抓取源码）：voice payload 为 SVC NetworkMessage 1:1 原始字节；config 为
+  单个 UTF transport 串；C2S 以 mc:abs(UUID.hashCode()%65535) 喂 addRawPacket
+  （碰撞空间）；sendPacketRaw 拦截为全服开关；客户端 Socket 静态无界队列、
+  close 不唤醒、isClosed 恒 false。上游为 26.2 —— 不能对 26.3 做安装组合声明。
+- 自有实现（不要求装 SVC-Extra）：SvcMcChannelPayloads（自有 ID，字节契约与
+  Extra 一致，8 KiB 有界解码；双装在注册层隔离）；SvcMcChannelAdapter（按玩家
+  路由、单调计数器唯一会话地址、断连回收、重连新地址、无 SVC 即 no-op）；
+  SvcMcChannelSocket（官方 initialization event 注册、会话级有界环形队列、
+  close 唤醒、isClosed 真实）；SvcServerSendPacketMixin（只拦已宣告玩家、
+  writeServer 保留 SVC 加密、拦截失败回落 UDP；双装时适配层空集 = Extra 赢得
+  SVC 域，TS 路径不受影响）；JOIN 宣告 transport（relay.svcMcChannelEnabled，
+  默认关）。
+- 与 Extra 端点的真实互操作（本服务端 ↔ Extra 客户端）保持"framing 契约一致、
+  未双端实测"的如实状态 —— 不冒充已兼容。
+
+S2 实际测试与证据：
+- review/svc-mc-channel/evidence/svc-suite.log：13 项全 PASS（100 并发会话地址
+  无碰撞、宣告门控、按玩家接管 vs UDP 不动、注册簿记账、断连/重连生命周期、
+  无 SVC no-op、重置）。已纳入 review/RunAll.ps1。
+- RunM7 更新允许已记录的 common mixin（server.SvcServerSendPacketMixin），
+  产物校验 PASS；候选 JAR 哈希更新为
+  C1D5BC2A64DF5A368B3C623CFFCB8E9EDE8496021B4F00CF03840C011B7BA6A9。
+- ts-mc-relay/route-lifecycle/gui-integration 复跑全 PASS；mod gradle build 通过。
+
 S1 客户端暂缓项与如实记录：
 - 真实 MC 网络（netty 上的 payload 收发）与本 wire 一致，但端到端仅由回环
   harness 验证；真实 TS 服务器经中继的握手/音频留待外部验证（用户暂缓范围）。
@@ -99,6 +124,11 @@ E01–E15 / U01–U06 不变；本轮新增 UI（Consent 屏、频道页表单/�
   构建+clean-copy；S0 提交后哈希已变化）。下轮 RunAll 时以最终 HEAD 重算。
 
 下一条具体动作（文件、方法、验证命令）：
+S3：四模式（TS_UDP/TS_TUNNEL_V1/TS_MC_CHANNEL/SVC 原生）配置迁移、能力/错误
+提示、诊断与部署表（沿用既有界面，不另造 GUI）；S4：Music-0 小型实施记录
+（本地 PCM/WAV/测试音、独立队列/节拍、headless Opus 方案与许可核对）后实现。
+S2 遗留：SVC-Extra 端点真实互操作实测（需目标版本环境）；S1 遗留：专用服务端
+启动/命令 reload 生命周期验证（无客户端工程验证，具备运行条件即做）。原动作：
 S2.1：固定 SVC-Extra 上游 commit/许可证/目标平台，读其实际 packet envelope、
 Socket 生命周期/secret/session 与 Mixin（26.2 参考不能假定适配 26.3，兼容声明
 按源码与实验记录）；S2.2：byte-level 双向互操作 fixture 先行，再实现
