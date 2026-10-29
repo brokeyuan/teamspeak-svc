@@ -78,11 +78,27 @@ public final class SvcMcChannelSocket implements ClientVoicechatSocket {
                         throw new java.io.IOException("native UDP socket unavailable");
                     }
                     lock.unlock();
+                    RawUdpPacket packet;
                     try {
-                        return readUdp(udp);
+                        packet = readUdp(udp);
+                    } catch (java.net.SocketException e) {
+                        lock.lock();
+                        try {
+                            // F1：受控换态 —— 本对象仍有效、且 UDP socket 因内部
+                            // activateMcChannel() 关闭时，这不是错误：回到循环顶，
+                            // 读取线程无缝转入 MC 队列模式。真正的 close（isClosed）
+                            // 与其他 socket 故障仍按契约抛出，SVC 读线程据此退出。
+                            if (!closed.get() && mcChannelMode && udp == switchedFromUdp) {
+                                continue;
+                            }
+                        } finally {
+                            lock.unlock();
+                        }
+                        throw e;
                     } finally {
                         lock.lock();
                     }
+                    return packet;
                 }
             }
             RawUdpPacket packet = ring[head];
@@ -95,6 +111,13 @@ public final class SvcMcChannelSocket implements ClientVoicechatSocket {
             lock.unlock();
         }
     }
+
+    /**
+     * 受控换态识别标记：activateMcChannel() 关闭的原生 socket 引用。read() 在
+     * 该 socket 上收到 SocketException 且对象未关闭、模式已切 MC 时视为受控
+     * 唤醒（不是错误）。任何其他 socket 的异常仍然向外传播。
+     */
+    private volatile DatagramSocket switchedFromUdp;
 
     /** 原生 UDP 接收（SVC 默认实现语义：4096 缓冲，超长 IOException 拒绝）。 */
     private RawUdpPacket readUdp(DatagramSocket udp) throws java.io.IOException {
@@ -178,8 +201,9 @@ public final class SvcMcChannelSocket implements ClientVoicechatSocket {
         mcChannelMode = true;
         DatagramSocket udp = udpSocket;
         udpSocket = null;
+        switchedFromUdp = udp; // F1：read() 的受控换态识别标记
         if (udp != null && !udp.isClosed()) {
-            udp.close();
+            udp.close(); // 唤醒阻塞在 receive 的读线程（read 捕获后转入 MC 模式）
         }
     }
 

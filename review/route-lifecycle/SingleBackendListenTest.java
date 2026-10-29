@@ -110,8 +110,11 @@ public class SingleBackendListenTest {
         TsVoiceManager.manualDisconnect();
         check(BackendCoordinator.snapshot().selection().intent() == SelectionPolicy.IntentKind.PAUSED,
                 "S4: disconnect enters PAUSED (no active backend)");
-        check(!SvcBackendAdapter.isNativeReceiveSuppressed(),
-                "S4: PAUSED is not OFF - the gate stays open for a possible explicit SVC pick");
+        // F3 (confirmed rule): PAUSED has no selected backend - the gate stays
+        // CLOSED for SVC until the user explicitly switches. "Not OFF" refers to
+        // the user's settings/lifecycle, not to silently listening to SVC.
+        check(SvcBackendAdapter.isNativeReceiveSuppressed(),
+                "S4: PAUSED with no selected backend does not listen to SVC (explicit switch required)");
 
         // PAUSED 下的 TS 帧也不播放（无活动后端 = 无收听）
         long pausedBefore = TsAudioInjector.getInjectedFrames();

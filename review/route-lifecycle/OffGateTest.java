@@ -121,9 +121,13 @@ public class OffGateTest {
         check(SvcBackendAdapter.isNativeReceiveSuppressed(),
                 "O3: TS mode suppresses native SVC receive (single-listen default)");
         TsVoiceManager.disconnectTeamSpeak();
+        // F3 (confirmed rule): PAUSED has NO selected backend - "not chosen" is
+        // not "chose SVC". Native SVC receive stays suppressed until the user
+        // explicitly switches to SVC. PAUSED is not OFF (intent differs, user
+        // settings untouched) but it also is not a silent SVC listen.
         check(BackendCoordinator.snapshot().selection().intent() == SelectionPolicy.IntentKind.PAUSED
-                        && !SvcBackendAdapter.isNativeReceiveSuppressed(),
-                "O3: PAUSED does not suppress native SVC receive (no implicit OFF/SVC switch)");
+                        && SvcBackendAdapter.isNativeReceiveSuppressed(),
+                "O3: PAUSED with no selected backend does not listen to SVC (no implicit restore)");
 
         // ---- O4: OFF -> explicit TS reconnect reopens everything ----
         TsVoiceManager.disableAllVoice();

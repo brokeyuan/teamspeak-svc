@@ -38,32 +38,30 @@ public final class SvcBackendAdapter {
     }
 
     /**
-     * 原生 SVC 下行是否被本扩展的收听归属压制（N3/D03 + E5 单后端收听默认；
+     * 原生 SVC 下行是否被本扩展的收听归属压制（N3/D03 + E5/F3 单后端收听默认；
      * mixin 在 {@code ClientVoicechat.processSoundPacket} 头部读取）。
      *
      * <p>规则直接派生自协调器快照（不保存第二份状态）：</p>
      * <ul>
      *   <li>OFF：压制（关闭全部语音）；</li>
-     *   <li>PAUSED：不压制 —— 它不是 OFF，保留显式选择前的接收状态，只是不
-     *       主动改听 SVC（TS 帧由 {@code TsVoiceManager.handleVoiceFrame} 的
-     *       PAUSED 门消费）；</li>
-     *   <li>其他意图：仅当协调器当前选中的后端是 SVC 时放行原生下行 ——
-     *       <b>TS 被选中时原生 SVC 下行被压制</b>（默认单后端收听；双收听
-     *       只能作为未来显式设置，当前不开启）。AUTO 未解析（无选择）时放行，
-     *       避免在解析窗口误吞原生语音。</li>
+     *   <li><b>无选中后端（PAUSED/AUTO 未解析的 Optional.empty）：压制</b> ——
+     *       "尚未选择"不是"用户选择了 SVC"（F3：复核探针反例已除）。AUTO
+     *       解析完成提交选择后按其结果放行；PAUSED 想听 SVC 必须显式切回；</li>
+     *   <li>有选中后端：仅 SVC 被选中时放行 —— TS 被选中时压制（默认单后端
+     *       收听；双收听只能作为未来显式设置）。</li>
      * </ul>
      *
      * <p>与用户在 SVC 里的静音/音量设置完全无关。</p>
      */
     public static boolean isNativeReceiveSuppressed() {
         var snapshot = com.tsvoice.client.connection.BackendCoordinator.snapshot();
-        var intent = snapshot.selection().intent();
-        if (intent == com.tsvoice.client.connection.SelectionPolicy.IntentKind.OFF) {
+        if (snapshot.selection().intent()
+                == com.tsvoice.client.connection.SelectionPolicy.IntentKind.OFF) {
             return true;
         }
-        // E5：只有 SVC 被选中（或 AUTO 未解析成 TS）才放行原生 SVC 下行
+        // 只有明确选中 SVC 才放行原生 SVC 下行；无选择/TS 选中均压制。
         return snapshot.selection().selectedBackend()
-                .orElse(com.tsvoice.client.connection.VoiceState.BackendKind.SVC)
+                .orElse(com.tsvoice.client.connection.VoiceState.BackendKind.TS3)
                 != com.tsvoice.client.connection.VoiceState.BackendKind.SVC;
     }
 }

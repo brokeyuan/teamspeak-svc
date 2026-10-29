@@ -144,6 +144,7 @@ public final class MusicSession implements AutoCloseable {
             }
             ownedEncoder = encoder;
             ownedEngine = engine;
+            playbackGeneration++; // F4：新播放代 —— 旧代编码中的帧作废
             state = State.PLAYING;
             failureReason = "";
         }
@@ -153,8 +154,12 @@ public final class MusicSession implements AutoCloseable {
     /** 引擎 sink：PCM → 编码 → 发送（阻塞在 engine worker；不占控制面）。 */
     private boolean encodeAndSend(short[] pcm) {
         OpusEncoderAdapter encoder;
+        long myGeneration;
+        FrameSender sender;
         synchronized (stateLock) {
             encoder = ownedEncoder;
+            myGeneration = playbackGeneration;
+            sender = frameSenderRef;
             if (state != State.PLAYING && state != State.PAUSED) {
                 return false; // 已取消/关闭：丢弃取出帧
             }
@@ -183,9 +188,16 @@ public final class MusicSession implements AutoCloseable {
             }
             return false;
         }
-        // 发送桥由 startPlayback 的 sender 参数承载（见重载）—— 测试与生产
-        // 各自接线；此处经由 frameSenderRef。
-        FrameSender sender = frameSenderRef;
+        // F4：编码后、最终网络入队前的许可复核 —— 编码期间发生的 cancel/
+        // pause/replace/断连/关闭使本帧作废：不调用 sender（绝不给旧帧换绑
+        // 新 sender），播放代际由 startPlayback/cancel 递增。
+        synchronized (stateLock) {
+            if (playbackGeneration != myGeneration
+                    || (state != State.PLAYING && state != State.PAUSED)) {
+                framesDroppedAfterEncode++;
+                return false;
+            }
+        }
         if (sender == null) {
             return false;
         }
@@ -197,11 +209,23 @@ public final class MusicSession implements AutoCloseable {
         return true;
     }
 
+    /** playback generation：startPlayback/cancel 递增（F4 编码后复核依据）。 */
+    private long playbackGeneration;
+    /** 编码完成后因代际/状态失配而丢弃的帧数（诊断）。 */
+    private long framesDroppedAfterEncode;
+
+    /** 编码后因许可失配丢弃的帧数（诊断/测试）。 */
+    public long framesDroppedAfterEncode() {
+        synchronized (stateLock) {
+            return framesDroppedAfterEncode;
+        }
+    }
+
     private volatile FrameSender frameSenderRef;
 
-    /** 测试/宿主重载：显式发送桥 + 时钟。 */
-    void startPlaybackForTest(PcmSource source, OpusEncoderAdapter encoder,
-                              FrameSender sender, java.util.function.LongSupplier clock)
+    /** 测试/宿主重载：显式发送桥 + 时钟（公开供回归/宿主接线）。 */
+    public void startPlaybackForTest(PcmSource source, OpusEncoderAdapter encoder,
+                                     FrameSender sender, java.util.function.LongSupplier clock)
             throws EncodingUnavailableException {
         this.frameSenderRef = sender;
         startPlayback(source, encoder, clock);
@@ -229,12 +253,13 @@ public final class MusicSession implements AutoCloseable {
         }
     }
 
-    /** 取消播放：引擎 cancel（代际递增 → 在途帧废弃）；回到 CONNECTED。 */
+    /** 取消播放：引擎 cancel（代际递增 → 在途/编码中帧废弃）；回到 CONNECTED。 */
     public void cancel() {
         synchronized (stateLock) {
             if (ownedEngine != null) {
                 ownedEngine.cancel();
             }
+            playbackGeneration++; // F4：编码中的帧在复核点废弃，不再调用 sender
             if (state == State.PLAYING || state == State.PAUSED
                     || state == State.ENDED || state == State.FAILED) {
                 state = State.CONNECTED;
