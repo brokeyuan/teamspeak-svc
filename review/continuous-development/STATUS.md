@@ -1,10 +1,13 @@
 基线 / 当前提交：
-`f32416c`（post-m7 复核基线）→ `a979efc`（S0 全部七项关闭）→ `527d85d`（STATUS）→ `dcea5d8`（S1 TS_MC_CHANNEL 完整工程路径）→ `f7c0d44`（STATUS）→ `07e96f2`（S2 SVC_MC_CHANNEL 自有适配）。
+`f32416c`（post-m7 复核基线）→ `a979efc`（S0 全部七项关闭）→ `527d85d`（STATUS）→ `dcea5d8`（S1 TS_MC_CHANNEL 完整工程路径）→ `f7c0d44`（STATUS）→ `07e96f2`（S2 SVC_MC_CHANNEL 自有适配）→ `a5ef77f`（STATUS）→ `1b598ac`（S3 四模式部署表+迁移回归）→ `823ab2f`（S4 Music-0 引擎核心）。
 本轮工作区还携带未提交的任务书/复核报告文档（用户提交进来的）。
 
 当前阶段 / 当前任务：
-S0/S1/S2 已完成并提交；下一步为 S3（四模式工程体验收尾）与 S4（Music-0/
-Music-1，按总任务书先做小型实施记录再执行）。P7 仍待负责人确认，不自动实施。
+S0–S3 与 S4 的 Music-0 核心已完成并提交。下一条：Music-0 宿主接线
+（SVC API OpusEncoder + sendVoice(CODEC_OPUS_MUSIC) + 发送许可绑定，工作记录：
+docs/superpowers/plans/2026-10-29-music-0-implementation-record.md），
+随后 Music-1（独立 Bot 身份/第二会话；relay 的 MUSIC_BOT purpose 授权开放）。
+P7 仍待负责人确认，不自动实施。
 
 已完成的生产路径（S0，提交 a979efc）：
 - R21/P1：confirmChannel 的代际分配并入全局 ROUTE_EPOCH 单点（原先局部 +1
@@ -91,6 +94,27 @@ S2 实际测试与证据：
   产物校验 PASS；候选 JAR 哈希更新为
   C1D5BC2A64DF5A368B3C623CFFCB8E9EDE8496021B4F00CF03840C011B7BA6A9。
 - ts-mc-relay/route-lifecycle/gui-integration 复跑全 PASS；mod gradle build 通过。
+
+已完成的生产路径（S3/S4-Music-0，提交 1b598ac / 823ab2f）：
+- S3：docs/superpowers/plans/2026-10-29-s3-modes-deployment.md（四模式部署表/
+  配置迁移规则/server.json 参考/管理诊断/错误类别表/资源边界）；
+  S3TransportMigrationTest（p3-config 套件，11 项 —— 旧 tcp 只迁移为
+  TS_TUNNEL_V1 的硬约束等）。
+- S4/Music-0：ts3voice-core protocol/music（PcmSource/TestToneSource/
+  WavPcmSource/MusicEngine，纯 Java 零依赖，headless 可测）—— 本地 PCM WAV
+  （非 PCM 明确拒绝，待许可核对）+ 确定性测试音；有界队列（512 帧）满时
+  背压（不丢帧，有序播放）；绝对节拍（20ms，时钟可注入）；暂停保位置/
+  恢复/取消复位/关闭终态；sink/音源异常 → FAILED 带原因（不静默吞）；
+  逐帧计数诊断。宿主接线（OpusEncoder+sendVoice）是剩余 glue，未宣称完成。
+
+S3/S4 实际测试与证据：
+- review/music-0/evidence.log：27 项全 PASS（音源确定性、WAV 重采样/折叠、
+  显式拒绝、假时钟精确出帧、暂停/恢复位置、背压 capacity-1、许可丢帧计数、
+  失败原因）。已纳入 review/RunAll.ps1。
+- 最终复跑：ts-mc-relay/svc-mc-channel/music-0/p3-config/route-lifecycle/
+  gui-integration 全 exit 0；ts3voice-core gradle test 145 项 PASS；
+  mod gradle build 通过（候选 JAR 以最终提交为准，交付前重算哈希）。
+
 
 S1 客户端暂缓项与如实记录：
 - 真实 MC 网络（netty 上的 payload 收发）与本 wire 一致，但端到端仅由回环
