@@ -1,4 +1,40 @@
 基线 / 当前提交：
+`0072d00`（上一轮 E0–E9）→ 本轮（2026-10-29 验收候选任务书 F0–F7）：
+`861f60d`(F1+F3+F4 反例修复) → `229806c`(F2 生产代际/barrier/字节) →
+`c30bf8d`(F5 音乐生产工厂+真实 Opus+命令入口) → `5aaa1ea`(relay.musicBotEnabled)
+→ `80dd40f`(harness 修复，RunAll 全绿) → `77fc8ea`(候选 JAR 打包)。
+
+当前阶段 / 当前任务：
+**候选已交付，等待用户客户端验收。** 候选：
+`dist/client-acceptance/80dd40f/teamspeak-svc-0.9.8+26.3.jar`
+SHA-256 `8585708afc5e3740309411b28b46138fb0886b5e08552fe99e20f5ad6c4d6a1c`
+（39,396,995 字节；源码功能终点 80dd40f；构建 gradlew build exit 0；
+RunAll core+26 套件全 PASS exit 0）。
+验收手册 `review/client-acceptance-next/CLIENT-ACCEPTANCE.md`（A00–A12，
+首轮冒烟 A00–A05）；结果表 `RESULTS.md`（初始全部"待用户执行"）；
+交付明细 `DELIVERY.md`（已实现/残留限制/N-A 清单）；依赖与配置 `MANIFEST.md`。
+
+本轮修复摘要（复核 post-0072d00 反例全部闭环）：
+- F1：SVC read() 的 UDP→MC 受控换态（SocketException 不再抛给 SVC 读线程）。
+- F2：生产 DATA 帧携带入队真实 routeEpoch；频道确认点发送 ROUTE_BARRIER；
+  bytes/s 限额真实计费（与 pps 双桶）。
+- F3：PAUSED/无选中后端不恢复原生 SVC 收听（Optional.empty ≠ 选择 SVC）。
+- F4：音乐编码后/入队前最终许可复核（cancel 后编码中的帧丢弃，不再调 sender）。
+- F5：MusicSession 生产连接/独立身份/编码器工厂（真实 Opus encode→decode 往返
+  headless 验证）/MusicBotManager + /tsvoice music 命令组/生命周期自动停本机 Bot/
+  relay.musicBotEnabled 受控第二会话（默认 false）。
+- F6：9 个 harness 套件适配修复；RunAll 全量门 PASS。
+
+本轮结束规则（任务书 §3.5）：
+**到此交接并停止新增功能。** Music-2/3、在线曲库、P7、网页/手机留后续；
+待用户验收反馈后优先修验收缺陷。
+
+未验证项（客户端验收覆盖，本轮未做）：
+真实 MC 网络上的 TS 握手/音频、实体设备听感、30 分钟稳定性、svc-extra 双装行为。
+残留工程项（下一轮，不阻塞验收）：OPEN 链 DNS/socket 移出 MC 主线程；
+MC 提交侧有界 drain；Bot 频道事件（被移出房间即停的检测）。
+
+基线 / 当前提交：
 `81c687c`（post-81c687c 复核基线）→ 本轮（2026-10-29 执行任务书 E0–E9）：
 `dfbfd5f`(E1/T31) → `d6a9b9e`(E2/T36) → `5ecb27b`(E3/T32+T34) → `49ee583`(E4/T33+T35)
 → `39aacb5`(E5) → `2e9b08d`(E6/T37) → `2a4d615`(E7/T38) → `06c35d8`(E8 基础)
