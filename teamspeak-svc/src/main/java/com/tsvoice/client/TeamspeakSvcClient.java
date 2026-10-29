@@ -133,6 +133,20 @@ public class TeamspeakSvcClient {
                 (payload, context) -> context.client().execute(() ->
                         TsVoiceManager.onRelayDownstreamFrame(payload.frame())));
 
+        // E2/T36：SVC MC 通道下行（服务端 S2C SVC NetworkMessage 原始字节 →
+        // socket 队列）与传输宣告（config）。顺序无关：宣告可先于/后于
+        // SVC initialization event 到达（SvcMcChannelClient 内部处理）。
+        ClientPlayNetworking.registerGlobalReceiver(
+                com.tsvoice.common.net.SvcMcChannelPayloads.SvcTransportConfigPayload.TYPE,
+                (payload, context) -> context.client().execute(() ->
+                        com.tsvoice.client.backend.SvcMcChannelClient.onServerAnnouncement(
+                                payload.transport())));
+        ClientPlayNetworking.registerGlobalReceiver(
+                com.tsvoice.common.net.SvcMcChannelPayloads.SvcVoiceS2cPayload.TYPE,
+                (payload, context) -> context.client().execute(() ->
+                        com.tsvoice.client.backend.SvcMcChannelClient.onDownstreamVoice(
+                                payload.data())));
+
         // 信标：新 endpoint 需要玩家显式授权；只有已记住的 endpoint 自动采用
         // T06/R09：issuer 信任变化立即刷新 Ghost 展示（降级不改稳定 UUID，不停音频）。
         ClientIdentityService.setIdentityChangeListener(() ->
@@ -184,6 +198,9 @@ public class TeamspeakSvcClient {
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             ClientIdentityService.clearVerified();
             TsVoiceManager.onServerChanged("");
+            // E2/T36：MC 断连/换服复位 SVC MC 通道（socket 关闭、宣告清零，
+            // 不跨连接复用旧决定/旧队列）
+            com.tsvoice.client.backend.SvcMcChannelClient.onMcConnectionClosed();
         });
 
         // /tsvoice 命令

@@ -77,8 +77,8 @@ public class SvcMcChannelTest {
         SvcMcChannelAdapter.resetForTest();
         List<Integer> ports = new ArrayList<>();
         for (int i = 0; i < 100; i++) {
-            var address = SvcMcChannelAdapter.onPlayerInitialized(UUID.nameUUIDFromBytes(
-                    ("player-" + i).getBytes()));
+            var address = SvcMcChannelAdapter.onPlayerInitializedForConnection(UUID.nameUUIDFromBytes(
+                    ("player-" + i).getBytes()), "conn-" + i, null);
             int port = address.toSocketAddress().getPort();
             ports.add(port);
         }
@@ -87,7 +87,7 @@ public class SvcMcChannelTest {
 
         // ---- 未登记玩家拒收（宣告先于语音）----
         UUID registered = UUID.randomUUID();
-        SvcMcChannelAdapter.onPlayerInitialized(registered);
+        SvcMcChannelAdapter.onPlayerInitializedForConnection(registered, "conn-reg", null);
         UUID stranger = UUID.randomUUID();
         check(!SvcMcChannelAdapter.isMcChannelPlayer(stranger),
                 "R2: unannounced player is not an MC-channel player");
@@ -111,7 +111,7 @@ public class SvcMcChannelTest {
                 "R4: adapter tracks exactly the announced sessions (100 R1 + 1 R2)");
 
         // ---- 断开回收 ----
-        SvcMcChannelAdapter.onPlayerDisconnected(registered);
+        SvcMcChannelAdapter.onPlayerDisconnected(registered, "conn-reg");
         check(!SvcMcChannelAdapter.isMcChannelPlayer(registered),
                 "R5: disconnect reclaims the session address");
         boolean after = SvcMcChannelAdapter.onSendPacketRaw(registered, outbound,
@@ -119,9 +119,9 @@ public class SvcMcChannelTest {
         check(!after, "R5: outbound after disconnect is not taken over (SVC keepalive owns timeouts)");
 
         // ---- 会话重建：重连分配新地址（旧地址不复用给新连接语义）----
-        var first = SvcMcChannelAdapter.onPlayerInitialized(registered);
-        SvcMcChannelAdapter.onPlayerDisconnected(registered);
-        var second = SvcMcChannelAdapter.onPlayerInitialized(registered);
+        var first = SvcMcChannelAdapter.onPlayerInitializedForConnection(registered, "conn-1st", null);
+        SvcMcChannelAdapter.onPlayerDisconnected(registered, "conn-1st");
+        var second = SvcMcChannelAdapter.onPlayerInitializedForConnection(registered, "conn-2nd", null);
         check(first.toSocketAddress().getPort() != second.toSocketAddress().getPort(),
                 "R6: a reconnected player gets a fresh session address (old address not reused)");
 

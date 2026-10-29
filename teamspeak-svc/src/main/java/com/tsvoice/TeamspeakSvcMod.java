@@ -143,6 +143,8 @@ public final class TeamspeakSvcMod implements ModInitializer {
         // S1.3：TS 中继上行 sink —— DATA_S2C/CLOSED 从 session worker 投递给玩家
         //（有界队列在 TsRelayRuntime.sink 侧；发送失败由 runtime 回收会话）。
         ServerLifecycleEvents.SERVER_STARTING.register(server -> {
+            // E2/T36：svc-extra 让渡注入（元数据查询；Extra 在场时适配停用）
+            SvcMcChannelAdapter.setSvcExtraOwner(RuntimeDependencies.svcExtraPresent());
             Path configDir = FabricLoader.getInstance().getConfigDir();
             ServerRuntime runtime = ServerRuntime.start(configDir, server.isDedicatedServer(),
                     (relaySessionId, playerUuid, datagram) -> {
@@ -188,8 +190,8 @@ public final class TeamspeakSvcMod implements ModInitializer {
                 String connectionId = connectionId(handler.player);
                 runtime.forgetConnection(connectionId);
                 runtime.relayRuntime().onClientDisconnected(connectionId);
-                // S2/P5：SVC MC 通道会话地址回收
-                SvcMcChannelAdapter.onPlayerDisconnected(handler.player.getUUID());
+                // S2/P5：SVC MC 通道会话地址回收（按真实连接）
+                SvcMcChannelAdapter.onPlayerDisconnected(handler.player.getUUID(), connectionId);
             }
         });
 
@@ -214,7 +216,9 @@ public final class TeamspeakSvcMod implements ModInitializer {
             try {
                 ServerPlayNetworking.send(handler.player, announcement);
                 if (enabled) {
-                    SvcMcChannelAdapter.onPlayerInitialized(handler.player.getUUID());
+                    // E2/T36：按 server instance + 真实连接登记（不是线程 ID）
+                    SvcMcChannelAdapter.onPlayerInitializedForConnection(
+                            handler.player.getUUID(), connectionId(handler.player), server);
                 }
             } catch (RuntimeException e) {
                 LOGGER.debug("[teamspeak-svc] SVC transport announcement failed: {}", e.getMessage());
