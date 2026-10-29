@@ -1,0 +1,75 @@
+PASS F1: fresh install loads with defaults
+PASS F1: fresh install is disabled with no targets and a generated service id
+PASS F1: second launch reuses the persisted service id (no renewal)
+PASS F2: a valid legacy config migrates enabled with its real endpoint
+PASS F2: the legacy default service id is renewed (re-authorization flagged)
+PASS F2: the legacy file is preserved and backed up
+PASS F3: the unconfigured template example stays disabled
+PASS F4: a corrupt server.json reports INVALID_CONFIG
+PASS F4: the user's corrupt file is never overwritten
+PASS F5: failed legacy migration reports INVALID_CONFIG
+PASS F5: the broken legacy file is preserved
+PASS F6: an existing server.json wins over the legacy file
+PASS F7: future transport kinds never become announceable targets in this version
+PASS F7: unknown kinds produce a 'not implemented' diagnostic
+PASS F8: ttl above the wire limit is rejected
+PASS F8: ttl at the wire limit is accepted
+PASS F8: port 0 rejected
+PASS F8: port 65536 rejected
+PASS F8: oversized host rejected
+Server config regression: all checks passed
+PASS A1: an active announcer answers a hello
+PASS A1: the response binds the request nonce
+PASS A1: the announcement carries the config's service id and targets
+PASS A1: responses respect the wire limit
+PASS A2: a disabled announcer has no announcement side effects
+PASS A2: no valid targets -> no reply (clients keep their rules)
+PASS A2: oversized frames are rejected before processing
+PASS A2: malformed hello frames are dropped silently
+PASS A3: a burst of 4 hellos is answered
+PASS A3: beyond the burst the announcer stays silent
+PASS A3: the limit recovers with time (only the reply is limited, players are never kicked)
+PASS A4: connections are tracked for limiting
+PASS A4: disconnect removes the connection's records
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS A5: a DISABLED runtime never answers
+PASS A5: a valid enabled config yields an ACTIVE runtime
+PASS A5: enabled without targets stays DISABLED (no fake announcements)
+PASS A6: runtime starts ACTIVE
+PASS A6: a failed reload stops the (no longer trustworthy) announcements
+PASS A6: the failed reload keeps the admin's file
+PASS A6: fixing the config and reloading restores announcements
+PASS A7: a closed (old-world) runtime never answers new connections
+PASS A8/R22: dedicated environment is not affected by the integrated gate
+PASS A8/R22: integrated servers default to disabled unless explicitly enabled in config
+PASS R22: reload keeps the integrated server disabled (integratedServerEnabled=false)
+PASS R22: repeated reloads keep the integrated server disabled
+PASS R22: broken config on an integrated server stays gated (INVALID/DISABLED)
+PASS R22: config recovery on an integrated server keeps the default-off gate
+PASS R22: explicit integratedServerEnabled=true keeps the integrated server active
+PASS R22: reload keeps the explicit integrated opt-in active
+PASS R22: turning the opt-in off disables the integrated server on reload
+PASS R22: dedicated reloads stay ACTIVE (no integrated gate)
+Announcer & runtime regression: all checks passed
+artifact: none found - running gradlew build
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.5.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+java.io.IOException: Unable to establish loopback connection
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+gradlew build failed during M7 artifact preparation
+At C:\Users\Administrator\AppData\Local\Temp\tsvoice-publish-audit-20261030-54bdae391ee94a2f85f2018dec1b9a96\source\rev
+iew\m7-unified-release\RunM7.ps1:40 char:29
++ ... it -ne 0) { throw 'gradlew build failed during M7 artifact preparatio ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (gradlew build f...act preparation:String) [], RuntimeException
+    + FullyQualifiedErrorId : gradlew build failed during M7 artifact preparation

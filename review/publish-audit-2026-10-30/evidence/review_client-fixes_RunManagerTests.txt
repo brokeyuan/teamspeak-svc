@@ -1,0 +1,18 @@
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS server password preserves exact spaces
+PASS global channel password resolves independently
+PASS per-server passwords override both defaults independently
+PASS untrusted beacon never activates the beacon route
+PASS explicit empty per-server passwords clear inherited defaults
+PASS untrusted beacon waits for explicit approval
+PASS one-time approval uses beacon without credentials
+PASS remembered endpoint is approved
+PASS remembered endpoint auto-trusts same host and port
+PASS changed beacon endpoint requires renewed approval
+PASS denied beacon does not connect
+PASS sendMic precondition: TS route committed via activation
+PASS unconfirmed channel consumes microphone frame without TS send or SVC fallback
+PASS confirmChannel approves the observed self channel
+PASS confirmed channel forwards one microphone frame

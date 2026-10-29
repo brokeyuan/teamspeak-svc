@@ -1,0 +1,43 @@
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+Exception in thread "teamspeak-svc-voice" java.lang.ExceptionInInitializerError
+	at com.tsvoice.client.TsVoiceManager.connect(TsVoiceManager.java:1262)
+	at com.tsvoice.client.TsVoiceManager.sessionLoop(TsVoiceManager.java:1018)
+	at com.tsvoice.client.TsVoiceManager.lambda$startSession$0(TsVoiceManager.java:901)
+	at java.base/java.lang.Thread.run(Thread.java:1474)
+Caused by: java.io.UncheckedIOException: java.io.IOException: Unable to establish loopback connection
+	at java.net.http/jdk.internal.net.http.HttpClientImpl.<init>(HttpClientImpl.java:482)
+	at java.net.http/jdk.internal.net.http.HttpClientImpl.create(HttpClientImpl.java:420)
+	at java.net.http/jdk.internal.net.http.HttpClientBuilderImpl.build(HttpClientBuilderImpl.java:142)
+	at com.tsvoice.client.AvatarPipeline.<clinit>(AvatarPipeline.java:34)
+	... 4 more
+Caused by: java.io.IOException: Unable to establish loopback connection
+	at java.base/sun.nio.ch.PipeImpl$Initializer.init(PipeImpl.java:96)
+	at java.base/sun.nio.ch.PipeImpl.<init>(PipeImpl.java:186)
+	at java.base/sun.nio.ch.WEPollSelectorImpl.<init>(WEPollSelectorImpl.java:78)
+	at java.base/sun.nio.ch.WEPollSelectorProvider.openSelector(WEPollSelectorProvider.java:33)
+	at java.base/java.nio.channels.Selector.open(Selector.java:295)
+	at java.net.http/jdk.internal.net.http.HttpClientImpl$SelectorManager.<init>(HttpClientImpl.java:1094)
+	at java.net.http/jdk.internal.net.http.HttpClientImpl.<init>(HttpClientImpl.java:479)
+	... 7 more
+Caused by: java.net.SocketException: Invalid argument: connect
+	at java.base/sun.nio.ch.UnixDomainSockets.connect0(Native Method)
+	at java.base/sun.nio.ch.UnixDomainSockets.connect(UnixDomainSockets.java:126)
+	at java.base/sun.nio.ch.UnixDomainSockets.connect(UnixDomainSockets.java:122)
+	at java.base/sun.nio.ch.SocketChannelImpl.connect(SocketChannelImpl.java:950)
+	at java.base/java.nio.channels.SocketChannel.open(SocketChannel.java:281)
+	at java.base/sun.nio.ch.PipeImpl$Initializer$LoopbackConnector.run(PipeImpl.java:123)
+	at java.base/sun.nio.ch.PipeImpl$Initializer.init(PipeImpl.java:78)
+	... 13 more
+FAIL C1: session A connects
+[dbg] C1 state=CONNECTING error=
+Exception in thread "main" java.lang.NullPointerException: Cannot read field "textListener" because "<local4>" is null
+	at com.tsvoice.client.SessionConsumptionTest.main(SessionConsumptionTest.java:110)
+Session consumption regression failed
+At C:\Users\Administrator\AppData\Local\Temp\tsvoice-publish-audit-20261030-54bdae391ee94a2f85f2018dec1b9a96\source\rev
+iew\session-consumption\RunSessionConsumption.ps1:303 char:28
++ ... LASTEXITCODE -ne 0) { throw 'Session consumption regression failed' }
++                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Session consumption regression failed:String) [], RuntimeException
+    + FullyQualifiedErrorId : Session consumption regression failed

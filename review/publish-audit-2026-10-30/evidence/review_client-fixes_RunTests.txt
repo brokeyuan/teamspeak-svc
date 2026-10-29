@@ -1,0 +1,22 @@
+ע: C:\Users\Administrator\AppData\Local\Temp\tsvoice-publish-audit-20261030-54bdae391ee94a2f85f2018dec1b9a96\source\teamspeak-svc\src\main\java\com\tsvoice\client\ts3voice\Ts3Crypt.javaʹ�û򸲸����ѹ�ʱ�� API��
+ע: �й���ϸ��Ϣ, ��ʹ�� -Xlint:deprecation ���±��롣
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS play() enqueues on the owned playback channel
+PASS SVC instance replacement: the channel binds to the current client
+PASS play() still delivers after the SVC client instance is replaced
+PASS SVC reconnect rebinds playback to the current client (stale channel recreated)
+PASS SVC reconnect uses current client after cleanup (counters were reset)
+PASS visibility sync preserves native PlayerState identity
+PASS TS cleanup preserves native PlayerState
+PASS reflector refuses to overwrite a native PlayerState
+PASS reflector refuses to delete a state it does not own
+PASS injected cross-server state is not classified as a native player
+PASS group refresh does not modify native replacement of a ghost
+PASS cleanup preserves native replacement of a previous ghost
+PASS same-channel ungrouped TS user stays visible
+PASS owned TS audio channel is active
+PASS cleanup removes owned TS ghost
+PASS cleanup closes owned TS audio channel
+PASS retired channel no longer bound to any SVC client

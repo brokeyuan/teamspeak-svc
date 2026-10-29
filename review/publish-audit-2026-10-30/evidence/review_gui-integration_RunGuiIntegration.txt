@@ -1,0 +1,93 @@
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS G1: a v2 bookmark file is backed up once before the v3 migration
+PASS G1: the migrated v2 bookmark keeps its fields and gains defaults
+PASS G1: v3 fields round-trip through the store
+PASS G1: the 8-arg v2 constructor still works and locked maps to LOCKED policy
+PASS G2: the bookmark screen's connect action joins the bookmark channel
+PASS G2: the confirmed channel grants the transmit route
+PASS G2: the model reports the TS mic target with the confirmed channel
+PASS G2: transport/policy/move-phase/source read from the live coordinator
+PASS G3: disconnect TeamSpeak -> IDLE, never an implicit SVC switch
+PASS G3: switch to vanilla SVC -> SVC mic target
+PASS G3: close all voice -> IDLE with the OFF phase
+PASS G4: the locked bookmark confirms and sends in its bookmark channel
+PASS G4: the model reports the locked policy
+[dbg] cyc0 stillBlocked=true ready=false phase=BLOCKED_BY_POLICY transmitReady=false cid=null policy=LOCKED_TARGET myChannel=7 joinCalls=1 lastJoin=5
+[dbg] cyc1 stillBlocked=true ready=false phase=BLOCKED_BY_POLICY transmitReady=false cid=null policy=LOCKED_TARGET myChannel=7 joinCalls=1 lastJoin=5
+[dbg] cyc2 stillBlocked=true ready=false phase=BLOCKED_BY_POLICY transmitReady=false cid=null policy=LOCKED_TARGET myChannel=7 joinCalls=1 lastJoin=5
+[dbg] cyc3 stillBlocked=true ready=false phase=BLOCKED_BY_POLICY transmitReady=false cid=null policy=LOCKED_TARGET myChannel=7 joinCalls=1 lastJoin=5
+[dbg] cyc4 stillBlocked=true ready=false phase=BLOCKED_BY_POLICY transmitReady=false cid=null policy=LOCKED_TARGET myChannel=7 joinCalls=1 lastJoin=5
+[dbg] cyc5 stillBlocked=true ready=false phase=BLOCKED_BY_POLICY transmitReady=false cid=null policy=LOCKED_TARGET myChannel=7 joinCalls=1 lastJoin=5
+PASS G4: an admin move away blocks the locked route (stays blocked across cycles)
+PASS G4: the model still names TS as the target while blocked
+PASS G4: but the transmit permission follows the revoked route
+PASS G5: session reconnected on bm-gui
+PASS G5: deleting the active bookmark pauses with no silent retarget
+PASS G5: an explicit connect still works
+PASS G5: deleting an inactive bookmark leaves the session alone
+PASS G6: an unknown bookmark id errors with the id in the message
+PASS G7: credentials resolve per endpoint, never across hosts/ports
+PASS C: baseline channel confirmed
+PASS C1: join-by-cid submits
+PASS C1: the joined channel confirms and grants the route
+PASS C2: join with a wrong password submits
+PASS C2: the async rejection enters FAILED
+PASS C2: the page's status line can show the real rejection reason
+PASS C2: no transmit permission leaks after the failed join
+PASS C3: join without permission submits
+PASS C3: the permission denial enters FAILED
+PASS C3b: stay-in-this-channel accepted
+PASS C3b: sending resumes in the current channel after the user action
+PASS C4: createChannel reached the client
+PASS C4: creation alone does not disturb the confirmed route (no fake move)
+PASS C5: move submitted (page then closed)
+PASS C5: the late reply still lands in the route state machine (not lost, not faked)
+PASS C5: recovery after the late reply
+PASS C6: move submitted in the dying session
+PASS C6: dead-session state torn down (no live route to poison)
+PASS D1: the hello frame respects the wire limit
+PASS D1: the hello carries a request nonce
+PASS D2: the announcement (matching nonce+context) is accepted
+PASS D2: the pre-trusted endpoint is auto-authorized
+PASS D2: the authorized announcement feeds session selection without inheriting credentials
+PASS D2: AUTO with an authorized recommendation selects TS
+PASS D3: a wrong-nonce announcement is rejected
+PASS D3: replaying the same announcement is rejected
+PASS D3: an announcement from the old MC context is rejected
+PASS D3: oversized frames are rejected before allocation
+PASS D3: a zero-TTL announcement produces no candidates
+PASS D4: no announcement means no announcement candidates
+PASS D4: without announcements the global auto target still applies
+PASS D5: auth failures classify as terminal AUTH_DENIED
+PASS D5: DNS failures are retryable
+PASS D5/R26: generic transport failures stay retryable; unknown errors are INTERNAL, not UDP-unreachable
+PASS D5: the retry backoff keeps the 2s base with +-20% jitter
+GUI flow regression: all checks passed
+PASS R26: target 2.6.25 is supported
+PASS R26: the declared minimum 2.6.20 is supported
+PASS R26: newer 2.6.27 is supported
+PASS R26: an unverified newer series (2.7.0) is NOT accepted
+PASS R26: 2.6.1 does NOT pass (old prefix bug)
+PASS R26: 2.60.x does NOT pass (prefix bug)
+PASS R26: 2.6.19 is below the declared minimum
+PASS R26: 2.5.x is below the declared minimum
+PASS R26: unparseable versions are rejected
+PASS R26: two-part versions need an explicit patch (parse to 2.6.0 < 2.6.20)
+PASS R26: null versions are rejected
+PASS R26: build suffixes are stripped before comparison
+PASS R26: socket timeouts stay retryable NETWORK_TIMEOUT
+PASS R26: transport IOExceptions stay retryable
+PASS R26: unknown plain exceptions classify as INTERNAL, not NETWORK_TIMEOUT
+PASS R26: DNS failures classify as DNS_FAILED
+PASS R26: structured invalid_server_password classifies as terminal AUTH_DENIED
+PASS R26: the numeric TS error id is preserved on the exception
+PASS R26: structured channel-password rejection classifies as CHANNEL_PASSWORD
+PASS R26: an unlisted server rejection is NOT treated as a network timeout
+PASS R26: an unlisted server rejection terminates retrying (server said no)
+PASS R26: runtime defects classify as INTERNAL
+PASS R26: illegal states classify as INTERNAL
+PASS R26: unknown exceptions classify as INTERNAL (not NETWORK_TIMEOUT)
+PASS R26: INTERNAL stays retryable but is never misread as UDP-unreachable
+R26 compatibility regression: all checks passed

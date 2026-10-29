@@ -1,0 +1,240 @@
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS A: no TS config: SVC native microphone path untouched
+PASS B: configured server reaches CONNECTING
+PASS B: session and route not ready while connecting
+PASS B: frame consumed while TS connecting (no SVC leak)
+PASS C: session reaches CONNECTED
+PASS C: the session holds a frontend mic lease (T08b, no SVC server required)
+PASS C: clientmove requested; no transmit permission before server confirmation
+PASS C: frame consumed while the channel move is unconfirmed
+PASS C: server-confirmed self channel grants the transmit route
+PASS C: confirmed session carries the frame to TS only
+PASS D: disconnect releases the frontend mic lease
+PASS D: after explicit disconnect the frame is dropped, not sent to SVC
+PASS E: reconnect after disconnect reaches CONNECTING
+PASS E (R01): reconnecting TS consumes frames, gate not stuck on SVC_NATIVE
+PASS F: reconnect reaches CONNECTED
+PASS F: reconnected session re-confirms the channel route
+PASS F: reconnected session carries the frame to TS only
+PASS G1: disconnect persists across MC server change (no SVC leak)
+PASS G2: returning to a configured server does not auto-resume voice
+PASS G3: SVC reconnect events do not override the pause
+PASS H: failed connect enters RECONNECTING
+PASS H: frames stay dropped while the TS session retries
+PASS I: switchToSvc closes the TS session
+PASS I1: SVC selected but speaking boundary not crossed: frame suppressed
+PASS I2: after the silence gap the SVC native path passes through
+PASS I3: PINNED_SVC is not overridden by SVC lifecycle events
+PASS J: explicit reconnect leaves VOICE_OFF
+PASS J: OFF override is cleared by the explicit reconnect
+PASS J: inbound TS frame reaches playback while voice is on
+PASS J: OFF records the voice-muted override
+PASS J: OFF suppresses mic frames (no SVC, no TS)
+PASS J: late inbound frame after OFF does not reach playback
+PASS J: OFF releases TS playback resources
+PASS J: OFF survives announcements, server changes and device events
+PASS K: explicit reconnect leaves VOICE_OFF with a live session
+PASS K: disconnect enters PAUSED with no active backend
+PASS K: server change does not clear the pause
+PASS K: explicit reconnect exits the pause
+PASS K: reconnect completes
+PASS L: activation re-runs do not steal an explicit selection
+PASS L: unchanged config keeps the session alive
+Route lifecycle regression: all checks passed
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS B1: bookmark connect reaches the network
+PASS B1: bookmark session connects
+PASS B1: bookmark intent committed with its own target reference
+PASS B1: initial bookmark channel joined via the confirmation service
+PASS B1: join request alone does not grant transmit permission
+PASS B1: legacy group mapper does not drive bookmark channels
+PASS B1: voice and channel text both blocked while the move is unconfirmed
+PASS B2: confirmed self channel publishes authority+cid route
+PASS B2: bookmark mode can send voice and channel text without any SVC group
+PASS B3: confirmed server move auto-follows and bumps the route epoch
+PASS B3: follow mode keeps sending from the new confirmed channel
+PASS B4: locked target confirmed and sendable
+PASS B4: admin move away from the locked channel pauses sending
+PASS B4: locked mismatch consumes frames without TS send
+PASS B4: returning to the locked target re-arms sending
+PASS B5: requesting another channel revokes the permit
+PASS B5: stale observation for cid 5 does not approve while cid 6 is pending
+PASS B5: the requested channel's own confirmation completes the move
+PASS B6: second bookmark session connects
+PASS B6: failed join request pauses with a reason, no guessed channel
+PASS B6: no transmit permission after the rejected move
+PASS B6: frames stay dropped after the rejected move
+Bookmark route regression: all checks passed
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS Q: legacy config session connects
+PASS Q: mapper requests the main channel move
+PASS Q: route confirmed at cid 5
+PASS Q: sent frame carries the current route epoch
+PASS Q: legacy pull-back revokes the permit and bumps the route epoch
+PASS Q: frames during the pull-back are consumed, never sent
+PASS Q: pull-back re-confirmed at the group target
+PASS Q: frames after the pull-back carry the current epoch
+PASS Q: requesting cid 6 revokes the permit
+PASS Q: frames during an unconfirmed move are consumed, never sent
+PASS Q: move to cid 6 confirmed
+PASS Q: sending resumes on the confirmed new channel
+Queued voice route regression: all checks passed
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS M1: initial bookmark channel joined via the confirmation service
+PASS M1: locked channel 5 confirmed and sendable
+PASS M1: frame with the confirmed epoch is written
+PASS M1: the illegal observation revokes the transmit permit
+PASS M1: the revocation advanced the route epoch
+PASS M1: readiness reads the same revoked state
+PASS M1: a queued old-epoch frame is dropped at the write point after the move
+PASS M1: the move phase reports BLOCKED_BY_POLICY
+PASS M1: even the new epoch cannot write while the policy target is unmet
+PASS M1: returning to the locked target re-arms sending
+PASS M2: follow mode confirms the initial self channel
+PASS M2: confirmed admin move auto-follows and bumps the epoch
+PASS M2: voice keeps flowing from the followed channel without user action
+PASS M3: baseline channel confirmed
+PASS M3: move request submitted
+PASS M3: the move command is tracked for its result
+PASS M3: the request is in flight with the permit revoked
+PASS M3: the async error reply enters the FAILED phase
+PASS M3: the server's rejection reason is preserved for the UI
+PASS M3: repeated reconciliation cycles never re-approve the previous channel
+PASS M3: voice stays dropped across the failure window
+PASS M3: a new request supersedes the failure
+PASS M3: recovery through a fresh confirmed move request
+PASS M4: baseline channel confirmed
+PASS M4: move requested
+PASS M4: permission denial enters the FAILED phase
+PASS M4: still blocked before the user acts
+PASS M4: the explicit stay-here action is accepted
+PASS M4: sending resumes in the current channel after the user action
+PASS M5: baseline channel confirmed
+PASS M5: move requested, no reply scripted
+PASS M5: the unanswered request ends in FAILED, not a silent re-approval
+PASS M5: no transmit permission after the timeout
+PASS M5: the timeout block survives further reconciliation cycles
+PASS M6: an ambiguous initial target enters the FAILED phase
+PASS M6: the ambiguity is reported with the offending name
+PASS M6: no transmit permission leaks while the target is ambiguous
+PASS M6: stay-here accepted
+PASS M6: the user can resume in the current channel
+PASS M7: a missing initial target stays in RESOLVING
+PASS M7: no transmit permission while the initial target is unresolved
+PASS M8: baseline channel confirmed
+PASS M8: request A (cid 6)
+PASS M8: request B (cid 7) supersedes A
+PASS M8: each request carries its own result future
+PASS M8: the superseded request's late rejection is discarded
+PASS M8: the superseded request's late success is discarded too
+PASS M8: the stale observation for A's channel does not approve
+PASS M8: B's own reply and self-confirmation complete the move
+Route move lifecycle regression: all checks passed
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS O1: native SVC receive is open in SVC mode
+PASS O1: OFF engages the native receive gate
+PASS O1: OFF records the extension's own mute override
+PASS O1: switching back to SVC reopens the gate
+PASS O1: recovery clears only the extension override, never user settings
+PASS O2: OFF closes and clears queued native playback channels
+PASS O3: session reaches the network
+PASS O3: TS session connects
+PASS O3: TS mode suppresses native SVC receive (single-listen default)
+PASS O3: PAUSED with no selected backend does not listen to SVC (no implicit restore)
+PASS O4: OFF engages and stops the TS session
+PASS O4: an explicit TS reconnect clears OFF but keeps single-listen (SVC gate closed)
+PASS O5: OFF persists across a server change (gate still engaged)
+PASS O6: session reconnected
+PASS O6: OFF stops the TS session (inbound and outbound)
+PASS O6: switch back to SVC restores the pre-OFF receive state
+Off gate regression: all checks passed
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS S1: SVC selected -> native SVC receive open
+PASS S1: TS session connects
+PASS S1: TS selected -> native SVC receive suppressed (single-listen default)
+PASS S2: after switching to SVC the native receive reopens
+PASS S2: a TS frame after the switch to SVC is consumed at the gate (not played)
+PASS S3: TS session reconnects
+PASS S3: TS selected again -> SVC receive suppressed
+PASS S4: disconnect enters PAUSED (no active backend)
+PASS S4: PAUSED with no selected backend does not listen to SVC (explicit switch required)
+PASS S4: PAUSED consumes TS frames at the gate (no listening backend)
+PASS S5: backend switching never engages the OFF mute override
+ALL PASS
+PASS R21: session start allocates from the global counter
+PASS R21: legal target confirmed
+PASS R21: second target confirmed
+PASS R21: third target confirmed
+PASS R21: confirmed channel changes strictly advance the epoch
+PASS R21: repeated observation accepted
+PASS R21: unchanged channel observation does not advance the epoch
+PASS R21: new session epoch strictly greater than every old-session epoch (6 > 4)
+PASS R21: stale-session write permit is denied after session switch
+PASS R21: new session has no write permit before channel confirmation
+PASS R21: new session confirms its target
+PASS R21: confirmed new session holds the write permit
+PASS R21: illegal channel observation denied
+PASS R21: illegal observation revokes the permit
+PASS R21: revocation advances the epoch
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS R27: valid announcement accepted (entering pending consent)
+PASS R27: malformed frame #0 rejected without exception
+PASS R27: malformed frame #1 rejected without exception
+PASS R27: malformed frame #2 rejected without exception
+PASS R27: malformed frame #3 rejected without exception
+PASS R27: malformed frame #4 rejected without exception
+PASS R27: malformed frame #5 rejected without exception
+PASS R27: malformed frame #6 rejected without exception
+PASS R27: malformed frame #7 rejected without exception
+PASS R27: malformed frame #8 rejected without exception
+PASS R27: malformed frames did not disturb the received snapshot
+PASS R23: untrusted announcement surfaces as pending consent
+PASS R23: explicit accept authorizes the received snapshot
+PASS R23: accepted candidates leave the pending state
+PASS R23: accepted candidates are authorized for selection
+PASS R23: second announcement enters pending consent
+PASS R23: explicit reject records the decision
+PASS R23: rejected candidates no longer pending in this context
+PASS R23: reject does not disturb earlier authorization
+PASS R23: authorization binds the actually-received snapshot
+ALL PASS
+ע: teamspeak-svc\src\main\java\com\tsvoice\client\ts3voice\Ts3Crypt.javaʹ�û򸲸����ѹ�ʱ�� API��
+ע: �й���ϸ��Ϣ, ��ʹ�� -Xlint:deprecation ���±��롣
+PASS L: writer drains the init packet
+PASS L: writer is parked inside the in-flight frame
+PASS L: writer resumes after the boundary
+PASS L: the frame already in flight before the boundary is sent (recorded limitation)
+PASS L: queued old-epoch frames never reach the transport after the switch
+PASS L: new-route frames flow after the channel switch
+PASS L: stale-epoch and unbound (not-ready) frames are dropped fail-closed
+PASS L: control command crosses the same writer boundary
+Connection linearization regression: all checks passed
+PASS R: locked target 5 is confirmed by the production coordinator
+PASS R: the route is ready for the confirmed locked channel
+PASS R: writer drains the init packet
+PASS R: writer is parked inside the in-flight old-epoch frame
+PASS R: the illegal channel observation is denied by the locked policy
+PASS R: the denial revoked the transmit permit (D04 probe reproduction)
+PASS R: the denial advanced the route epoch
+PASS R: writer resumes after the boundary
+PASS R: the frame already in flight before the denial is sent (recorded limitation)
+PASS R: queued old-epoch frames die at the real write point after the denial
+PASS R: the new session re-confirms its locked target
+PASS R: a new session issues a globally fresh write epoch
+PASS R: an old-session frame can never match the new route epoch
+PASS R: frames bound to the live session's epoch flow through
+Route epoch revocation regression: all checks passed

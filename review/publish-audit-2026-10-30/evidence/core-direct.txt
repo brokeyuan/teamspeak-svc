@@ -1,0 +1,3 @@
+Protocol tests passed: 108
+Identity trust regression passed: 15 checks
+Capability wire regression passed: 22 checks

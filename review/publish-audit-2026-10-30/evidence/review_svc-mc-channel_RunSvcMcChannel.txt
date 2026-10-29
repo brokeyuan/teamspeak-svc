@@ -1,0 +1,48 @@
+PASS W: voice payload bound is 8 KiB (SVC NetworkMessage envelope far smaller)
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS R1: 100 concurrent session addresses are collision-free (no UUID.hashCode%65535)
+PASS R2: unannounced player is not an MC-channel player
+PASS R2: announced player routes via MC channel
+PASS R3: outbound to an MC-channel player is taken over
+PASS R3: outbound to a UDP player is untouched (per-player routing, no global switch)
+PASS R4: adapter tracks exactly the announced sessions (100 R1 + 1 R2)
+PASS R5: disconnect reclaims the session address
+PASS R5: outbound after disconnect is not taken over (SVC keepalive owns timeouts)
+PASS R6: a reconnected player gets a fresh session address (old address not reused)
+PASS R7: absent SVC server makes the downstream no-op (basic TS path unaffected)
+PASS R8: reset clears all sessions
+ALL PASS
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS C1: initialization event receives a socket
+PASS C1: registered socket is the session-scoped implementation
+PASS C2: before MC_CHANNEL announcement the socket delegates to native UDP (echo round-trip)
+PASS C3: MC_CHANNEL announcement activates the channel
+PASS C3: after announcement send goes through the MC bridge (not UDP)
+PASS C3: S2C receiver feeds the socket queue (production handler path)
+PASS C4: announcement before initialization still registers a socket
+PASS C4: late registration still receives downstream frames
+PASS C5: UDP announcement keeps native transport
+PASS C6: precondition - channel active
+PASS C6: MC disconnect resets the channel state
+PASS C6: socket is closed on disconnect (no stale bridge)
+PASS C6: downstream after disconnect is dropped (no cross-world queue)
+PASS C7: fresh socket stays in UDP mode (frames dropped, not queued)
+PASS C7: session socket queue delivers frames in order (MC mode)
+PASS C7: read after close fails fast (SVC reader thread exits)
+PASS S1: two connections registered back-to-back get independent sessions
+PASS S2: reconnect of the same player gets a fresh session id
+PASS S2: the old connection is retired by the new registration
+PASS S2: the new connection is the active session
+PASS S3: disconnect reclaims the session
+PASS S3: a reclaimed address is not immediately reused (stale-packet protection)
+PASS S4: synthetic MC-channel address is unresolved (never DNS-resolved)
+PASS S4: synthetic address construction is deterministic
+PASS S5: a server-instance change clears registrations (no cross-world state)
+PASS S6: svc-extra ownership disables this adapter's registration
+PASS S6: no session is registered while svc-extra owns the SVC domain
+PASS S6: without svc-extra the adapter registers normally
+ALL PASS

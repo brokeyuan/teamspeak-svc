@@ -1,0 +1,17 @@
+PASS authoritative snapshot filters group A members
+PASS authoritative snapshot filters group B members
+PASS null group id targets nobody
+PASS populated snapshot reports MEMBERS
+PASS UNKNOWN keeps last snapshot filtered to the requested group
+PASS UNKNOWN never includes members of another group
+PASS UNKNOWN keeps other groups filtered as well
+PASS UNKNOWN stale snapshot targets nobody
+PASS stale snapshot reports UNKNOWN
+PASS republish refreshes the snapshot TTL
+PASS authoritative stale snapshot targets nobody
+PASS authoritative stale snapshot reports UNKNOWN
+PASS authoritative empty snapshot targets nobody
+PASS authoritative empty snapshot reports EMPTY
+PASS group switch moves the member between groups
+PASS reset returns to unknown and empty
+BridgeMembership regression: all checks passed

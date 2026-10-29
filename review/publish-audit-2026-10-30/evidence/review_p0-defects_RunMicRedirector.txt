@@ -1,0 +1,20 @@
+teamspeak-svc\src\main\java\com\tsvoice\client\TsVoiceManager.java:1287: ����: �Ҳ�������
+        if (!ClientPlayNetworking.canSend(TsRelayPayloads.RelayOpenPayload.TYPE)) {
+                                 ^
+  ����:   ���� canSend(Type<RelayOpenPayload>)
+  λ��: �� ClientPlayNetworking
+teamspeak-svc\src\main\java\com\tsvoice\client\TsVoiceManager.java:1452: ����: �Ҳ�������
+        if (session != null && ClientPlayNetworking.canSend(TsRelayPayloads.RelayClosePayload.TYPE)) {
+                                                   ^
+  ����:   ���� canSend(Type<RelayClosePayload>)
+  λ��: �� ClientPlayNetworking
+ע: review\p0-defects\stubs\net\fabricmc\fabric\api\client\networking\v1\ClientPlayNetworking.javaʹ����δ�����򲻰�ȫ�Ĳ�����
+ע: �й���ϸ��Ϣ, ��ʹ�� -Xlint:unchecked ���±��롣
+2 ������
+Mic redirect regression compilation failed
+At C:\Users\Administrator\AppData\Local\Temp\tsvoice-publish-audit-20261030-54bdae391ee94a2f85f2018dec1b9a96\source\rev
+iew\p0-defects\RunMicRedirector.ps1:177 char:28
++ ... XITCODE -ne 0) { throw 'Mic redirect regression compilation failed' }
++                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Mic redirect re...pilation failed:String) [], RuntimeException
+    + FullyQualifiedErrorId : Mic redirect regression compilation failed
