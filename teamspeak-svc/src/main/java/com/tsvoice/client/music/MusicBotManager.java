@@ -61,6 +61,11 @@ public final class MusicBotManager {
 
     // ---- 状态查询（UI/命令反馈） ----
 
+    /** G6：当前活跃会话（UI/音量派生用；无则 null）。 */
+    public static MusicSession activeSession() {
+        return ACTIVE.get();
+    }
+
     public static boolean isActive() {
         MusicSession s = ACTIVE.get();
         return s != null && s.state() != MusicSession.State.CLOSED
@@ -136,6 +141,22 @@ public final class MusicBotManager {
             throw new BotStateException("volume must be 0..100");
         }
         localVolumePercent = percent;
+        // G6/P2-05：写入实际本机收听链（SVC 参与者音量存储；键 = serverUID +
+        // Bot TS UID 稳定派生）。重连后由播放通道重放；不影响发送。
+        applyListeningGain();
+    }
+
+    /** 音量/静音应用到 Bot 参与者键（identity 快照可用时）。 */
+    private static void applyListeningGain() {
+        var session = ACTIVE.get();
+        var snapshot = session == null ? null : session.botIdentitySnapshot();
+        if (snapshot == null || snapshot.serverUid() == null || snapshot.tsUid() == null) {
+            return; // 未连接或身份未就绪：连接确认后由 UI/播放重放
+        }
+        var key = com.tsvoice.client.TsAudioInjector.participantUuidFor(
+                snapshot.serverUid(), snapshot.tsUid());
+        com.tsvoice.client.ParticipantVolumeControl.setVolume(key, localVolumePercent / 100.0);
+        com.tsvoice.client.ParticipantVolumeControl.reapply(key);
     }
 
     public static int volume() {
@@ -203,6 +224,7 @@ public final class MusicBotManager {
                         channel == null ? "" : channel, connection);
                 session = new MusicSession(host, port, nickname, null);
                 MusicSendPermit permit = MusicBotAssembly.assemble(session, client, serverUid);
+                session.setBotTsUid(identity.getClientUid());
                 session.setEncoderFactory(() -> {
                     de.maxhenkel.voicechat.api.VoicechatClientApi api = TeamspeakSvcClient.clientApi();
                     if (api == null) {

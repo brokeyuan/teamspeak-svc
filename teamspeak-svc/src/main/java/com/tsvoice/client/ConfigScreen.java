@@ -224,6 +224,12 @@ public class ConfigScreen extends Screen {
         }).bounds(cx - 100, y, 200, 20).build();
         addRenderableWidget(connectBtn);
 
+        // G6/P2-05：可发现的音乐 Bot 入口（独立页面；UI 与命令同业务操作）
+        y += 24;
+        addRenderableWidget(Button.builder(Component.literal("Music Bot..."), b ->
+                Minecraft.getInstance().setScreenAndShow(new com.tsvoice.client.music.MusicScreen())
+        ).bounds(cx - 100, y, 200, 20).build());
+
         y += 24;
 
         // 三个独立语音操作（D1/T09）：断开 TS / 切换 SVC / 关闭全部语音 —— 不合并、

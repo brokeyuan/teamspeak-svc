@@ -213,6 +213,25 @@ public final class MusicSession implements AutoCloseable {
         return pc == null ? null : pc.permit;
     }
 
+    /** G6 音量键来源：Bot 绑定房间的 serverUID + Bot TS UID（未确认时 null）。 */
+    public record BotIdentitySnapshot(String serverUid, String tsUid) {
+    }
+
+    public BotIdentitySnapshot botIdentitySnapshot() {
+        ProductionConnection pc = productionForTest();
+        if (pc == null) {
+            return null;
+        }
+        return new BotIdentitySnapshot(pc.boundServerUid, botTsUid);
+    }
+
+    /** Bot 自己的 TS UID（identity 派生；attach 后由 BotManager 设置）。 */
+    private volatile String botTsUid;
+
+    public void setBotTsUid(String uid) {
+        this.botTsUid = uid;
+    }
+
     /** 房间绑定（授权 serverUID/cid）；Bot 被移出该房间即停（F5 边界）。 */
     public void bindRoom(String serverUid, int channelId) {
         ProductionConnection pc = production;
