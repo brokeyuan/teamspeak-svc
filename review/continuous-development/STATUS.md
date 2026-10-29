@@ -1,64 +1,87 @@
 基线 / 当前提交：
-`b732169`（开工）→ `3976267`（N0–N7 全部提交；提交表见
-review/engineering-closeout/DELIVERY.md）。
+`f32416c`（post-m7 复核基线）→ `a979efc`（S0 全部七项关闭）。
+本轮工作区还携带未提交的任务书/复核报告文档（用户提交进来的）。
 
 当前阶段 / 当前任务：
-阶段 A（N0–N7 工程收尾）与阶段 B（M7 统一发布 T14.1–T14.6/T14.8）已完成；
-真实安装矩阵（M7-E01–E12/T14.7）待用户恢复真机验收。下一段可继续的工作：
-M7 真机矩阵补验（需用户环境）、随后沿队列 C（M9/P6 TS over MC TCP）推进。
+S0（post-m7-transport-execution-plan 第 2 节）已完成并提交；下一步为
+S1（TS_MC_CHANNEL 完整工程路径），随后 S2（SVC_MC_CHANNEL）。阶段是检查点
+不是停工点。
 
-已完成的生产路径：
-- D01–D05 全部关闭（工程层）：独立 AudioChannel 播放 / 失效租约接管 / OFF
-  processSoundPacket HEAD mixin 门控 / 策略拒绝原子撤销+全局单调写出代际 /
-  clientmove 命令关联与 FAILED 持续阻断。
-- T09/T10/T12 生产接线：书签 schema v3 + 列表/编辑屏 + VoiceStatusModel、
-  频道页（cid 加入/锁定/stay-here/参与者 UUID 用户列表）、能力公告链
-  （hello→公告→信任授权→候选选择）+ FailureKind 分类 + 退避 jitter。
+已完成的生产路径（S0，提交 a979efc）：
+- R21/P1：confirmChannel 的代际分配并入全局 ROUTE_EPOCH 单点（原先局部 +1
+  在多次管理员移动后回退/重复）；BackendCoordinator.writePermittedFor(session)
+  + writer supplier 绑定 sessionLoop 捕获的本代 token —— 旧会话帧即使与新
+  会话 epoch 数值重合也不能发送。
+- R27/P1：onCapabilitiesAnnouncementFrame 对 decode 返回 null 显式拒绝，
+  Fabric 接收任务不再 NPE；9 类畸形帧（空/短/坏 magic/major/TTL/计数/截断）
+  安全返回且不扰动已接收快照。
+- R22：ServerRuntime 在 start 时固定 dedicated/integrated 环境；初始状态、
+  reload、无效配置恢复统一走 computeStatus，集成默认关闭门不再被 reload 绕过；
+  显式 integratedServerEnabled=true/off 按 reload 生效；dedicated 不受影响。
+- R23：新增 CapabilityConsentScreen（接受/记住/拒绝），授权动作绑定实际接收
+  快照 + context；拒绝本 context 内不再弹窗；记住只记 TS_ENDPOINT（不自动批准
+  同地址未来能力）；/tsvoice trust-announce 手动入口。
+- R24：EndpointCredentialStore 增加按 ref 的 get/set/copyEndpointToRef 与受控
+  identities/ 目录解析（拒绝路径分隔符/网络地址）；书签保存保留既有
+  credentialRef/identityRef 不再写 null；连接按 ref 解析凭据与身份，同 host:port
+  两个书签独立；首次保存复制全局 identity.txt 为书签私有身份（全局身份不动）。
+- R25：TsChannelsScreen 重写：分页（全部频道可达）、目标频道独立密码输入、
+  创建表单（名称/父频道/可选密码，异常进错误反馈行）、逐用户音量/静音
+  （ParticipantVolumeControl，写入 SVC player-volume 存储，参与者键稳定、
+  重连重放）；创建父频道按名解析歧义/缺失明确报错。
+- R26：RuntimeDependencies 语义版本谓词（仅 2.6.20 ≤ v < 2.7.0；2.6.1/2.60.x/
+  2.7.0/解析失败拒绝）；TsProtocolException 携带结构化 TS error id/msg；
+  classifyConnectFailure 类型优先：IO/DNS 可重试、服务器协议拒绝
+  PROTOCOL_REJECTED（终止）、未知异常 INTERNAL（可重试但不再冒充
+  NETWORK_TIMEOUT/UDP 不通）。
 
 本次实际测试与证据路径：
-- review/RunAll.ps1 v2：core 先行 + 23 组 harness（含 m7-unified-release/RunM7）。
-- M7 候选产物 teamspeak-svc-0.9.8+26.3.jar SHA-256
-  2E8BFE430DE304138E240973455CDE084AB45363D76F3C178A536D2CF64ACE73
-  （取代 N7 阶段哈希 5FA9DF88…，N7 记录保留为历史）。
-- 新增回归：RouteMoveLifecycleTest(M1–M8)、RouteEpochRevocationTest(R)、
-  FrontendLeaseTest(39 项)、OffGateTest(O1–O6)、GuiFlowTest(G/C/D 段)。
+- review/s0-closeout/route-lifecycle-s0.log：RouteLifecycle + Bookmark +
+  QueuedVoice + RouteMoveLifecycle + OffGate + 新 S0FixRegressionTest
+  （R21 单调性/会话绑定许可、R27 畸形公告、R23 授权流）全部 PASS（82 项）。
+- review/s0-closeout/gui-integration-r26.log：GuiFlowTest + 新
+  R26CompatibilityTest（版本谓词 + 分类）全部 PASS（82 项）。
+- review/s0-closeout/m7-r22.log：AnnouncerTest 扩展 R22 段（reload 不绕过
+  集成门、显式开/关、恢复路径、dedicated 不受门影响）全部 PASS。
+- 其余受影响套件复跑零 FAIL：client-fixes、p0-defects、p1-isolation、
+  p3-config、session-consumption、upload-confirmation、p3-channel、
+  p4-discovery、p1-playback、playback-ownership、standalone-frontend、
+  channel-fixes（Mapper/Protocol）。
+- ts3voice-core gradle test：145 项 PASS；teamspeak-svc gradle build 成功。
+- 候选 JAR 重新生成：teamspeak-svc-0.9.8+26.3.jar
+  SHA-256 df5f5af9a421e9e5b966469f29412a018d7c354ef033ad18ffa8c60c92ea6db7
+  （S0 代码变更，M7 哈希不能沿用；交付前以最终提交重算）。
 
-客户端暂缓项：
-E01–E15 / U01–U06 全部"用户主动暂缓"，原编号与步骤保留在
-review/engineering-closeout/DEFERRED-CLIENT-ACCEPTANCE.md。
+客户端暂缓项（用户主动暂缓，编号保留）：
+E01–E15 / U01–U06 不变；本轮新增 UI（Consent 屏、频道页表单/分页/音量）的
+真实渲染/点击同样暂缓，动作控制流已由 harness 覆盖。
 
 局部阻塞及不受影响的任务：
-- M6 产品闭环与 M7 完整安装矩阵依赖真机（暂缓），不阻塞 M7 的构建/装载隔离/
-  服务端生命周期等工程工作。
-- 公告候选的用户显式授权界面未交付（未信任候选保持未授权+日志）——归入 M7
-  界面工作。
-- 频道页列表超 8 条无分页（已记录）。
+- RunAll 全量在个别环境曾因 HttpClient/loopback 初始化失败；本轮按套件分跑
+  全部真实通过，未伪报全绿。后续仍以 review/RunAll.ps1 为最终门。
+- 未解决：本轮未重跑 m7-unified-release 的 RunM7 产物段（需要 gradle 完整
+  构建+clean-copy；S0 提交后哈希已变化）。下轮 RunAll 时以最终 HEAD 重算。
 
 下一条具体动作（文件、方法、验证命令）：
-等用户恢复真机验收后执行 M7-E01–E12 矩阵（review/m7-unified-release/STATUS.md
-未验证清单）；工程侧可继续队列 C 的技术准备：TS3 over MC TCP 的最小数据报往返
-原型（TcpTransport 之上的 per-connection 帧格式冻结前不做生产代码）。验证命令：
-`powershell -NoProfile -ExecutionPolicy Bypass -File review/RunAll.ps1`（23 组全绿）。
-
-本轮新增或修订的技术决策（M7）：
-- 唯一 JAR：environment="*"；main（com.tsvoice.TeamspeakSvcMod，无 SVC 引用）/
-  client（bootstrap.ClientEntrypoint 依赖校验后委托）/ voicechat（compat 门面，
-  服务端只占稳定 ID）三入口；SVC 从全局 depends 移除，客户端以元数据检查明确校验。
-- payload 注册唯一所有者：common/net/CapabilitiesPayloads，主入口一次注册。
-- 服务端公告：server/ServerConfig（schema v1 + legacy 备份迁移 + 未实现 kind 诊断）、
-  CapabilityAnnouncer（nonce 回显、2/s 突发 4 限流）、ServerRuntime（四状态、
-  每 MinecraftServer 实例、集成服务器默认门）、/tsvoice-server status|reload。
-- breaks: voice-capabilities（旧公告 mod 冲突声明）。
+S1.1：明确传输类型（TS_UDP / TS_MC_CHANNEL / TS_TUNNEL_V1）迁移 boolean tcp；
+Ts3VoiceClient 增加传输注入入口（保留旧构造器委托）；新增
+teamspeak-svc/src/main/java/com/tsvoice/client/ts3voice/TsMcChannelTransport.java；
+S1.2：ts3voice-core 新增 protocol/relay/TsRelayWire.java + J/common/net/
+TsRelayPayloads.java（CAPABILITIES/OPEN/OPENED/DATA/ROUTE_BARRIER/CLOSE/
+CLOSED/ERROR，方向化注册）；S1.3：server/relay/{TsRelayRuntime,TsRelaySession}
+per-session connected UDP socket；S1.5：review/ts-mc-relay/RunTsMcRelay.ps1
+（echo/两会话/allowlist/伪造 sessionId/限额/回收）。验证命令：套件逐一
+powershell -NoProfile -ExecutionPolicy Bypass -File review/<suite>/<Run>.ps1，
+最终门 powershell -NoProfile -ExecutionPolicy Bypass -File review/RunAll.ps1。
 
 本轮新增或修订的技术决策：
-- routeEpoch 全局单调（跨会话不复位）＝ 会话绑定的写出许可（N1）。
-- clientmove 全部经命令 tracker（return_code 关联），移动结果与 self 频道确认
-  分离；失败进入 FAILED 持续阻断，恢复=新请求确认或用户 acceptCurrentChannel（N1）。
-- TS 下行播放不经 processSoundPacket：适配器自有 AudioChannel（null
-  InitializationData，2.6.25 字节码零读取已核）；诊断分级
-  attempts/enqueued/resourceFailures（N2）。
-- OFF = 协调器意图直读门控（mixin HEAD）+ 原生通道队列清空；无第二份状态（N3）。
-- 删除"正在使用"的书签 → PAUSED（不静默换目标）（N4）。
-- 公告授权沿用信标信任模型：仅预信任 endpoint 自动授权；同 nonce 更新公告合法、
-  字节级重放拒绝（N6）。
-- 连接失败统一 FailureKind；认证/密码/权限/封禁/版本终止重试（N6）。
+- routeEpoch：任何路由代际写入只经 nextRouteEpoch()；不变观察不递增；
+  writer 许可 = 全局 epoch + 会话绑定双条件（S0.1）。
+- 集成服务器门属于"环境"而不是"启动时刻动作"：环境不可变、参与每次状态计算
+  （S0.3）。applyIntegratedServerGate() 保留为兼容 no-op。
+- SVC 版本支持范围 = [2.6.20, 2.7.0)（有工程证据的语义区间；新系列须重做
+  ABI 核对后再放宽）（S0.7）。
+- 服务器结构化协议拒绝（TsProtocolException）默认终止重试（PROTOCOL_REJECTED），
+  数值 id 语义未经真实协议资料核实前只传递不解释（S0.7）。
+- 书签 credentialRef/identityRef：ref 键与 endpoint 键共存（"ref:" 前缀），
+  迁移只复制不删除；身份引用限定受控 identities/ 目录，缺失明确报错（S0.5）。
