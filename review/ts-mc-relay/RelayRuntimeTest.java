@@ -87,7 +87,7 @@ public class RelayRuntimeTest {
                 TsRelayRuntime.MAX_SESSIONS_GLOBAL,
                 new TsRelayRuntime.Limits(TsRelayWire.MAX_DATAGRAM_BYTES,
                         TsRelayRuntime.MAX_DATAGRAMS_PER_SECOND,
-                        TsRelayRuntime.MAX_BYTES_PER_SECOND));
+                        TsRelayRuntime.MAX_BYTES_PER_SECOND), false);
     }
 
     static byte[] openFrame(int requestId, String targetId) {
@@ -252,7 +252,7 @@ public class RelayRuntimeTest {
                 TsRelayRuntime.MAX_SESSIONS_GLOBAL,
                 new TsRelayRuntime.Limits(TsRelayWire.MAX_DATAGRAM_BYTES,
                         TsRelayRuntime.MAX_DATAGRAMS_PER_SECOND,
-                        TsRelayRuntime.MAX_BYTES_PER_SECOND));
+                        TsRelayRuntime.MAX_BYTES_PER_SECOND), false);
         TsRelayRuntime runtime3 = new TsRelayRuntime(new RecordingSink(), badDns);
         TsRelayRuntime.OpenResult r3 = runtime3.onOpen("conn-R", "player-R", openFrame(1, "bad-dns"));
         check(!r3.ok(), "R6: unresolvable target yields ERR_TARGET_UNAVAILABLE (DNS stays server-side)");

@@ -78,6 +78,12 @@ public final class ServerConfig {
         public int maxSessions = 64;
         /** SVC_MC_CHANNEL 服务端适配（S2/P5）：默认关闭；需要 SVC 服务端在场。 */
         public boolean svcMcChannelEnabled = false;
+        /**
+         * MUSIC_BOT 第二中继会话（F5/Music-1）：默认关闭。启用后音乐 Bot 可经
+         * MC 通道中继其独立 TS 会话（与 PLAYER_VOICE 分桶登记、分 purpose 限额；
+         * 不借用 SVC 音乐/媒体桥接名义 —— 这是 TS relay 的第二会话授权）。
+         */
+        public boolean musicBotEnabled = false;
     }
 
     public int schemaVersion = SCHEMA_VERSION;

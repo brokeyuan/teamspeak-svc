@@ -35,7 +35,7 @@ public class RelayMusicBotPurposeTest {
                 TsRelayRuntime.MAX_SESSIONS_GLOBAL,
                 new TsRelayRuntime.Limits(TsRelayWire.MAX_DATAGRAM_BYTES,
                         TsRelayRuntime.MAX_DATAGRAMS_PER_SECOND,
-                        TsRelayRuntime.MAX_BYTES_PER_SECOND));
+                        TsRelayRuntime.MAX_BYTES_PER_SECOND), false);
     }
 
     public static void main(String[] args) throws Exception {
@@ -78,6 +78,25 @@ public class RelayMusicBotPurposeTest {
         check(runtime.sessionCount() == 1,
                 "S: exactly the one PLAYER_VOICE session exists after the MUSIC_BOT rejection");
         runtime.close();
+
+        // ---- E8b：musicBotEnabled=true 时 MUSIC_BOT 可通过 purpose 门 ----
+        TsRelayRuntime enabledRuntime = new TsRelayRuntime((id, p2, d) -> true,
+                new TsRelayRuntime.RelayConfig(true,
+                        Map.of("ts", new TsRelayRuntime.RelayConfig.RelayTargetConfig("127.0.0.1", 50000)),
+                        TsRelayRuntime.MAX_SESSIONS_GLOBAL,
+                        new TsRelayRuntime.Limits(TsRelayWire.MAX_DATAGRAM_BYTES,
+                                TsRelayRuntime.MAX_DATAGRAMS_PER_SECOND,
+                                TsRelayRuntime.MAX_BYTES_PER_SECOND),
+                        true));
+        var enabledOpen = enabledRuntime.onOpen("conn-e8b", "player-e8b", TsRelayWire.encodeOpen(
+                new TsRelayWire.OpenFrame(1, "ts", TsRelayWire.Purpose.MUSIC_BOT)));
+        TsRelayWire.Decoded enabledErr = enabledOpen.ok() ? null
+                : TsRelayWire.decode(enabledOpen.errorFrame());
+        check(enabledOpen.ok() || (enabledErr != null
+                        && enabledErr.error().stableErrorCode() == TsRelayWire.ERR_TARGET_UNAVAILABLE),
+                "E8b: musicBotEnabled=true passes MUSIC_BOT through the purpose gate "
+                        + "(fails later only on reachability)");
+        enabledRuntime.close();
 
         System.out.println(failures == 0 ? "ALL PASS" : failures + " FAILURES");
         if (failures > 0) {

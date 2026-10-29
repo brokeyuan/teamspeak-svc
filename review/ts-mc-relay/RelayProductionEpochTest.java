@@ -57,7 +57,7 @@ public class RelayProductionEpochTest {
         return new TsRelayRuntime.RelayConfig(true,
                 Map.of("ts", new TsRelayRuntime.RelayConfig.RelayTargetConfig("127.0.0.1", port)),
                 TsRelayRuntime.MAX_SESSIONS_GLOBAL,
-                new TsRelayRuntime.Limits(TsRelayWire.MAX_DATAGRAM_BYTES, pps, bps));
+                new TsRelayRuntime.Limits(TsRelayWire.MAX_DATAGRAM_BYTES, pps, bps), false);
     }
 
     static byte[] open(int id) {

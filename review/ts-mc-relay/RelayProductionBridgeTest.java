@@ -62,7 +62,7 @@ public class RelayProductionBridgeTest {
         return new TsRelayRuntime.RelayConfig(true,
                 Map.of("ts", new TsRelayRuntime.RelayConfig.RelayTargetConfig("127.0.0.1", port)),
                 TsRelayRuntime.MAX_SESSIONS_GLOBAL,
-                new TsRelayRuntime.Limits(TsRelayWire.MAX_DATAGRAM_BYTES, pps, 512 * 1024));
+                new TsRelayRuntime.Limits(TsRelayWire.MAX_DATAGRAM_BYTES, pps, 512 * 1024), false);
     }
 
     /**

@@ -74,7 +74,8 @@ public final class ServerRuntime implements AutoCloseable {
         return new TsRelayRuntime.RelayConfig(true, java.util.Map.copyOf(targets),
                 config.relay.maxSessions,
                 new TsRelayRuntime.Limits(config.relay.maxDatagramBytes,
-                        config.relay.maxDatagramsPerSecond, config.relay.maxBytesPerSecond));
+                        config.relay.maxDatagramsPerSecond, config.relay.maxBytesPerSecond),
+                config.relay.musicBotEnabled);
     }
 
     /** 当前 TS 中继运行时（主入口 payload 接收/诊断；默认关闭时仍可安全调用）。 */

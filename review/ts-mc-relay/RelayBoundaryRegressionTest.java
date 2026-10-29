@@ -64,7 +64,7 @@ public class RelayBoundaryRegressionTest {
         return new TsRelayRuntime.RelayConfig(true,
                 Map.of("ts", new TsRelayRuntime.RelayConfig.RelayTargetConfig("127.0.0.1", port)),
                 TsRelayRuntime.MAX_SESSIONS_GLOBAL,
-                new TsRelayRuntime.Limits(maxBytes, pps, 512 * 1024));
+                new TsRelayRuntime.Limits(maxBytes, pps, 512 * 1024), false);
     }
 
     static byte[] open(int id) {

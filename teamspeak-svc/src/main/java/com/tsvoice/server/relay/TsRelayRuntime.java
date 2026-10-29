@@ -98,7 +98,7 @@ public final class TsRelayRuntime {
 
     /** 运行配置（管理员 allowlist + 总量上限）。 */
     public record RelayConfig(boolean enabled, Map<String, RelayTargetConfig> targets,
-                              int maxSessions, Limits limits) {
+                              int maxSessions, Limits limits, boolean musicBotEnabled) {
 
         /** 目标配置条目（targetId → host/port；host 允许内网地址 —— 管理员明确 allowlist）。 */
         public record RelayTargetConfig(String host, int port) {
@@ -106,7 +106,8 @@ public final class TsRelayRuntime {
 
         public static RelayConfig disabled() {
             return new RelayConfig(false, Map.of(), MAX_SESSIONS_GLOBAL,
-                    new Limits(MAX_DATAGRAM_BYTES, MAX_DATAGRAMS_PER_SECOND, MAX_BYTES_PER_SECOND));
+                    new Limits(MAX_DATAGRAM_BYTES, MAX_DATAGRAMS_PER_SECOND, MAX_BYTES_PER_SECOND),
+                    false);
         }
     }
 
@@ -167,7 +168,8 @@ public final class TsRelayRuntime {
         if (!config.enabled()) {
             return failOpen(open, TsRelayWire.ERR_NOT_AUTHORIZED, "relay disabled on this server");
         }
-        if (open.purpose() != TsRelayWire.Purpose.PLAYER_VOICE) {
+        if (open.purpose() != TsRelayWire.Purpose.PLAYER_VOICE
+                && !(open.purpose() == TsRelayWire.Purpose.MUSIC_BOT && config.musicBotEnabled())) {
             return failOpen(open, TsRelayWire.ERR_NOT_AUTHORIZED, "purpose not enabled");
         }
         if (open.targetId() == null || open.targetId().isBlank()) {
