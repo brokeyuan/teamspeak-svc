@@ -1,4 +1,62 @@
 基线 / 当前提交：
+`81c687c`（post-81c687c 复核基线）→ 本轮（2026-10-29 执行任务书 E0–E9）：
+`dfbfd5f`(E1/T31) → `d6a9b9e`(E2/T36) → `5ecb27b`(E3/T32+T34) → `49ee583`(E4/T33+T35)
+→ `39aacb5`(E5) → `2e9b08d`(E6/T37) → `2a4d615`(E7/T38) → `06c35d8`(E8 基础)
+→ `50cff46`(E9 harness 修复)。全部独立提交，反例先行。
+
+当前阶段 / 当前任务：
+T31–T38 全部关闭（见 review/reliability-music-next/DELIVERY.md 的逐项证据表）。
+RunAll 全量门 PASS（core test + 26 套件，exit 0；evidence/e9-runall.log）。
+下一条：Music-1 继续 —— Bot 加入明确 serverUID/cid 房间（MusicSession 生产
+connect() 接线）、开启/暂停/继续/下一首/停止/队列入口、host 离开默认停 Bot；
+MUSIC_BOT purpose 授权开关配置节（服务端）。
+
+本轮（E0–E9）关键修复摘要：
+- E1/T31：mixin config package 修正 + TsVoiceMixinPlugin（SVC 目标 mixin 条件
+  应用）+ RunM7 逐条 FQN→JAR entry 断言（负例已验证 FAIL）。dedicated 无 SVC/
+  有 SVC 两种矩阵真实启动验证（mixin error=0；testserver 已恢复原状）。
+- E2/T36：SvcMcChannelSocket 双模（原生 UDP 委托默认 → 宣告后单向 MC），宣告/
+  初始化顺序无关；S2C/config receiver 生产接线；服务端登记 server+connection、
+  地址回收不复用、createUnresolved 合成地址；svc-extra 让渡。28 断言含真实
+  UDP 回环。
+- E3：TsRelayWire.classifyUpstreamDatagram 唯一外层编码点（raw TS 回包不再被
+  生产 sink 拒绝）；pendingOpens 客户端+服务端按 connection/requestId 精确关
+  联，迟到 OPENED 不批准新尝试。
+- E4：会话级单调 route barrier（旧代际拒绝）；协商 pps token bucket 真实拒绝；
+  服务端/客户端接收统一协商 4096；receive(maxLen) 不足明确失败（不静默裁剪）。
+- E5：默认单后端收听落地 —— 原生 SVC 下行按协调器选中后端判定（TS 选中即压
+  制；PAUSED≠OFF；用户设置不动）。OffGate 断言按已确认产品规则更新。
+- E6/T37：MusicEngine 无损背压（容量判定先于 readFrame，1..6 在容量 1/2/512
+  下完整输出）、close 终态、PAUSED 不忙转（CPU 探针）、playback generation
+  隔离、source 四终态恰好关一次、慢 sink 不阻塞控制面。
+- E7/T38：MusicSession 独立身份面/编码器适配/发送许可绑定；废止"玩家会话并
+  行发送"方向（实施记录已修订）；编码不可用明确失败。
+- E8 基础：Purpose.MUSIC_BOT(2) wire 预留 + 登记按 connection#purpose（玩家
+  语音与音乐 Bot 互不覆盖、断连全回收）；MUSIC_BOT 默认 NOT_AUTHORIZED
+  （受控开放）。
+- E9：E5/E6 生产 hook 传导的 9 个 harness 套件 stub 修复；RunAll 门绿。
+
+本轮实际测试与证据（review/reliability-music-next/evidence/）：
+- e9-runall.log：RunAll 全量 CI-EQUIVALENT PASS（core + 26 套件）。
+- e2-svc-suite.log：40 PASS（真实 loopback UDP）。
+- e3/e4/e8-relay-*.log：64 PASS（四类 relay 回归，含真实 echo）。
+- e6/e7-music-suite.log：47 PASS（引擎+边界+独立会话）。
+- e5-route-lifecycle.log：全 PASS（含 SingleBackendListenTest 11 断言）。
+- e1-dedicated-load.log + e1-*-stdout.log：dedicated 两矩阵启动日志。
+- ts3voice-core gradle test 108 protocol checks PASS；mod gradle build 成功。
+
+客户端暂缓项（不变）：
+真实 MC 网络/真实 TS 服务器端到端、实体音频听感、SVC-Extra 双端实测、
+SVC API OpusEncoder 实机验证、Music-1 UI 验收 —— 均按既定矩阵暂缓，未伪报。
+
+下一条具体动作：
+Music-1：MusicSession.connect() 生产接线（独立 identity + transport 注入
+Ts3VoiceClient 构造器）→ /tsvoice music 命令组（start/pause/resume/next/
+stop/queue）→ 服务端 relay.svcMcChannelMusicEnabled 配置节（默认 false）
++ OPEN purpose 门放行路径。验证：RunMusicCore 增加生产接线回归 +
+RunTsMcRelay MUSIC_BOT 授权用例。
+
+基线 / 当前提交：
 `f32416c`（post-m7 复核基线）→ `a979efc`（S0 全部七项关闭）→ `527d85d`（STATUS）→ `dcea5d8`（S1 TS_MC_CHANNEL 完整工程路径）→ `f7c0d44`（STATUS）→ `07e96f2`（S2 SVC_MC_CHANNEL 自有适配）→ `a5ef77f`（STATUS）→ `1b598ac`（S3 四模式部署表+迁移回归）→ `823ab2f`（S4 Music-0 引擎核心）。
 本轮工作区还携带未提交的任务书/复核报告文档（用户提交进来的）。
 
