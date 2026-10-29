@@ -1,0 +1,40 @@
+plugins {
+    id 'net.fabricmc.fabric-loom' version "${fabric_loom_version}"
+}
+
+version = "${mod_version}+${minecraft_version}"
+group = 'com.tsvoice'
+
+base {
+    archivesName = project.archives_base_name
+}
+
+repositories {
+    mavenCentral()
+    maven {
+        name = 'FabricMC'
+        url = 'https://maven.fabricmc.net/'
+    }
+}
+
+dependencies {
+    // 协议编解码（CapabilityWire）来自共享 core；include 作为 jar-in-jar 分发。
+    implementation 'com.tsvoice:ts3voice-core:0.1.0'
+    include 'com.tsvoice:ts3voice-core:0.1.0'
+
+    minecraft "com.mojang:minecraft:${minecraft_version}"
+    // Minecraft 26.2 是未混淆版本，不需要 mappings 配置
+    implementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 25
+    options.encoding = 'UTF-8'
+}

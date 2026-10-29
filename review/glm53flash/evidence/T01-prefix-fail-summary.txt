@@ -1,0 +1,16 @@
+PASS A: no TS config: SVC native microphone path untouched
+PASS B: configured server reaches CONNECTING
+PASS B: session and route not ready while connecting
+PASS B: frame consumed while TS connecting (no SVC leak)
+PASS C: session reaches CONNECTED
+PASS C: connected session carries the frame to TS only
+FAIL D: after explicit disconnect the frame is dropped, not sent to SVC
+PASS E: reconnect after disconnect reaches CONNECTING
+FAIL E (R01): reconnecting TS consumes frames, gate not stuck on SVC_NATIVE
+PASS F: reconnect reaches CONNECTED
+FAIL F: reconnected session carries the frame to TS only
+FAIL G1: disconnect persists across MC server change (no SVC leak)
+PASS G2: returning to a configured server does not auto-resume voice
+PASS G3: SVC reconnect events do not override the pause
+FAIL H: failed connect enters RECONNECTING
+PASS H: frames stay dropped while the TS session retries

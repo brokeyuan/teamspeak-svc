@@ -1,0 +1,17 @@
+ע: C:\Users\Administrator\AppData\Local\Temp\tsvoice-publish-audit-20261030-54bdae391ee94a2f85f2018dec1b9a96\source\teamspeak-svc\src\main\java\com\tsvoice\client\ts3voice\Ts3Crypt.javaʹ�û򸲸����ѹ�ʱ�� API��
+ע: �й���ϸ��Ϣ, ��ʹ�� -Xlint:deprecation ���±��롣
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS clientlist snapshot retains cid
+PASS duplicate names retain parent 1
+PASS duplicate names retain parent 2
+PASS global duplicate name lookup rejects ambiguity
+PASS deleted channel removed
+PASS remaining duplicate becomes unambiguous
+PASS rename removes former name
+PASS rename preserves parent
+PASS move removes old parent association
+PASS move updates parent association
+PASS reverse lookup retains original case
+RSA and handshake regression checks passed

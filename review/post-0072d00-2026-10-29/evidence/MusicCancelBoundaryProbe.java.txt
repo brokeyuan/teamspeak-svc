@@ -1,0 +1,15 @@
+package com.tsvoice.client.music;
+import com.tsvoice.protocol.music.*;import java.util.concurrent.*;import java.util.concurrent.atomic.*;
+public class MusicCancelBoundaryProbe {
+ public static void main(String[]args)throws Exception{
+  CountDownLatch entered=new CountDownLatch(1),release=new CountDownLatch(1);AtomicInteger sent=new AtomicInteger();
+  MusicSession.OpusEncoderAdapter encoder=new MusicSession.OpusEncoderAdapter(){volatile boolean closed;public byte[]encode(short[]pcm){entered.countDown();try{if(!release.await(2,TimeUnit.SECONDS))throw new AssertionError("timeout");}catch(InterruptedException e){throw new RuntimeException(e);}return new byte[]{1};}public void close(){closed=true;}public boolean isClosed(){return closed;}};
+  MusicSession s=new MusicSession("local",9987,"bot",null);s.connectForTest(new MusicSession.ConnectionBundle());
+  s.startPlaybackForTest(TestToneSource.sine(440,0.04),encoder,opus->{sent.incrementAndGet();return true;},System::nanoTime);
+  if(!entered.await(1,TimeUnit.SECONDS))throw new AssertionError("encoder not entered");s.cancel();release.countDown();
+  long deadline=System.nanoTime()+1000000000L;while(sent.get()==0&&System.nanoTime()<deadline)Thread.sleep(1);
+  System.out.println("state after cancel="+s.state()+", sender callbacks after cancel="+sent.get());
+  if(sent.get()==0)throw new AssertionError("observed missing final permit check no longer exists");
+  System.out.println("REPRODUCED: frame blocked in encoder is submitted after cancel() has returned");s.close();
+ }
+}

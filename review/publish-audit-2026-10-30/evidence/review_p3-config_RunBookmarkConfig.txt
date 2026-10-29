@@ -1,0 +1,42 @@
+PASS normalization collapses case, trailing dot and default port
+PASS different ports stay separate credentials
+PASS different host aliases do not share credentials
+PASS passwords preserve exact spaces
+PASS first write has revision 1
+PASS credential change bumps the revision
+PASS explicit empty clears both fields and removes the entry
+PASS toString redacts secrets
+PASS credentials persist across reload
+PASS migration copies to the exact normalized endpoint
+PASS migration never diffuses passwords to other hosts
+PASS migration never overwrites existing credentials
+PASS blank hosts and empty passwords are not migrated
+Endpoint credentials regression: all checks passed
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS trusted server-bridge beacon keeps the automatic path dormant
+PASS manual bookmark connects despite the server-bridge beacon
+PASS bookmark session uses manual source and its transport policy
+PASS bookmark credentials come from the endpoint-isolated store with exact spacing
+PASS explicit bookmark intent survives an MC server change
+PASS late server-bridge beacon does not override the explicit intent
+PASS manual disconnect clears the bookmark intent
+PASS unknown bookmark id reports an operable error
+PASS legacy global credential migrates to its exact endpoint
+PASS existing bookmark credentials are untouched by migration
+PASS unrelated manual host does not inherit the global endpoint password (F08)
+PASS the global endpoint itself still inherits the global password
+Bookmark migration regression: all checks passed
+PASS null -> AUTO
+PASS empty -> AUTO
+PASS udp -> TS_UDP
+PASS UDP case-insensitive
+PASS tcp -> TS_TUNNEL_V1 (legacy tcp does NOT become MC channel)
+PASS tunnel alias
+PASS mc_channel -> TS_MC_CHANNEL (explicit only)
+PASS relay alias
+PASS unknown value falls back to AUTO (old semantic)
+PASS legacy tcp=true -> TS_TUNNEL_V1
+PASS legacy tcp=false -> TS_UDP
+S3 transport migration: all checks passed

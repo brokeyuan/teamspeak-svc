@@ -1,0 +1,86 @@
+plugins {
+    id 'net.fabricmc.fabric-loom' version "${fabric_loom_version}"
+}
+
+version = "${mod_version}+${minecraft_version}"
+group = "${maven_group}"
+
+base {
+    archivesName = project.archives_base_name
+}
+
+repositories {
+    mavenCentral()
+    maven {
+        name = 'FabricMC'
+        url = 'https://maven.fabricmc.net/'
+    }
+    maven {
+        name = 'MaxHenkel'
+        url = 'https://maven.maxhenkel.de/repository/public'
+    }
+    maven {
+        name = 'TerraformersMC'
+        url = 'https://maven.terraformersmc.com/releases/'
+    }
+}
+
+dependencies {
+    implementation 'com.tsvoice:ts3voice-core:0.1.0'
+    include 'com.tsvoice:ts3voice-core:0.1.0'
+
+    minecraft "com.mojang:minecraft:${minecraft_version}"
+    // MC 26.x 为未混淆版本，不需要 mappings
+
+    implementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
+
+    // Simple Voice Chat API（仅编译期；运行期由 voicechat mod 提供）
+    compileOnly "de.maxhenkel.voicechat:voicechat-api:${voicechat_api_version}"
+    // SVC 内部类（mixin 目标 ALSpeakerBase/MicrophoneProcessor 等；运行期由玩家装的 SVC 提供）
+    compileOnly files('libs/svc-internal-classes.jar')
+
+    // ModMenu（可选集成：模组列表配置入口；运行期未装亦可）
+    compileOnly "com.terraformersmc:modmenu:${modmenu_version}"
+
+    // WebRTC（AEC/降噪/AGC，缝合自 SVC-Extra；Apache-2.0，GPL 兼容）
+    implementation "dev.onvoid.webrtc:webrtc-java:0.14.0"
+    include "dev.onvoid.webrtc:webrtc-java:0.14.0"
+    include(implementation "dev.onvoid.webrtc:webrtc-java:0.14.0:windows-x86_64")
+    include(implementation "dev.onvoid.webrtc:webrtc-java:0.14.0:linux-x86_64")
+    include(implementation "dev.onvoid.webrtc:webrtc-java:0.14.0:linux-aarch64")
+    include(implementation "dev.onvoid.webrtc:webrtc-java:0.14.0:macos-aarch64")
+
+    // JNA（NVIDIA AFX 的 Kernel32 LoadLibraryEx 用）
+    // JNA：MC 26.3 自带 5.17.0（oshi 依赖）——绝不 include 自带版本，避免覆盖冲突
+    implementation "net.java.dev.jna:jna:5.17.0"
+    implementation "net.java.dev.jna:jna-platform:5.17.0"
+
+    // BouncyCastle（TS3 语音协议：AES-EAX + P-256 ECDH/ECDSA + DER）
+    implementation "org.bouncycastle:bcprov-jdk18on:${bouncycastle_version}"
+    include "org.bouncycastle:bcprov-jdk18on:${bouncycastle_version}"
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(Integer.parseInt(java_version))
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = Integer.parseInt(java_version)
+}
+
+processResources {
+    inputs.property "version", project.version
+
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
+    }
+}
+
+// 协议自测工具仅保留在 build/classes（供 README 的 CLI 用法），不打进发布 jar
+jar {
+    exclude 'com/tsvoice/client/ts3voice/Ts3VoiceSelfTest*.class'
+    exclude 'com/tsvoice/client/ts3voice/Ts3ChannelTest*.class'
+}

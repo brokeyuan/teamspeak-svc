@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Test shared protocol module
+        working-directory: ./ts3voice-core
+        run: ../teamspeak-svc/gradlew.bat clean test --no-daemon
+      - name: Build client
+        working-directory: ./teamspeak-svc
+        run: ./gradlew.bat clean build --no-daemon
+      - name: Build server
+        working-directory: ./teamspeak&svcbridge
+        run: ./gradlew.bat clean build --no-daemon
+      - name: Client protocol and RSA regressions
+        shell: pwsh
+        run: ./review/channel-fixes/RunProtocol.ps1
+      - name: Client group mapper regressions
+        shell: pwsh
+        run: ./review/channel-fixes/RunMapper.ps1
+      - name: Client state regressions
+        shell: pwsh
+        run: ./review/client-fixes/RunTests.ps1
+      - name: Client manager regressions
+        shell: pwsh
+        run: ./review/client-fixes/RunManagerTests.ps1
+      - name: Client mic redirect regressions (P0/F02)
+        shell: pwsh
+        run: ./review/p0-defects/RunMicRedirector.ps1
+      - name: Client identity trust regressions (P0/F04+F05)
+        shell: pwsh
+        run: ./review/p0-defects/RunClientIdentity.ps1
+      - name: Bridge membership regressions (P0/F06)
+        shell: pwsh
+        run: ./review/p0-defects/RunBridgeMembership.ps1
+      - name: Bridge identity issuing regressions (P0/revision store)
+        shell: pwsh
+        run: ./review/p0-defects/RunIdentityIssuing.ps1
+      - name: Session isolation regressions (P1/F03)
+        shell: pwsh
+        run: ./review/p1-isolation/RunSessionIsolation.ps1
+      - name: Transport shutdown regressions (P1/F09)
+        shell: pwsh
+        run: ./review/p1-transport/RunTransportShutdown.ps1
+      - name: Stable participant volume regressions (P1)
+        shell: pwsh
+        run: ./review/p1-playback/RunStableVolume.ps1
+      - name: Frontend adapter regressions (P2)
+        shell: pwsh
+        run: ./review/p2-frontend/RunFrontend.ps1
+      - name: Bookmark and credential regressions (P3/F08)
+        shell: pwsh
+        run: ./review/p3-config/RunBookmarkConfig.ps1
+      - name: Command tracker and file transfer regressions (P3)
+        shell: pwsh
+        run: ./review/p3-channel/RunCommandTracker.ps1
+      - name: Discovery and fallback regressions (P4)
+        shell: pwsh
+        run: ./review/p4-discovery/RunFallbackPolicy.ps1
+      - name: Build capabilities server mod (P4)
+        working-directory: ./voice-capabilities-fabric
+        run: ./gradlew.bat clean build --no-daemon
+      - name: Server regressions
+        shell: pwsh
+        run: ./review/server-fixes/RunServerChecks.ps1
+      - name: CI-equivalent full verification (review/RunAll.ps1)
+        shell: pwsh
+        run: ./review/RunAll.ps1
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mod-jars
+          path: |
+            teamspeak-svc/build/libs/*.jar
+            teamspeak&svcbridge/build/libs/*.jar
+          if-no-files-found: warn

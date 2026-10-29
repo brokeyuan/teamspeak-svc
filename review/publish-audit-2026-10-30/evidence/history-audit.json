@@ -1,0 +1,43 @@
+{
+  "reachableObjects": 4118,
+  "scannedBlobs": 1953,
+  "scannedTextBlobs": 1813,
+  "knownSecretPatternMatches": [],
+  "sensitiveRuntimePaths": [],
+  "historicalConfigFixtures": [
+    {
+      "object": "5ee551e3853d6409e344791b511b7e42dd7b8195",
+      "path": "review/client-fixes/config/teamspeak-svc/servers.json",
+      "endpoints": [
+        "trust-once",
+        "trust-remember",
+        "test-mc"
+      ],
+      "nonemptyStringCount": 2,
+      "allValuesPresentInTestSources": true,
+      "unmatchedValueHashes": []
+    },
+    {
+      "object": "1d48b97f107b8ce9543c9b3e91e966af8d0f0cd2",
+      "path": "review/p3-config/config/teamspeak-svc/endpoint-credentials.json",
+      "endpoints": [
+        "ts-bm.local:9987",
+        "global.example.com:9987"
+      ],
+      "nonemptyStringCount": 3,
+      "allValuesPresentInTestSources": true,
+      "unmatchedValueHashes": []
+    },
+    {
+      "object": "c4effc674b33b4aabe00f269d625e88d118efa6c",
+      "path": "review/p3-config/config/teamspeak-svc/servers.json",
+      "endpoints": [
+        "p3-other-server",
+        "p3-bookmarks"
+      ],
+      "nonemptyStringCount": 2,
+      "allValuesPresentInTestSources": true,
+      "unmatchedValueHashes": []
+    }
+  ]
+}

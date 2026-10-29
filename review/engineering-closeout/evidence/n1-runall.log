@@ -1,0 +1,57 @@
+RUNALL env: JAVA_HOME=C:\Program Files\Java\jdk-25.0.4.1
+PASS ts3voice-core clean test (gradle)
+PASS review/channel-fixes/RunProtocol.ps1
+PASS review/channel-fixes/RunMapper.ps1
+PASS review/client-fixes/RunTests.ps1
+FAIL review/client-fixes/RunManagerTests.ps1 (exit 1)
+--- last 12 stdout lines (C:\Users\ADMINI~1\AppData\Local\Temp\2\tsvoice-ci-logs\client-fixes__ManagerTests.log) ---
+--- last 6 stderr lines (C:\Users\ADMINI~1\AppData\Local\Temp\2\tsvoice-ci-logs\client-fixes__ManagerTests.err.log) ---
+  sts.ps1:89 ×Ö·û: 25
+  + if($LASTEXITCODE -ne 0){throw 'Manager tests compilation failed'}
+  +                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      + CategoryInfo          : OperationStopped: (Manager tests compilation failed:String) [], RuntimeException
+      + FullyQualifiedErrorId : Manager tests compilation failed
+   
+FAIL review/p0-defects/RunMicRedirector.ps1 (exit 1)
+--- last 12 stdout lines (C:\Users\ADMINI~1\AppData\Local\Temp\2\tsvoice-ci-logs\p0-defects__MicRedirector.log) ---
+--- last 6 stderr lines (C:\Users\ADMINI~1\AppData\Local\Temp\2\tsvoice-ci-logs\p0-defects__MicRedirector.err.log) ---
+  or.ps1:157 ×Ö·û: 28
+  + ... XITCODE -ne 0) { throw 'Mic redirect regression compilation failed' }
+  +                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      + CategoryInfo          : OperationStopped: (Mic redirect re...pilation failed:String) [], RuntimeException
+      + FullyQualifiedErrorId : Mic redirect regression compilation failed
+   
+PASS review/p0-defects/RunClientIdentity.ps1
+PASS review/p0-defects/RunBridgeMembership.ps1
+PASS review/p0-defects/RunIdentityIssuing.ps1
+PASS review/p1-isolation/RunSessionIsolation.ps1
+PASS review/p1-transport/RunTransportShutdown.ps1
+PASS review/p1-playback/RunStableVolume.ps1
+PASS review/p2-frontend/RunFrontend.ps1
+FAIL review/p3-config/RunBookmarkConfig.ps1 (exit 1)
+--- last 12 stdout lines (C:\Users\ADMINI~1\AppData\Local\Temp\2\tsvoice-ci-logs\p3-config__BookmarkConfig.log) ---
+--- last 6 stderr lines (C:\Users\ADMINI~1\AppData\Local\Temp\2\tsvoice-ci-logs\p3-config__BookmarkConfig.err.log) ---
+  ig.ps1:148 ×Ö·û: 28
+  + ... CODE -ne 0) { throw 'Bookmark config regression compilation failed' }
+  +                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      + CategoryInfo          : OperationStopped: (Bookmark config...pilation failed:String) [], RuntimeException
+      + FullyQualifiedErrorId : Bookmark config regression compilation failed
+   
+PASS review/route-lifecycle/RunRouteLifecycle.ps1
+FAIL review/session-consumption/RunSessionConsumption.ps1 (exit 1)
+--- last 12 stdout lines (C:\Users\ADMINI~1\AppData\Local\Temp\2\tsvoice-ci-logs\session-consumption__SessionConsumption.log) ---
+--- last 6 stderr lines (C:\Users\ADMINI~1\AppData\Local\Temp\2\tsvoice-ci-logs\session-consumption__SessionConsumption.err.log) ---
+  ssionConsumption.ps1:233 ×Ö·û: 28
+  + ... DE -ne 0) { throw 'Session consumption regression compilation failed' ...
+  +                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      + CategoryInfo          : OperationStopped: (Session consump...pilation failed:String) [], RuntimeException
+      + FullyQualifiedErrorId : Session consumption regression compilation failed
+   
+PASS review/playback-ownership/RunPlaybackOwnership.ps1
+PASS review/standalone-frontend/RunStandaloneFrontend.ps1
+PASS review/p3-channel/RunCommandTracker.ps1
+PASS review/p4-discovery/RunFallbackPolicy.ps1
+PASS review/server-fixes/RunServerChecks.ps1
+PASS review/upload-confirmation/RunUploadConfirmation.ps1
+CI-EQUIVALENT RESULT: FAIL (4 failed: review/client-fixes/RunManagerTests.ps1, review/p0-defects/RunMicRedirector.ps1, review/p3-config/RunBookmarkConfig.ps1, review/session-consumption/RunSessionConsumption.ps1)
+Full per-suite logs: C:\Users\ADMINI~1\AppData\Local\Temp\2\tsvoice-ci-logs

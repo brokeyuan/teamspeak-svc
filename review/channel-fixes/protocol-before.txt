@@ -1,0 +1,18 @@
+ע: C:\Users\Administrator\Documents\Workspace\Brokeyuan\mods\teamspeak&svcbridge\teamspeak-svc\src\main\java\com\tsvoice\client\ts3voice\Ts3Crypt.javaʹ�û򸲸����ѹ�ʱ�� API��
+ע: �й���ϸ��Ϣ, ��ʹ�� -Xlint:deprecation ���±��롣
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+FAIL clientlist snapshot retains cid
+FAIL duplicate names retain parent 1
+PASS duplicate names retain parent 2
+FAIL global duplicate name lookup rejects ambiguity
+FAIL deleted channel removed
+FAIL remaining duplicate becomes unambiguous
+FAIL rename removes former name
+FAIL rename preserves parent
+PASS move removes old parent association
+FAIL move updates parent association
+FAIL reverse lookup retains original case
+Exception in thread "main" java.lang.AssertionError: 9 channel regressions failed
+	at com.tsvoice.client.ts3voice.ProtocolRegression.main(ProtocolRegression.java:27)

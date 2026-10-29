@@ -1,0 +1,14 @@
+ע: C:\Users\Administrator\AppData\Local\Temp\tsvoice-publish-audit-20261030-54bdae391ee94a2f85f2018dec1b9a96\source\teamspeak-svc\src\main\java\com\tsvoice\client\ts3voice\Ts3Crypt.javaʹ�û򸲸����ѹ�ʱ�� API��
+ע: �й���ϸ��Ϣ, ��ʹ�� -Xlint:deprecation ���±��롣
+PASS mic-thread send path stays non-blocking while the writer stalls
+PASS bounded voice queue drops oldest frames while the writer stalls (dropped=44)
+PASS stop() finishes within 2s despite a blocked write (took 97ms)
+PASS connection reports closed after stop
+PASS real-TCP stop() finishes within 2s despite a blocked write (took 99ms)
+PASS real-TCP sender thread exits after close
+PASS concurrent send+close completes without deadlock (stop took 98ms)
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS only OPUS voice frames reach the listener (delivered=2)
+Transport shutdown regression: all checks passed

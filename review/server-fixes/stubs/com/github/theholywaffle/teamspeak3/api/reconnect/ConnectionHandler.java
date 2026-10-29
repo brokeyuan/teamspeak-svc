@@ -1,0 +1,2 @@
+package com.github.theholywaffle.teamspeak3.api.reconnect;
+public interface ConnectionHandler {void onConnect(com.github.theholywaffle.teamspeak3.TS3Query q);void onDisconnect(com.github.theholywaffle.teamspeak3.TS3Query q);}

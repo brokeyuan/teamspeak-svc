@@ -1,0 +1,14 @@
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS session A client created
+PASS current session voice frame resolves through its own client
+PASS session B client created after config change
+PASS stale session voice frame is not injected (and not resolved via the new client)
+PASS stale session text does not reach the MC chat
+PASS stale session membership callback does not sync ghost visibility
+PASS new session voice frame still delivered after stale callbacks
+PASS new session text reaches the MC chat
+PASS stale membership callback never syncs with the replaced client
+PASS manual disconnect closes the active session client
+Session isolation regression: all checks passed

@@ -1,0 +1,23 @@
+PASS L1: two commands registered
+PASS L1: in-flight return codes are never reused
+PASS L2: unassociated error completes nobody
+PASS L3: rejection routes to its own request with the server error
+PASS L3: success (error id=0) completes the matching future
+PASS L4: timeout completes exceptionally
+PASS L4: registration released after timeout
+PASS L4: late reply after timeout does not resurrect the future
+PASS L4: late reply does not re-register anything
+PASS L5: cancelSession completes in-flight futures
+PASS L5: cancellation is the completion cause
+PASS L5: registry empty after cancel
+FAIL L6: send failure releases the registration
+Exception in thread "main" java.lang.AssertionError: 1 command lifecycle checks failed
+	at com.tsvoice.client.CommandLifecycleTest.main(CommandLifecycleTest.java:105)
+Command lifecycle regression failed
+ËùÔÚÎ»ÖÃ C:\Users\Administrator\Documents\Workspace\Brokeyuan\mods\teamspeak&svcbridge\review\upload-confirmation\RunUp
+loadConfirmation.ps1:118 ×Ö·û: 28
++ ... ($LASTEXITCODE -ne 0) { throw 'Command lifecycle regression failed' }
++                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Command lifecycle regression failed:String) [], RuntimeException
+    + FullyQualifiedErrorId : Command lifecycle regression failed
+ 

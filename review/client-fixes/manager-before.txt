@@ -1,0 +1,12 @@
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS server password preserves exact spaces
+FAIL global channel password resolves independently
+FAIL per-server passwords override both defaults independently
+FAIL beacon credentials inherit global defaults
+PASS explicit empty per-server passwords clear inherited defaults
+FAIL unconfirmed channel consumes microphone frame without TS send or SVC fallback
+FAIL confirmed channel forwards one microphone frame
+Exception in thread "main" java.lang.AssertionError: 5 manager checks failed
+	at com.tsvoice.client.ManagerTests.main(ManagerTests.java:35)

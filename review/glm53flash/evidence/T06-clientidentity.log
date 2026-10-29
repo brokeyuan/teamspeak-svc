@@ -1,0 +1,31 @@
+注: C:\Users\Administrator\Documents\Workspace\Brokeyuan\mods\teamspeak&svcbridge\teamspeak-svc\src\main\java\com\tsvoice\client\ts3voice\Ts3Crypt.java使用或覆盖了已过时的 API。
+注: 有关详细信息, 请使用 -Xlint:deprecation 重新编译。
+注: 某些输入文件使用了未经检查或不安全的操作。
+注: 有关详细信息, 请使用 -Xlint:unchecked 重新编译。
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS trusted issuer claim elevates the MC identity
+PASS stored expiry equals the signed claim expiry, not the arrival time
+PASS untrusted issuer claim is not stored
+PASS claim issued in the future is rejected
+PASS claim exceeding the 24h TTL is rejected
+PASS claim for another virtual server is rejected
+PASS higher-revision claim within policy restores the mapping
+PASS revocation removes the verified mapping
+PASS revoked claim replay is rejected
+PASS revoked claim replay is rejected after restart
+PASS re-proof after revocation with a newer revision is accepted
+PASS expired claim is rejected
+PASS malformed claim payload is rejected
+PASS display mappings clear when the TS client disconnects
+PASS watermark still blocks an equal-revision replay after reconnect
+PASS R09: trusted claim elevates before unpin
+PASS R09: query degrades immediately after unpin (same server)
+PASS R09: query degrades immediately after unpin (second server)
+PASS R09: another issuer's mapping survives the unpin
+PASS R09: display layer is notified of the identity change
+PASS R09: replaying the unpinned claim after re-pin stays rejected
+PASS R09: a fresh higher-revision claim re-elevates after re-pin
+PASS R09: expired claims never resolve at query time
+ClientIdentityService regression: all checks passed

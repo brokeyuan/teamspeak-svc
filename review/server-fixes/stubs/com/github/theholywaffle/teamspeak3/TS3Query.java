@@ -1,0 +1,2 @@
+package com.github.theholywaffle.teamspeak3;
+public class TS3Query {public static String fail="";public static TS3Query last;public boolean closed;public TS3Query(TS3Config c){last=this;}public void connect(){if(fail.equals("connect"))throw new IllegalStateException("connect failure");}public TS3Api getApi(){return new TS3Api();}public void exit(){closed=true;}}

@@ -1,0 +1,54 @@
+# Java / Gradle
+.gradle/
+build/
+out/
+*.class
+
+# Local runtime and generated artifacts
+run/
+logs/
+*.log
+*.log.gz
+# Execution evidence from the glm53flash round is delivery material
+!review/glm53flash/evidence/*.log
+# Execution evidence from the engineering-closeout round is delivery material
+!review/engineering-closeout/evidence/*.log
+
+# Native/native caches unpacked at runtime
+config/teamspeak-svc/native/
+
+# Never commit real identities or credentials
+identity.txt
+identities/
+identity-signing-keypair.txt
+identity-signing-keypair.txt.tmp
+config/tsbridge/identity.txt
+config/tsbridge/identities/
+
+# Local test server contains world data and potentially real credentials
+testserver/
+!testserver/README.md
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+
+# Large reference/generated material not part of product source
+/teamspeak&svcbridge.zip
+/voicechat-discord-main/
+/tsbridge-standby/
+/review/build-fixes/
+
+# Volatile harness state (regenerated on every run)
+review/*/config/
+review/*/issuing-config/
+review/p0-defects/classes-dbg/
+
+# Capabilities mod build outputs
+voice-capabilities-fabric/build/
+voice-capabilities-fabric/run/
+voice-capabilities-fabric/.gradle/
+
+# Remaining tracked volatile fixtures cleanup
+review/p0-defects/issuing-config/

@@ -1,0 +1,23 @@
+{
+  "required": true,
+  "package": "com.tsvoice.client.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "minVersion": "0.8",
+  "plugin": "com.tsvoice.compat.svc.TsVoiceMixinPlugin",
+  "client": [
+    "ClientVoicechatMixin",
+    "AlSpeakerMixin",
+    "GameProfileUtilsMixin",
+    "MicProcessorMixin",
+    "MinecraftGizmoMixin",
+    "VoiceChatScreenMixin",
+    "SoundEngineAccessor",
+    "SoundManagerAccessor"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  },
+  "mixins": [
+    "server.SvcServerSendPacketMixin"
+  ]
+}

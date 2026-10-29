@@ -1,0 +1,96 @@
+PASS W: OPEN round-trips
+PASS W: DATA round-trips with session id + epoch + exact bytes
+PASS W: malformed frames rejected (empty/short/bad magic/truncated)
+PASS W: oversized datagram (4097B) rejected at encode, not truncated
+PASS W: oversized datagram encode must throw
+PASS W: relay capability frame round-trips
+PASS W: malformed relay capability rejected
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS R1: OPEN with allowlisted target is approved
+PASS R1: OPENED carries requestId + negotiated limits
+PASS R1: relaySessionId is 128-bit random
+PASS R1: downstream DATA accepted for the owning connection
+PASS R1: UDP loopback echo returned via MC channel
+PASS R1: echoed bytes are exact (no mutation)
+PASS R2: a second connection opens its own session
+PASS R2: two sessions hold distinct 128-bit ids
+PASS R2: forged sessionId from another connection is refused
+PASS R3: unknown target id is refused (ERR_UNKNOWN_TARGET)
+PASS R3: a third connection may open (per-connection limit is 1, not global)
+PASS R3: a connection holding a session cannot open another (ERR_LIMIT_SESSIONS)
+PASS R4: disabled relay refuses OPEN
+PASS R4: refusal carries stable error code ERR_NOT_AUTHORIZED
+PASS R5: client CLOSE gets a CLOSED reply
+PASS R5: closed session is reclaimed (A closed, B/C remain)
+PASS R5: DATA for a reclaimed session is refused
+PASS R5: MC disconnect reclaims the connection's session
+PASS R5: runtime close reclaims everything (idempotent)
+PASS R6: unresolvable target yields ERR_TARGET_UNAVAILABLE (DNS stays server-side)
+PASS R6: unresolvable target carries ERR_TARGET_UNAVAILABLE
+PASS R7: barrier test session opens
+PASS R7: barrier for the owning session is recognized
+PASS R7: barrier from another connection is refused
+ALL PASS
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS T32: OPEN accepted
+PASS T32: upstream DATA accepted
+PASS T32: production bridge accepts raw UDP reply from runtime (no decode-mismatch rejection)
+PASS T32: client handler decodes the bridged frame and restores the original datagram
+PASS T32b: OPEN accepted
+PASS T32b: session death produces a CLOSED control notification through the same bridge
+PASS T34: first connection's requestId=1 succeeds
+PASS T34: second connection's requestId=1 also succeeds (pendingOpens keyed by connection)
+PASS T34: duplicate requestId on the SAME connection is rejected
+PASS T34: CLOSE returns CLOSED
+PASS T34: after session end the same connection+requestId can OPEN again
+ALL PASS
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS T33a: barrier for a live session is accepted
+PASS T33a: DATA below the accepted route barrier is rejected
+PASS T33a: DATA at the barrier epoch is forwarded
+PASS T33a: DATA above the barrier epoch is forwarded
+PASS T33a: barrier epoch regression is rejected (monotonic)
+PASS T33b: negotiated maxDatagramsPerSecond=1 rejects a 4-burst (got 1 through)
+PASS T33b: after one second the token refills (rate limit, not a ban)
+PASS T35a: 3000-byte datagram accepted under the 4096 contract
+PASS T35a: UDP reply comes back full-size (3000 bytes, no truncation)
+PASS T35b: codec rejects a 4097-byte datagram at encode
+PASS T35b: decode of empty frame is null
+PASS T35b: decode rejects a hand-built 4097-byte DATA frame (runtime double guard)
+PASS T35c: receive(maxLen=2048) on a 3000-byte frame fails loudly (no silent truncation)
+PASS T35c: receive(4096) returns the full 3000-byte frame
+PASS T33c: two connections open independently (T34 base)
+PASS T33c: one connection's barrier does not gate another session
+ALL PASS
+PASS W: MUSIC_BOT purpose survives the wire round-trip
+PASS W: wire ids are stable (PLAYER_VOICE=1, MUSIC_BOT=2)
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS S: PLAYER_VOICE passes the purpose gate (fails later only on reachability)
+PASS S: MUSIC_BOT is rejected as not-authorized by default (controlled enablement)
+PASS S: a rejected MUSIC_BOT OPEN does not poison the connection's PLAYER_VOICE (p2 rejected only by p1's live single-session rule, not by MUSIC_BOT state)
+PASS S: exactly the one PLAYER_VOICE session exists after the MUSIC_BOT rejection
+PASS E8b: musicBotEnabled=true passes MUSIC_BOT through the purpose gate (fails later only on reachability)
+ALL PASS
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS F2a: OPEN accepted
+PASS F2b: production-style barrier accepted
+PASS F2a: frame carrying the pre-barrier epoch (199) is rejected
+PASS F2a: frame carrying the barrier epoch (200) is forwarded
+PASS F2a: frame carrying a newer epoch (201) is forwarded
+PASS F2b: barrier regression is rejected
+PASS F2b: rejected regression did not disturb the live barrier
+PASS F2c: first 3000-byte frame within the 4KiB/s budget is accepted
+PASS F2c: second frame exceeds the byte budget and is rejected
+PASS F2c: after one second the byte budget refills
+PASS F2d: pps bucket rejects the third datagram while the byte budget remains ample
+ALL PASS

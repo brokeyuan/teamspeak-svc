@@ -1,0 +1,10 @@
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS server password preserves exact spaces
+PASS global channel password resolves independently
+PASS per-server passwords override both defaults independently
+PASS beacon credentials inherit global defaults
+PASS explicit empty per-server passwords clear inherited defaults
+PASS unconfirmed channel consumes microphone frame without TS send or SVC fallback
+PASS confirmed channel forwards one microphone frame

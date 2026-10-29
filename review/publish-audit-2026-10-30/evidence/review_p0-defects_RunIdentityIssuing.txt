@@ -1,0 +1,20 @@
+ע: ĳЩ�����ļ�ʹ����δ�����򲻰�ȫ�Ĳ�����
+ע: �й���ϸ��Ϣ, ��ʹ�� -Xlint:unchecked ���±��롣
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS first proof issues a signed claim with revision >= 2
+PASS second claim has a higher revision
+PASS revocation broadcasts one payload per issued claim (got 2)
+PASS revocation payloads cover distinct claims
+PASS each revocation tombstone exceeds all issued revisions
+PASS re-proof after revocation uses a revision beyond the tombstones
+IdentityIssuing regression: all checks passed
+PASS first allocations start at 2 and increase
+PASS restart resumes beyond every previously issued revision
+PASS restart resumes at or beyond the persisted recovery point
+PASS persistence failure raises RevisionAllocationException
+PASS allocation after recovered persistence stays monotonic
+PASS long allocation chain across restarts is strictly monotonic
+PASS file persistence survives a restart
+IdentityRevisionStore regression: all checks passed

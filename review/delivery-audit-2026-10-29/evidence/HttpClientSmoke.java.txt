@@ -1,0 +1,1 @@
+public class HttpClientSmoke { public static void main(String[] args) { java.net.http.HttpClient.newHttpClient(); System.out.println("HttpClient initialized"); } }

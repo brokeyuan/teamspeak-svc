@@ -1,0 +1,19 @@
+PASS review/channel-fixes/RunProtocol.ps1
+PASS review/channel-fixes/RunMapper.ps1
+PASS review/client-fixes/RunTests.ps1
+PASS review/client-fixes/RunManagerTests.ps1
+PASS review/p0-defects/RunMicRedirector.ps1
+PASS review/p0-defects/RunClientIdentity.ps1
+PASS review/p0-defects/RunBridgeMembership.ps1
+PASS review/p0-defects/RunIdentityIssuing.ps1
+PASS review/p1-isolation/RunSessionIsolation.ps1
+PASS review/p1-transport/RunTransportShutdown.ps1
+PASS review/p1-playback/RunStableVolume.ps1
+PASS review/p2-frontend/RunFrontend.ps1
+PASS review/p3-config/RunBookmarkConfig.ps1
+PASS review/p3-channel/RunCommandTracker.ps1
+PASS review/p4-discovery/RunFallbackPolicy.ps1
+PASS review/server-fixes/RunServerChecks.ps1
+PASS core test (ts3voice-core clean test)
+CI-EQUIVALENT RESULT: PASS (all suites + core test green)
+EXIT=0

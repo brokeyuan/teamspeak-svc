@@ -1,0 +1,2 @@
+package com.github.theholywaffle.teamspeak3;
+public class TS3Config {public void setHost(String x){} public void setQueryPort(int x){}public void setEnableCommunicationsLogging(boolean x){}public void setConnectionHandler(com.github.theholywaffle.teamspeak3.api.reconnect.ConnectionHandler x){}}

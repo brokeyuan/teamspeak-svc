@@ -1,0 +1,138 @@
+RUNALL env: JAVA_HOME=C:\Program Files\Java\jdk-25.0.4.1
+FAIL ts3voice-core clean test (exit 1)
+--- last 12 stdout lines (C:\Users\ADMINI~1\AppData\Local\Temp\tsvoice-ci-logs\ts3voice-core-clean-test.log) ---
+  To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.5.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+  To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.5.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+  To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.5.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+--- last 6 stderr lines (C:\Users\ADMINI~1\AppData\Local\Temp\tsvoice-ci-logs\ts3voice-core-clean-test.err.log) ---
+
+  * Try:
+  > Run with --stacktrace option to get the stack trace.
+  > Run with --info or --debug option to get more log output.
+  > Run with --scan to get full insights from a Build Scan (powered by Develocity).
+  > Get more help at https://help.gradle.org.
+FAIL review/channel-fixes/RunProtocol.ps1 (exit 1)
+--- last 12 stdout lines (C:\Users\ADMINI~1\AppData\Local\Temp\tsvoice-ci-logs\channel-fixes__Protocol.log) ---
+--- last 6 stderr lines (C:\Users\ADMINI~1\AppData\Local\Temp\tsvoice-ci-logs\channel-fixes__Protocol.err.log) ---
+  ce\review\channel-fixes\RunProtocol.ps1:6 字符: 28
+  + if ($LASTEXITCODE -ne 0) { throw 'Compilation failed' }
+  +                            ~~~~~~~~~~~~~~~~~~~~~~~~~~
+      + CategoryInfo          : OperationStopped: (Compilation failed:String) [], RuntimeException
+      + FullyQualifiedErrorId : Compilation failed
+
+PASS review/channel-fixes/RunMapper.ps1
+FAIL review/client-fixes/RunTests.ps1 (exit 1)
+--- last 12 stdout lines (C:\Users\ADMINI~1\AppData\Local\Temp\tsvoice-ci-logs\client-fixes__Tests.log) ---
+--- last 6 stderr lines (C:\Users\ADMINI~1\AppData\Local\Temp\tsvoice-ci-logs\client-fixes__Tests.err.log) ---
+  ce\review\client-fixes\RunTests.ps1:122 字符: 25
+  + if($LASTEXITCODE -ne 0){throw 'Client test compilation failed'}
+  +                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      + CategoryInfo          : OperationStopped: (Client test compilation failed:String) [], RuntimeException
+      + FullyQualifiedErrorId : Client test compilation failed
+
+PASS review/client-fixes/RunManagerTests.ps1
+FAIL review/p0-defects/RunMicRedirector.ps1 (exit 1)
+--- last 12 stdout lines (C:\Users\ADMINI~1\AppData\Local\Temp\tsvoice-ci-logs\p0-defects__MicRedirector.log) ---
+--- last 6 stderr lines (C:\Users\ADMINI~1\AppData\Local\Temp\tsvoice-ci-logs\p0-defects__MicRedirector.err.log) ---
+  ce\review\p0-defects\RunMicRedirector.ps1:177 字符: 28
+  + ... XITCODE -ne 0) { throw 'Mic redirect regression compilation failed' }
+  +                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      + CategoryInfo          : OperationStopped: (Mic redirect re...pilation failed:String) [], RuntimeException
+      + FullyQualifiedErrorId : Mic redirect regression compilation failed
+
+PASS review/p0-defects/RunClientIdentity.ps1
+PASS review/p0-defects/RunBridgeMembership.ps1
+PASS review/p0-defects/RunIdentityIssuing.ps1
+PASS review/p1-isolation/RunSessionIsolation.ps1
+PASS review/p1-transport/RunTransportShutdown.ps1
+FAIL review/p1-playback/RunStableVolume.ps1 (exit 1)
+--- last 12 stdout lines (C:\Users\ADMINI~1\AppData\Local\Temp\tsvoice-ci-logs\p1-playback__StableVolume.log) ---
+--- last 6 stderr lines (C:\Users\ADMINI~1\AppData\Local\Temp\tsvoice-ci-logs\p1-playback__StableVolume.err.log) ---
+  ce\review\p1-playback\RunStableVolume.ps1:23 字符: 32
+  + ... LASTEXITCODE -ne 0) { throw 'Old-behavior probe compilation failed' }
+  +                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      + CategoryInfo          : OperationStopped: (Old-behavior probe compilation failed:String) [], RuntimeException
+      + FullyQualifiedErrorId : Old-behavior probe compilation failed
+
+PASS review/p2-frontend/RunFrontend.ps1
+PASS review/p3-config/RunBookmarkConfig.ps1
+PASS review/route-lifecycle/RunRouteLifecycle.ps1
+FAIL review/session-consumption/RunSessionConsumption.ps1 (exit 1)
+--- last 12 stdout lines (C:\Users\ADMINI~1\AppData\Local\Temp\tsvoice-ci-logs\session-consumption__SessionConsumption.log) ---
+  FAIL C1: session A connects
+--- last 6 stderr lines (C:\Users\ADMINI~1\AppData\Local\Temp\tsvoice-ci-logs\session-consumption__SessionConsumption.err.log) ---
+  ce\review\session-consumption\RunSessionConsumption.ps1:303 字符: 28
+  + ... LASTEXITCODE -ne 0) { throw 'Session consumption regression failed' }
+  +                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      + CategoryInfo          : OperationStopped: (Session consumption regression failed:String) [], RuntimeException
+      + FullyQualifiedErrorId : Session consumption regression failed
+
+FAIL review/playback-ownership/RunPlaybackOwnership.ps1 (exit 1)
+--- last 12 stdout lines (C:\Users\ADMINI~1\AppData\Local\Temp\tsvoice-ci-logs\playback-ownership__PlaybackOwnership.log) ---
+--- last 6 stderr lines (C:\Users\ADMINI~1\AppData\Local\Temp\tsvoice-ci-logs\playback-ownership__PlaybackOwnership.err.log) ---
+  ce\review\playback-ownership\RunPlaybackOwnership.ps1:37 字符: 28
+  + ... DE -ne 0) { throw 'Playback ownership regression compilation failed'  ...
+  +                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      + CategoryInfo          : OperationStopped: (Playback owners...pilation failed:String) [], RuntimeException
+      + FullyQualifiedErrorId : Playback ownership regression compilation failed
+
+PASS review/standalone-frontend/RunStandaloneFrontend.ps1
+PASS review/p3-channel/RunCommandTracker.ps1
+PASS review/p4-discovery/RunFallbackPolicy.ps1
+FAIL review/server-fixes/RunServerChecks.ps1 (exit 1)
+--- last 12 stdout lines (C:\Users\ADMINI~1\AppData\Local\Temp\tsvoice-ci-logs\server-fixes__ServerChecks.log) ---
+--- last 6 stderr lines (C:\Users\ADMINI~1\AppData\Local\Temp\tsvoice-ci-logs\server-fixes__ServerChecks.err.log) ---
+  ce\review\server-fixes\RunServerChecks.ps1:92 字符: 25
+  + if($LASTEXITCODE -ne 0){throw 'Server regression compilation failed'}
+  +                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      + CategoryInfo          : OperationStopped: (Server regression compilation failed:String) [], RuntimeException
+      + FullyQualifiedErrorId : Server regression compilation failed
+
+FAIL review/upload-confirmation/RunUploadConfirmation.ps1 (exit 1)
+--- last 12 stdout lines (C:\Users\ADMINI~1\AppData\Local\Temp\tsvoice-ci-logs\upload-confirmation__UploadConfirmation.log) ---
+  PASS L4: late reply does not re-register anything
+  PASS L5: cancelSession completes in-flight futures
+  PASS L5: cancellation is the completion cause
+  PASS L5: registry empty after cancel
+  PASS L6: send failure releases the registration
+  Command lifecycle regression: all checks passed
+  PASS U1: CONFIRMED must be gone from the result type
+  PASS U1: result states distinguish transport/verified/failed/unknown (AVATAR_APPLIED is an application-layer outcome, not a transfer state)
+  PASS U2: concurrent uploads use distinct clientftfids
+  PASS U2: clean EOF is TRANSPORT_FINISHED for both uploads (never a storage confirmation)
+  PASS U3: a reply attributed to the wrong client does not complete the upload
+  PASS U3: session close cancels the in-flight upload (no hang, no fake success)
+--- last 6 stderr lines (C:\Users\ADMINI~1\AppData\Local\Temp\tsvoice-ci-logs\upload-confirmation__UploadConfirmation.err.log) ---
+  ce\review\upload-confirmation\RunUploadConfirmation.ps1:120 字符: 28
+  + ... LASTEXITCODE -ne 0) { throw 'Upload confirmation regression failed' }
+  +                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      + CategoryInfo          : OperationStopped: (Upload confirmation regression failed:String) [], RuntimeException
+      + FullyQualifiedErrorId : Upload confirmation regression failed
+
+PASS review/gui-integration/RunGuiIntegration.ps1
+PASS review/ts-mc-relay/RunTsMcRelay.ps1
+PASS review/svc-mc-channel/RunSvcMcChannel.ps1
+PASS review/music-0/RunMusicCore.ps1
+FAIL review/m7-unified-release/RunM7.ps1 (exit 1)
+--- last 12 stdout lines (C:\Users\ADMINI~1\AppData\Local\Temp\tsvoice-ci-logs\m7-unified-release__M7.log) ---
+  PASS A8/R22: integrated servers default to disabled unless explicitly enabled in config
+  PASS R22: reload keeps the integrated server disabled (integratedServerEnabled=false)
+  PASS R22: repeated reloads keep the integrated server disabled
+  PASS R22: broken config on an integrated server stays gated (INVALID/DISABLED)
+  PASS R22: config recovery on an integrated server keeps the default-off gate
+  PASS R22: explicit integratedServerEnabled=true keeps the integrated server active
+  PASS R22: reload keeps the explicit integrated opt-in active
+  PASS R22: turning the opt-in off disables the integrated server on reload
+  PASS R22: dedicated reloads stay ACTIVE (no integrated gate)
+  Announcer & runtime regression: all checks passed
+  artifact: none found - running gradlew build
+  To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.5.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+--- last 6 stderr lines (C:\Users\ADMINI~1\AppData\Local\Temp\tsvoice-ci-logs\m7-unified-release__M7.err.log) ---
+  ce\review\m7-unified-release\RunM7.ps1:40 字符: 29
+  + ... it -ne 0) { throw 'gradlew build failed during M7 artifact preparatio ...
+  +                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      + CategoryInfo          : OperationStopped: (gradlew build f...act preparation:String) [], RuntimeException
+      + FullyQualifiedErrorId : gradlew build failed during M7 artifact preparation
+
+CI-EQUIVALENT RESULT: FAIL (10 failed: ts3voice-core clean test, review/channel-fixes/RunProtocol.ps1, review/client-fixes/RunTests.ps1, review/p0-defects/RunMicRedirector.ps1, review/p1-playback/RunStableVolume.ps1, review/session-consumption/RunSessionConsumption.ps1, review/playback-ownership/RunPlaybackOwnership.ps1, review/server-fixes/RunServerChecks.ps1, review/upload-confirmation/RunUploadConfirmation.ps1, review/m7-unified-release/RunM7.ps1)
+Full per-suite logs: C:\Users\ADMINI~1\AppData\Local\Temp\tsvoice-ci-logs

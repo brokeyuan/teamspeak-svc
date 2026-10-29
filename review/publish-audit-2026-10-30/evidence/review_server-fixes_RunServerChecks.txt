@@ -1,0 +1,19 @@
+ע: review\server-fixes\ServerRegression.javaʹ����δ�����򲻰�ȫ�Ĳ�����
+ע: �й���ϸ��Ϣ, ��ʹ�� -Xlint:unchecked ���±��롣
+PASS failed query cleans connect
+PASS failed query cleans login
+PASS failed query cleans select
+PASS failed query cleans nickname
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS successful query stays open until disconnect
+PASS offline player cannot commit newly connected client
+PASS stopped tunnel closes established socket
+PASS unauthenticated and replayed tunnel tickets cannot forward
+PASS unknown reflected membership is empty
+PASS unknown membership preserves last verified audience
+PASS microphone uses current packet group, not stale membership cache
+PASS unpaired fallback microphone is not gated by pairing
+PASS restart-only reload is rejected without partial update
+PASS supported reload updates runtime policy

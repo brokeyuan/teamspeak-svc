@@ -1,0 +1,17 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.5.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+
+> Configure project :
+Fabric Loom: 1.17.21
+
+> Task :ts3voice-core:compileJava UP-TO-DATE
+
+> Task :compileJava
+注: C:\Users\Administrator\Documents\Workspace\Brokeyuan\mods\teamspeak&svcbridge\teamspeak-svc\src\main\java\com\tsvoice\client\ts3voice\Ts3Crypt.java使用或覆盖了已过时的 API。
+注: 有关详细信息, 请使用 -Xlint:deprecation 重新编译。
+
+[Incubating] Problems report is available at: file:///C:/Users/Administrator/Documents/Workspace/Brokeyuan/mods/teamspeak&svcbridge/teamspeak-svc/build/reports/problems/problems-report.html
+
+BUILD SUCCESSFUL in 13s
+2 actionable tasks: 1 executed, 1 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.5.1/userguide/configuration_cache_enabling.html

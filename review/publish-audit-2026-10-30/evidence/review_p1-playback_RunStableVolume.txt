@@ -1,0 +1,32 @@
+ע: C:\Users\Administrator\AppData\Local\Temp\tsvoice-publish-audit-20261030-54bdae391ee94a2f85f2018dec1b9a96\source\teamspeak-svc\src\main\java\com\tsvoice\client\ts3voice\Ts3Crypt.javaʹ�û򸲸����ѹ�ʱ�� API��
+ע: �й���ϸ��Ϣ, ��ʹ�� -Xlint:deprecation ���±��롣
+ע: C:\Users\Administrator\AppData\Local\Temp\tsvoice-publish-audit-20261030-54bdae391ee94a2f85f2018dec1b9a96\source\review\p1-playback\oldsrc\OldBehaviorProbe.javaʹ����δ�����򲻰�ȫ�Ĳ�����
+ע: �й���ϸ��Ϣ, ��ʹ�� -Xlint:unchecked ���±��롣
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+FAIL old derivation is not authority-scoped (same uuid for any server)
+FAIL old close removed the NEW stream channel by UUID alone
+old behavior failures: 2
+old-behavior probe reproduced both defects (expected failures)
+ע: C:\Users\Administrator\AppData\Local\Temp\tsvoice-publish-audit-20261030-54bdae391ee94a2f85f2018dec1b9a96\source\teamspeak-svc\src\main\java\com\tsvoice\client\ts3voice\Ts3Crypt.javaʹ�û򸲸����ѹ�ʱ�� API��
+ע: �й���ϸ��Ϣ, ��ʹ�� -Xlint:deprecation ���±��롣
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS same authority and uid derive the same stable UUID
+PASS different TS servers isolate the same uid
+PASS different uids derive different UUIDs
+PASS UUID uses the documented tsvoice-participant-v2 derivation
+PASS ghost registers under the stable participant UUID
+PASS first injection registers the SVC channel object
+PASS sequence reset keeps the same channel object
+PASS owned close removes and closes the channel
+PASS ghost state removed
+PASS reconnect re-registers under the same stable UUID (volume persists)
+PASS new stream owns a new channel object
+PASS close with a foreign handle never kills the live channel
+PASS stale cleanup with the old channel handle cannot remove the new channel
+PASS close with the correct owned handle removes the channel
+PASS same uid on another server injects under an isolated UUID
+Stable participant volume regression: all checks passed

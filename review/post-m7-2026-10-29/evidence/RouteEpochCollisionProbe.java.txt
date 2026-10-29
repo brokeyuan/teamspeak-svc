@@ -1,0 +1,23 @@
+import com.tsvoice.client.connection.*;
+public class RouteEpochCollisionProbe {
+ public static void main(String[] args){
+  BackendCoordinator.select(SelectionPolicy.IntentKind.PINNED_TS,"audit");
+  var oldToken=BackendCoordinator.beginSession();
+  BackendCoordinator.setChannelTarget(oldToken,VoiceState.ChannelPolicy.TS_NATIVE_FOLLOW,null);
+  BackendCoordinator.confirmChannel(oldToken,"server",1);
+  long initial=BackendCoordinator.route().routeEpoch();
+  BackendCoordinator.confirmChannel(oldToken,"server",2);
+  BackendCoordinator.confirmChannel(oldToken,"server",3);
+  long oldFrameEpoch=BackendCoordinator.route().routeEpoch();
+  BackendCoordinator.endSession(oldToken);
+  long ended=BackendCoordinator.route().routeEpoch();
+  var newToken=BackendCoordinator.beginSession();
+  BackendCoordinator.setChannelTarget(newToken,VoiceState.ChannelPolicy.TS_NATIVE_FOLLOW,null);
+  BackendCoordinator.confirmChannel(newToken,"server",99);
+  long newReadyEpoch=BackendCoordinator.route().routeEpoch();
+  System.out.println("initial="+initial+", old ready="+oldFrameEpoch+", ended="+ended+", new ready="+newReadyEpoch);
+  if(oldFrameEpoch!=newReadyEpoch)throw new AssertionError("expected collision no longer exists");
+  if(ended>=oldFrameEpoch)throw new AssertionError("expected monotonicity violation no longer exists");
+  System.out.println("REPRODUCED: route epoch decreases and old/new sessions share the same ready epoch");
+ }
+}

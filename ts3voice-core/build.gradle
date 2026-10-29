@@ -1,0 +1,49 @@
+plugins {
+    id 'java-library'
+}
+
+group = 'com.tsvoice'
+version = '0.1.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 25
+    options.encoding = 'UTF-8'
+}
+
+tasks.register('protocolTest', JavaExec) {
+    group = 'verification'
+    description = 'Runs dependency-free TS3 protocol assertions; any failure exits nonzero.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.tsvoice.protocol.ProtocolTestMain'
+}
+
+tasks.register('identityTrustTest', JavaExec) {
+    group = 'verification'
+    description = 'Runs dependency-free identity trust policy assertions; any failure exits nonzero.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.tsvoice.protocol.IdentityTrustRegression'
+}
+
+tasks.register('capabilityWireTest', JavaExec) {
+    group = 'verification'
+    description = 'Runs capability wire golden/malformed assertions; any failure exits nonzero.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.tsvoice.protocol.capability.CapabilityWireTest'
+}
+
+tasks.named('test') {
+    // This project deliberately has no JUnit dependency. protocolTest is the verifier.
+    failOnNoDiscoveredTests = false
+    dependsOn protocolTest
+    dependsOn identityTrustTest
+    dependsOn capabilityWireTest
+}

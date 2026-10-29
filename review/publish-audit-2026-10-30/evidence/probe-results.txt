@@ -1,0 +1,10 @@
+ע: teamspeak-svc\src\main\java\com\tsvoice\client\ts3voice\Ts3Crypt.javaʹ�û򸲸����ѹ�ʱ�� API��
+ע: �й���ϸ��Ϣ, ��ʹ�� -Xlint:deprecation ���±��롣
+REPRODUCED: bot epoch=1 rejected by real writer default supplier; dropped delta=1
+CONTROL: explicitly bound supplier permits the same epoch
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+REPRODUCED: send(control) accepted before barrier and rejected after epoch=200
+CONTROL: send(data,200) forwarded through the same runtime
+Both defects reproduced. Exit 0 means reproduction succeeded, NOT product acceptance.

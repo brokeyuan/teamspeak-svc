@@ -1,0 +1,31 @@
+ע: C:\Users\Administrator\AppData\Local\Temp\tsvoice-publish-audit-20261030-54bdae391ee94a2f85f2018dec1b9a96\source\teamspeak-svc\src\main\java\com\tsvoice\client\ts3voice\Ts3Crypt.javaʹ�û򸲸����ѹ�ʱ�� API��
+ע: �й���ϸ��Ϣ, ��ʹ�� -Xlint:deprecation ���±��롣
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS error id=0 with matching return_code satisfies the request
+PASS satisfied request is removed from the map
+PASS error id!=0 routes to the matching request
+PASS failed request is also consumed
+PASS unassociated error does not satisfy any request
+PASS return codes increment within a session
+PASS snapshot is keyed by server UID
+PASS replaceAll upserts all channels
+PASS ambiguous names list every match (never silently pick one)
+PASS password-known flag is preserved on the match
+PASS ordered view groups by parent then order
+PASS lookup by primary key cid works
+PASS remove drops the channel
+PASS upsert refreshes a channel
+PASS serverUid refresh only upgrades from blank
+Command tracker regression: all checks passed
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS unknown and pre-completion replies are ignored without state
+PASS no requests leak after prior runs
+PASS different TS uids produce distinct markers
+PASS different skins produce distinct markers
+PASS skin hash is part of the marker key
+PASS result states are transport-level only (EOF never confirms storage)
+File transfer regression: all checks passed

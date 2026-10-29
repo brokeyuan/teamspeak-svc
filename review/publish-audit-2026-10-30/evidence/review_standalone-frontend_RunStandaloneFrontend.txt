@@ -1,0 +1,43 @@
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+PASS F1: SVC stubs satisfy the critical hooks
+PASS F1: direct AudioChannel ownership is available
+PASS F2: first acquire succeeds
+PASS F2: isolated mic is self-owned
+PASS F2: second acquire while owned is rejected (single mic)
+PASS F2: release closes the lease
+PASS F2: acquire works again after release
+PASS F3: failing mic source yields null (FRONTEND_UNAVAILABLE)
+PASS F3: reservation is released on failure (no deadlock)
+PASS F4: SVC disconnect closes the self-owned isolated mic
+PASS F4: borrowed lease flagged
+PASS F4: borrowed mic is returned to SVC lifecycle without closing
+PASS R1: healthy lease acquired
+PASS R1: the lease still exists but its mic is dead (held/micAlive are distinct)
+PASS R1: reacquire over a dead lease succeeds (D02 probe fix)
+PASS R1: the dead lease was released before the new mic was created
+PASS R1: the replacement mic is alive, not created-then-closed
+PASS R1: recovery cycle 1 keeps exactly one live owner
+PASS R1: recovery cycle 2 keeps exactly one live owner
+PASS R1: recovery cycle 3 keeps exactly one live owner
+PASS R1: each recovery created exactly one replacement mic (no churn leak)
+PASS R2: isolated lease while the native mic is down
+PASS R2: no handoff while the native mic is still absent
+PASS R2: the isolated lease is explicitly handed over when the native mic appears
+PASS R2: the reacquire after the handoff borrows the native mic (single capture source)
+PASS F5: play() reports a completed enqueue on the owned channel
+PASS F5: the native null-connection gate is never consulted (no silent drop)
+PASS F5: the owned AudioChannel for the stream's uuid was created and started
+PASS F5: no InitializationData/secret was fabricated (real bytecode never reads it)
+PASS F5: the packet is queued on the owned channel and ownership is snapshotable
+PASS F5: the second frame reuses the same owned channel
+PASS F5: no duplicate channel per stream uuid
+PASS F5: confirmed enqueues are counted
+PASS F5: attempts/enqueued are tracked separately (N2 evidence grading)
+PASS F5: retiring the stream closes the owned channel (registry cleanup path)
+PASS F5b: play() with a failing playback resource refuses (no fake success)
+PASS F5b: the failed resource is not cached as if it existed
+PASS F5b: playback recovers once the resource is available again
+PASS F6: play() with a null frame refuses
+Frontend lease regression: all checks passed

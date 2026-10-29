@@ -1,0 +1,24 @@
+ע: C:\Users\Administrator\Documents\Workspace\Brokeyuan\mods\teamspeak&svcbridge\teamspeak-svc\src\main\java\com\tsvoice\client\ts3voice\Ts3Crypt.javaʹ�û򸲸����ѹ�ʱ�� API��
+ע: �й���ϸ��Ϣ, ��ʹ�� -Xlint:deprecation ���±��롣
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+clientlist cid=7 -> channel=-1
+duplicate channel Lobby under parent 1 -> null
+global Lobby lookup -> 20
+deleted cid=20 remains cached -> 20
+reused UDP packet sizes: 8, 300
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+after reconnect, cached SVC client is old instance -> true
+before visibility sync, real player state -> native
+after visibility sync, real player state -> injected
+after cleanup, real player state still present -> false
+no-group TS ghost before sync -> 1
+no-group TS ghost after sync -> 0
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+tunnel marked stopped -> true
+after stop, existing tunnel still forwards both ways -> true

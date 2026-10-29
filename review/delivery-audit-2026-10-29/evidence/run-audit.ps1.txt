@@ -1,0 +1,21 @@
+$ErrorActionPreference='Continue'
+$env:JAVA_HOME='C:\Program Files\Java\jdk-25.0.4.1'
+$env:PATH="$env:JAVA_HOME\bin;$env:PATH"
+Set-Location -LiteralPath (Join-Path $PSScriptRoot 'source')
+$coreFiles=@(Get-ChildItem 'ts3voice-core/src/main/java','ts3voice-core/src/test/java' -Recurse -Filter '*.java' | ForEach-Object FullName)
+& javac -encoding UTF-8 -d ts3voice-core/build/classes/java/main @coreFiles
+if($LASTEXITCODE -ne 0){throw 'core compile failed'}
+foreach($main in @('com.tsvoice.protocol.ProtocolTestMain','com.tsvoice.protocol.IdentityTrustRegression','com.tsvoice.protocol.capability.CapabilityWireTest')){
+ & java -cp ts3voice-core/build/classes/java/main $main *> (Join-Path $PSScriptRoot ($main+'.log'))
+ Write-Output "$main exit=$LASTEXITCODE"
+}
+$all=Get-Content 'review/RunAll.ps1' -Raw
+$suitePaths=[regex]::Matches($all,"'review/[^']+\.ps1'") | ForEach-Object {$_.Value.Trim("'")}
+$suitePaths+= 'review/upload-confirmation/RunUploadConfirmation.ps1'
+foreach($suite in $suitePaths){
+ $name=$suite.Replace('/','_')
+ & powershell -NoProfile -ExecutionPolicy Bypass -File $suite *> (Join-Path $PSScriptRoot ($name+'.log'))
+ Write-Output "$suite exit=$LASTEXITCODE"
+}
+
+

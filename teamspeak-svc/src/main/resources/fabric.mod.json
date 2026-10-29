@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "id": "teamspeak-svc",
+  "version": "${version}",
+  "name": "TeamSpeak Voice (SVC frontend)",
+  "description": "Keeps Simple Voice Chat as the in-game frontend (UI, activation, groups) and replaces its voice backend with a direct TeamSpeak 3 voice connection from your client. No server-side voice component required.",
+  "authors": [
+    "Brokeyuan"
+  ],
+  "license": "GPL-3.0",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.tsvoice.TeamspeakSvcMod"
+    ],
+    "client": [
+      "com.tsvoice.bootstrap.ClientEntrypoint"
+    ],
+    "voicechat": [
+      "com.tsvoice.compat.svc.VoicechatPluginEntrypoint"
+    ],
+    "modmenu": [
+      "com.tsvoice.client.ModMenuIntegration"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.20.1",
+    "fabric-api": "*",
+    "minecraft": "26.3.x",
+    "java": ">=25"
+  },
+  "suggests": {
+    "modmenu": "*"
+  },
+  "mixins": [
+    "teamspeak-svc.mixins.json"
+  ],
+  "recommends": {
+    "voicechat": ">=2.6.20",
+    "voicechat_api": "*"
+  },
+  "breaks": {
+    "voice-capabilities": "*"
+  }
+}

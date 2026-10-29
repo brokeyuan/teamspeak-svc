@@ -1,0 +1,16 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        maven { url = 'https://maven.quiltmc.org/repository/release' }
+        maven { url = 'https://maven.quiltmc.org/repository/snapshot' }
+        maven { url = 'https://maven.fabricmc.net/' }
+        maven { url = 'https://maven.maxhenkel.de/repository/public' }
+    }
+    resolutionStrategy {
+        eachPlugin {
+            if (requested.id.id.startsWith('org.quiltmc.loom')) {
+                useModule("org.quiltmc:loom:${requested.version}")
+            }
+        }
+    }
+}

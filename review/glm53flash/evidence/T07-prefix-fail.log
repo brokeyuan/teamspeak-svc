@@ -1,0 +1,24 @@
+注: C:\Users\Administrator\Documents\Workspace\Brokeyuan\mods\teamspeak&svcbridge\teamspeak-svc\src\main\java\com\tsvoice\client\ts3voice\Ts3Crypt.java使用或覆盖了已过时的 API。
+注: 有关详细信息, 请使用 -Xlint:deprecation 重新编译。
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+FAIL O1: trusted-MC participant injects on its participant channel
+FAIL O1: TS audio never occupies the native MC player's channel UUID
+FAIL O2: cross-server same-uid participant gets its own channel
+FAIL O2: the first server's ghost is untouched
+PASS O3: unknown identity plays on the participant channel
+FAIL O3: identity upgrade keeps the participant channel (volume survives)
+FAIL O3: identity upgrade does not migrate onto the MC channel
+FAIL O4: both identities play on their own participant channels
+PASS O6: removeAll releases every ghost channel
+Exception in thread "main" java.lang.AssertionError: 7 playback ownership checks failed
+	at com.tsvoice.client.PlaybackOwnershipTest.main(PlaybackOwnershipTest.java:116)
+Playback ownership regression failed
+所在位置 C:\Users\Administrator\Documents\Workspace\Brokeyuan\mods\teamspeak&svcbridge\review\playback-ownership\RunPla
+ybackOwnership.ps1:35 字符: 28
++ ... $LASTEXITCODE -ne 0) { throw 'Playback ownership regression failed' }
++                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Playback ownership regression failed:String) [], RuntimeException
+    + FullyQualifiedErrorId : Playback ownership regression failed
+ 

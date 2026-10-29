@@ -1,0 +1,21 @@
+PASS first acquire owns a live mic
+PASS no native mic: lease created an isolated mic
+PASS second acquire is rejected while one lease is active
+PASS the rejected acquire never creates a mic resource (no device churn)
+PASS the active lease is unaffected by the rejected acquire
+PASS lease closed
+PASS close releases the owned mic
+PASS re-acquire after close succeeds
+PASS native mic present: lease borrows instead of creating
+PASS svc disconnect closes the lease but never closes the borrowed native mic
+PASS coordinator can re-acquire after svc disconnect
+PASS critical hook failure disables acquisition (FRONTEND_UNAVAILABLE)
+Frontend ownership regression: all checks passed
+PASS MicThread 3-arg constructor probe succeeds (ABI match)
+PASS AudioChannel direct-ownership probe succeeds (ABI match)
+PASS CLIENT_STOPPING lifecycle events probe succeeds
+PASS no critical hooks missing on a 2.6.25-shaped runtime
+PASS no optional hooks missing
+PASS acquire refuses to run when critical hooks are missing
+PASS inspect re-evaluates against the live classpath
+Frontend compatibility regression: all checks passed

@@ -1,0 +1,76 @@
+ע: review\music-0\MusicEngineBoundaryTest.javaʹ�û򸲸����ѹ�ʱ�� API��
+ע: �й���ϸ��Ϣ, ��ʹ�� -Xlint:deprecation ���±��롣
+PASS T1: frame is 960 samples
+PASS T1: frame is 960 samples
+PASS T1: frame is 960 samples
+PASS T1: frame is 960 samples
+PASS T1: frame is 960 samples
+PASS T1: 100ms sine yields exactly 5 frames (got 5)
+PASS T1: closed source returns null
+PASS T2: WAV frame length
+PASS T2: 1s 22.05kHz stereo resamples to ~50 20ms frames (got 51)
+PASS T2: non-WAV file is explicitly rejected (no silent fallback)
+PASS T2: missing file rejected with IOException
+PASS T3: exactly 5 frames submitted in 100ms (got 5)
+PASS T3: natural end -> ENDED
+PASS T3: decode/submit counters agree
+PASS T3: no drops on the happy path
+PASS T4: pause -> PAUSED
+PASS T4: paused engine submits no frames
+PASS T4: resume continues from the paused position
+PASS T4: decode position preserved across pause
+PASS T4: cancel -> IDLE (reusable)
+PASS T5: queue backpressures at capacity-1 (one frame in flight; got 511)
+PASS T5: decode-ahead stops at capacity (backpressure, no drop)
+PASS T6: frames without permit are counted as dropped
+PASS T6: playback continues to natural end
+PASS T7: source failure -> FAILED with the reason surfaced
+PASS T7: close is terminal (CLOSED)
+PASS T8: sink failure -> FAILED with reason
+ALL PASS
+PASS T37-1: capacity=1 drains all 6 frames
+PASS T37-1: capacity=1 output complete, ordered, exactly-once (got [1, 2, 3, 4, 5, 6])
+PASS T37-1: capacity=1 ends naturally
+PASS T37-1: capacity=2 drains all 6 frames
+PASS T37-1: capacity=2 output complete, ordered, exactly-once (got [1, 2, 3, 4, 5, 6])
+PASS T37-1: capacity=2 ends naturally
+PASS T37-1: capacity=512 drains all 6 frames
+PASS T37-1: capacity=512 output complete, ordered, exactly-once (got [1, 2, 3, 4, 5, 6])
+PASS T37-1: capacity=512 ends naturally
+PASS T37-2: close is terminal
+PASS T37-2: play() after close() is rejected (CLOSED is terminal)
+PASS T37-2: state remains CLOSED after rejected play
+PASS T37-3: paused worker does not busy-loop (cpu delta 0ms < 50ms over 300ms wall)
+PASS T37-4: a frame of generation A is in flight at the sink
+PASS T37-4: frames of the cancelled generation never reach playback after replacement (got [1, 2, 3])
+PASS T37-5a: natural end closes the source exactly once
+PASS T37-5b: decode failure -> FAILED and the source is closed exactly once
+PASS T37-5c: cancel closes the source exactly once
+PASS T37-5d: close closes the source exactly once
+PASS T37-6: sink entered
+PASS T37-6: pause() returns promptly while the sink is stuck (0ms)
+PASS T37-6: cancel() returns promptly while the sink is stuck (0ms)
+PASS T37-6: close() returns promptly while the sink is stuck (0ms)
+ALL PASS
+PASS L1: independent session does not touch the player lifecycle
+PASS W1: all 5 encoded frames reached the sender (got 5)
+PASS W1: encoder consumed exactly 5 PCM frames
+PASS W1: frame bytes verify the PCM origin (1..5 in order)
+PASS W1: playback ends naturally
+PASS W1: session close releases the owned encoder
+PASS P1: paused session sends no further frames
+PASS P1: resume continues sending
+PASS C1: first send entered
+PASS C1: cancelled generation's in-flight frame is not re-sent after cancel
+PASS C1: cancel returns to CONNECTED, session reusable
+PASS C1: close after cancel releases the owned encoder
+PASS F1: reason names the encoder
+PASS F1: missing encoder fails explicitly (not silently skipped)
+PASS F1: state is FAILED
+ALL PASS
+ע: review\music-0\RealCodecRoundTripTest.javaʹ����δ�����򲻰�ȫ�Ĳ�����
+ע: �й���ϸ��Ϣ, ��ʹ�� -Xlint:unchecked ���±��롣
+PASS RC: real Opus encode produces a compact frame (196 bytes)
+PASS RC: real Opus decode restores 960 samples (got 960)
+PASS RC: decoded frame retains signal energy (rms=4660, not silence)
+ALL PASS
