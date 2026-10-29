@@ -374,7 +374,9 @@ public final class Ts3Connection {
             } while (frame == null && !voiceQueue.isEmpty());
             if (frame != null) {
                 try {
-                    transport.send(frame.data);
+                    // F2：携带入队时绑定的路由代际（MC 通道等信封传输写入帧头；
+                    // 原生 UDP/TCP 默认实现忽略）。
+                    transport.send(frame.data, frame.routeEpoch);
                 } catch (Exception e) {
                     if (!closed) {
                         Ts3VoiceClient.LOG.debug("[teamspeak-svc] writer send failed: {}", e.getMessage());

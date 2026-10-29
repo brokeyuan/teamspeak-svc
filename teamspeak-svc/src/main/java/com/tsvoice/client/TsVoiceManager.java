@@ -1293,14 +1293,16 @@ public final class TsVoiceManager {
             ClientPlayNetworking.send(new TsRelayPayloads.RelayOpenPayload(open));
             TsRelayWire.OpenedFrame opened = waiter.get(CONNECT_TIMEOUT_MS,
                     java.util.concurrent.TimeUnit.MILLISECONDS);
+            // F2：sender 闭包绑定不可变的本会话 id（不从可变全局取"当前会话"
+            // 给旧帧换身份）；路由代际由 transport.send(data, epoch) 携带（写线程
+            // 在最终写出点复核过的值原样入帧）。
+            final byte[] boundSessionId = opened.relaySessionId();
             mcRelaySessionId = opened.relaySessionId();
             mcRelayTransport = transport;
-            // 上行发送桥：TS3Connection 写线程调用 transport.send —— 这里转
-            // DATA_C2S 帧（有界，服务端按会话限额计费）。
-            transport.setRelaySender(datagram -> {
-                byte[] session = mcRelaySessionId;
+            transport.setRelaySender((com.tsvoice.client.ts3voice.TsMcChannelTransport.RelayFrameSender)
+                    (datagram, routeEpoch) -> {
                 byte[] frame = TsRelayWire.encodeData(TsRelayWire.MessageType.DATA_C2S,
-                        new TsRelayWire.DataFrame(session, 0, 0, datagram));
+                        new TsRelayWire.DataFrame(boundSessionId, routeEpoch, 0, datagram));
                 ClientPlayNetworking.send(new TsRelayPayloads.RelayDataC2sPayload(frame));
             });
             transport.attachRelaySession(opened.relaySessionId(), opened.maxDatagramBytes());
@@ -1391,6 +1393,33 @@ public final class TsVoiceManager {
             }
             default -> {
             }
+        }
+    }
+
+    /**
+     * F2：路由代际推进点（频道确认/许可变更）向服务端发送 ROUTE_BARRIER ——
+     * barrier 之后旧代际帧在服务端被拒（与客户端 writer 丢弃双保险）。
+     * 非中继会话/无会话为 no-op；发送失败仅记录（barrier 丢失不会造成错误
+     * 放行 —— 服务端只按收到的 barrier 生效）。
+     *
+     * @return 是否实际发送（诊断/测试）。
+     */
+    public static boolean sendRelayRouteBarrier() {
+        byte[] session = mcRelaySessionId;
+        TsMcChannelTransport transport = mcRelayTransport;
+        if (session == null || transport == null || transport.isClosed()) {
+            return false;
+        }
+        long epoch = com.tsvoice.client.connection.BackendCoordinator.snapshot().route().routeEpoch();
+        try {
+            byte[] frame = TsRelayWire.encodeRouteBarrier(
+                    new TsRelayWire.RouteBarrierFrame(session, epoch));
+            ClientPlayNetworking.send(new TsRelayPayloads.RelayRouteBarrierC2sPayload(frame));
+            TeamspeakSvcClient.LOGGER.debug("[teamspeak-svc] relay route barrier sent (epoch={})", epoch);
+            return true;
+        } catch (Exception e) {
+            TeamspeakSvcClient.LOGGER.debug("[teamspeak-svc] relay barrier send failed: {}", e.getMessage());
+            return false;
         }
     }
 

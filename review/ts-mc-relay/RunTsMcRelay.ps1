@@ -8,7 +8,7 @@ New-Item -ItemType Directory -Path "$base/classes" -Force | Out-Null
     'teamspeak-svc/src/main/java/com/tsvoice/server/relay/TsRelaySession.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/client/ts3voice/TsTransport.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/client/ts3voice/TsMcChannelTransport.java' `
-    "$base/RelayRuntimeTest.java" "$base/RelayProductionBridgeTest.java" "$base/RelayBoundaryRegressionTest.java" "$base/RelayMusicBotPurposeTest.java"
+    "$base/RelayRuntimeTest.java" "$base/RelayProductionBridgeTest.java" "$base/RelayBoundaryRegressionTest.java" "$base/RelayMusicBotPurposeTest.java" "$base/RelayProductionEpochTest.java"
 if ($LASTEXITCODE -ne 0) { throw 'relay regression compilation failed' }
 & java -cp "$base/classes;review/lib/*" com.tsvoice.RelayRuntimeTest
 if ($LASTEXITCODE -ne 0) { throw 'relay runtime regression failed' }
@@ -21,4 +21,7 @@ if ($LASTEXITCODE -ne 0) { throw 'relay boundary regression failed' }
 # E8/Music-1: MUSIC_BOT purpose wire + purpose-scoped registry (default-off)
 & java -cp "$base/classes;review/lib/*" com.tsvoice.RelayMusicBotPurposeTest
 if ($LASTEXITCODE -ne 0) { throw 'relay MUSIC_BOT purpose regression failed' }
+# F2: production epoch/barrier/bytes enforcement
+& java -cp "$base/classes;review/lib/*" com.tsvoice.RelayProductionEpochTest
+if ($LASTEXITCODE -ne 0) { throw 'relay production epoch regression failed' }
 exit $LASTEXITCODE

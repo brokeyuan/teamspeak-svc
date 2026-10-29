@@ -86,6 +86,13 @@ public final class TsMcChannelTransport implements TsTransport {
 
     @Override
     public void send(byte[] data) throws IOException {
+        // 无代际重载（兼容入口）：代际不可知，交给携带重载处理为"无代际帧"
+        //（服务端 barrier=0 语义：从未收到 barrier 的会话放行所有代际）。
+        send(data, 0);
+    }
+
+    @Override
+    public void send(byte[] data, long routeEpoch) throws IOException {
         if (closed.get()) {
             throw new IOException("transport closed");
         }
@@ -97,17 +104,27 @@ public final class TsMcChannelTransport implements TsTransport {
             throw new IOException("datagram out of negotiated bounds: "
                     + (data == null ? 0 : data.length) + " > " + negotiatedMaxDatagramBytes);
         }
-        // 交给 MC 网络层；编码与限额在那里执行（DATA_C2S 帧）。
-        relaySender.accept(data);
+        // F2：交给 MC 网络层，帧携带入队时绑定的路由代际（写线程在最终写出点
+        // 已复核过的值原样入帧 —— 不在此处读取"当前"代际重贴标签）。
+        relaySender.accept(data, routeEpoch);
     }
 
-    /** MC 网络层发送桥（客户端 manager 接线；在 MC netty 线程安全的发送路径上执行）。 */
-    private volatile java.util.function.Consumer<byte[]> relaySender = data -> {
+    /** MC 网络层发送桥（携带帧代际；manager 接线，MC netty 线程安全路径）。 */
+    private volatile RelayFrameSender relaySender = (data, epoch) -> {
         throw new IllegalStateException("relay sender not wired");
     };
 
+    /** 双参发送桥（F2）：data + 入队时代际。 */
+    public interface RelayFrameSender {
+        void accept(byte[] data, long routeEpoch);
+    }
+
     public void setRelaySender(java.util.function.Consumer<byte[]> sender) {
-        this.relaySender = sender == null ? data -> {
+        this.relaySender = sender == null ? null : (data, epoch) -> sender.accept(data);
+    }
+
+    public void setRelaySender(RelayFrameSender sender) {
+        this.relaySender = sender == null ? (data, epoch) -> {
             throw new IllegalStateException("relay sender not wired");
         } : sender;
     }

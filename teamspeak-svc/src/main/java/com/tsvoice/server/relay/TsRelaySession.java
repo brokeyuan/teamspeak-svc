@@ -52,9 +52,13 @@ final class TsRelaySession {
     private volatile long routeBarrierEpoch = 0;
     /** 每秒数据报限额（OPEN 协商值；≤0 视为不限 —— 配置已保证 ≥1）。 */
     private volatile int maxDatagramsPerSecond;
+    /** 每秒字节限额（F2：协商值真实计费；0 = 不限）。 */
+    private volatile int maxBytesPerSecond;
     /** Token bucket 当前令牌（纳秒精度回填）。 */
     private double datagramTokens;
     private long lastTokenNanos;
+    private double byteTokens;
+    private long lastByteTokenNanos;
 
     TsRelaySession(String playerUuid, String connectionId, String targetId,
                    byte[] relaySessionId, TsRelayRuntime runtime) {
@@ -87,10 +91,13 @@ final class TsRelaySession {
     }
 
     /** 配置协商限额（OPEN 时由 runtime 调用；同时给 bucket 注满初始令牌）。 */
-    synchronized void configureLimits(int maxDatagramsPerSecond) {
+    synchronized void configureLimits(int maxDatagramsPerSecond, int maxBytesPerSecond) {
         this.maxDatagramsPerSecond = maxDatagramsPerSecond;
         this.datagramTokens = Math.max(1, maxDatagramsPerSecond);
         this.lastTokenNanos = System.nanoTime();
+        this.maxBytesPerSecond = maxBytesPerSecond;
+        this.byteTokens = Math.max(1, maxBytesPerSecond);
+        this.lastByteTokenNanos = System.nanoTime();
     }
 
     /**
@@ -116,6 +123,26 @@ final class TsRelaySession {
     /** 该代际是否被当前屏障放行。 */
     boolean routeEpochPermitted(long routeEpoch) {
         return routeEpoch >= routeBarrierEpoch;
+    }
+
+    /**
+     * 字节许可（F2）：bytes/s token bucket 真实拒绝 —— 每数据报按实际长度
+     * 计费；突发受初始容量约束，持续速率受每秒回填约束。
+     */
+    synchronized boolean tryAcquireBytes(int byteCount) {
+        int bps = maxBytesPerSecond;
+        if (bps <= 0) {
+            return true;
+        }
+        long now = System.nanoTime();
+        double refill = (now - lastByteTokenNanos) / 1e9 * bps;
+        byteTokens = Math.min(bps, byteTokens + refill);
+        lastByteTokenNanos = now;
+        if (byteTokens < byteCount) {
+            return false;
+        }
+        byteTokens -= byteCount;
+        return true;
     }
 
     String playerUuid() {

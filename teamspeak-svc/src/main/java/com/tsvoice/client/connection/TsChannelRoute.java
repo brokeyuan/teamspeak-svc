@@ -167,6 +167,13 @@ public final class TsChannelRoute {
                 if (!Objects.equals(previousChannel, cid)) {
                     client.clearQueuedVoice();
                 }
+                // F2：代际推进点向服务端发 ROUTE_BARRIER（MC 中继会话在位时）——
+                // barrier 之后的旧代际帧在服务端也被拒（与 writer 丢弃双保险）。
+                try {
+                    com.tsvoice.client.TsVoiceManager.sendRelayRouteBarrier();
+                } catch (Throwable t) {
+                    // 非中继会话/无会话为 no-op；失败不阻断频道确认
+                }
                 failedAwaitingUser = false;
                 failureReason = "";
                 pauseReason = "";

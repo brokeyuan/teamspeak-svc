@@ -234,7 +234,7 @@ public final class TsRelayRuntime {
                 playerUuid, open.targetId(), negotiated.maxDatagramBytes(),
                 negotiated.maxDatagramsPerSecond(), negotiated.maxBytesPerSecond());
         // T33：协商限额下发给会话级 token bucket（立即生效，不只是返回值）
-        session.configureLimits(negotiated.maxDatagramsPerSecond());
+        session.configureLimits(negotiated.maxDatagramsPerSecond(), negotiated.maxBytesPerSecond());
         return OpenResult.of(opened, sessionId);
     }
 
@@ -276,6 +276,10 @@ public final class TsRelayRuntime {
         }
         // T33b：协商 pps 限额实际执行（token bucket 拒绝；控制/媒体同桶计费）
         if (!session.tryAcquireDatagram()) {
+            return false;
+        }
+        // F2：协商 bytes/s 限额实际执行（按数据报长度计费；超出即拒绝）
+        if (!session.tryAcquireBytes(data.datagram().length)) {
             return false;
         }
         try {

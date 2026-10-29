@@ -18,6 +18,15 @@ public interface TsTransport extends AutoCloseable {
     void send(byte[] data) throws IOException;
 
     /**
+     * 发送一个 TS3 包并携带入队时绑定的路由代际（F2：MC 通道等有信封的传输
+     * 把代际写进 DATA 帧 —— 绝不在最终发送时读取"当前"代际给旧帧重贴标签）。
+     * 默认实现忽略代际（原生 UDP/TCP 无外层信封，帧内代际对 TS 目标无意义）。
+     */
+    default void send(byte[] data, long routeEpoch) throws IOException {
+        send(data);
+    }
+
+    /**
      * 阻塞接收一个包（最长 maxLen 字节）。
      *
      * <p>实现以抛 {@link IOException}（SocketException / SocketTimeoutException / EOFException）
