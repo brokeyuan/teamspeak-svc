@@ -9,11 +9,22 @@ import java.util.function.LongSupplier;
  * 音乐引擎（Music-0 核心，纯 Java）：音源 → 有界队列 → 绝对节拍调度 →
  * 编码回调（TS 发送由宿主接线）。
  *
- * <p>资源边界（实施记录 §3/§5）：单实例；队列有界（默认 512 帧 ≈10s），
- * 满时丢最旧并计数（与语音队列同策略）；专用 daemon 线程 + 绝对节拍
- * （nextFrameAt += FRAME_NANOS，防漂移；时钟可注入）；暂停 = 不出队保留
- * 位置；取消/关闭 = 清队列、关音源、唤醒线程（幂等）；编码异常终止播放并
- * 记录原因（不静默吞）。时钟注入使调度测试确定化。</p>
+ * <p>T37/E6 修订：</p>
+ * <ul>
+ *   <li><b>无损背压</b>：容量判定先于 {@code readFrame} —— 队列满时停止预读，
+ *       不消耗音源帧；编号源在任意容量下完整、有序、恰好一次输出。</li>
+ *   <li><b>CLOSED 终态</b>：{@link #close()} 后 {@link #play} 抛
+ *       {@link IllegalStateException}；CLOSED 不可复活。</li>
+ *   <li><b>PAUSED 阻塞等待</b>：worker 在暂停时 {@code await} 唤醒信号，不
+ *       自旋（CPU 时间可验证）。</li>
+ *   <li><b>playback generation</b>：每次 {@link #play}/{@link #cancel} 递增；
+ *       sink 回调持有取出时绑定的代际 —— 返回后只有当前代际的帧计入提交，
+ *       旧代帧按 {@code framesDroppedByPermit} 丢弃（旧源帧不混入新播放）。</li>
+ *   <li><b>source 生命周期</b>：自然结束/解码失败/cancel/替换/close 均关闭
+ *       owned source 恰好一次。</li>
+ *   <li><b>控制操作不等待 sink</b>：pause/cancel/close 即时返回；sink 在锁外
+ *       执行，慢/阻塞 sink 不拖垮控制面。</li>
+ * </ul>
  */
 public final class MusicEngine implements AutoCloseable {
 
@@ -46,12 +57,14 @@ public final class MusicEngine implements AutoCloseable {
     private long framesDroppedByPermit;
     /** 暂停时刻（帧位置；恢复时音源已停在读位置）。 */
     private long nextFrameAtNanos;
+    /** playback generation（T37-4）：play/cancel 递增；出队帧绑定取出时代际。 */
+    private long generation;
 
     public MusicEngine(FrameSink sink, LongSupplier nanoClock) {
         this(sink, nanoClock, DEFAULT_QUEUE_CAPACITY);
     }
 
-    MusicEngine(FrameSink sink, LongSupplier nanoClock, int capacity) {
+    public MusicEngine(FrameSink sink, LongSupplier nanoClock, int capacity) {
         this.sink = sink;
         this.nanoClock = nanoClock;
         this.capacity = Math.max(1, capacity);
@@ -59,13 +72,16 @@ public final class MusicEngine implements AutoCloseable {
 
     // ---- 播放控制 ----
 
-    /** 开始播放一个音源（替换当前；旧音源关闭）。 */
+    /** 开始播放一个音源（替换当前；旧音源关闭）。CLOSED 引擎拒绝。 */
     public void play(PcmSource newSource) {
         if (newSource == null) {
             throw new IllegalArgumentException("source required");
         }
         lock.lock();
         try {
+            if (state == State.CLOSED) {
+                throw new IllegalStateException("engine closed: play() is not allowed after close()");
+            }
             PcmSource old = source;
             source = newSource;
             queue.clear();
@@ -75,6 +91,7 @@ public final class MusicEngine implements AutoCloseable {
             framesDroppedByPermit = 0;
             failureReason = "";
             nextFrameAtNanos = nanoClock.getAsLong();
+            generation++; // 新播放代：旧代在途帧废弃
             state = State.PLAYING;
             if (worker == null || !worker.isAlive()) {
                 worker = new Thread(this::run, "tsvoice-music-0");
@@ -97,6 +114,7 @@ public final class MusicEngine implements AutoCloseable {
         try {
             if (state == State.PLAYING) {
                 state = State.PAUSED;
+                wakeup.signalAll(); // worker 从节拍等待转入暂停阻塞
             }
         } finally {
             lock.unlock();
@@ -117,15 +135,19 @@ public final class MusicEngine implements AutoCloseable {
         }
     }
 
-    /** 取消播放：清队列、关音源，回到 IDLE（引擎可复用）。 */
+    /** 取消播放：清队列、关音源，回到 IDLE（引擎可复用）。代际递增废弃旧帧。 */
     public void cancel() {
         lock.lock();
         try {
+            if (state == State.CLOSED) {
+                return;
+            }
             queue.clear();
             PcmSource old = source;
             source = null;
             state = State.IDLE;
             failureReason = "";
+            generation++;
             if (old != null) {
                 old.close();
             }
@@ -205,12 +227,28 @@ public final class MusicEngine implements AutoCloseable {
     private void run() {
         while (true) {
             short[] frame = null;
+            long myGeneration = 0;
             boolean endOfSource = false;
             lock.lock();
             try {
-                // 解码预读：填满队列（锁内；解码是内存操作，音源 IO 已在 open
-                // 时建立；有界丢弃保证队列永不超 capacity）
+                // 暂停：阻塞等待（T37-3 不忙循环）；CLOSED/FAILED/ENDED/IDLE 退出
+                while (state == State.PAUSED) {
+                    try {
+                        wakeup.await();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                }
+                if (state != State.PLAYING) {
+                    return; // IDLE(取消)/CLOSED/FAILED/ENDED：退出
+                }
+                // 解码预读：填满队列（T37-1：容量判定先于 readFrame —— 满时
+                // 停止预读，绝不消耗并丢弃音源帧）
                 while (state == State.PLAYING && source != null && !endOfSource) {
+                    if (queue.size() >= capacity) {
+                        break; // 无损背压：队列满即停，源帧保留在音源
+                    }
                     try {
                         short[] decoded = source.readFrame();
                         if (decoded == null) {
@@ -218,15 +256,15 @@ public final class MusicEngine implements AutoCloseable {
                             break;
                         }
                         framesDecoded++;
-                        if (queue.size() >= capacity) {
-                            // 队列已满：停止预读（不是丢最旧 —— 队列持有即有序，
-                            // 停止预读等价背压；保留 drop 计数给真正的满场景）
-                            break;
-                        }
                         queue.offer(decoded);
                     } catch (Exception e) {
                         state = State.FAILED;
                         failureReason = e.getMessage() == null ? e.toString() : e.getMessage();
+                        PcmSource failed = source;
+                        source = null;
+                        if (failed != null) {
+                            failed.close(); // T37-5b：失败释放 owned source
+                        }
                         wakeup.signalAll();
                         return;
                     }
@@ -236,8 +274,9 @@ public final class MusicEngine implements AutoCloseable {
                     PcmSource old = source;
                     source = null;
                     if (old != null) {
-                        old.close();
+                        old.close(); // T37-5a：自然结束释放
                     }
+                    wakeup.signalAll();
                     return;
                 }
                 // 绝对节拍等待出队
@@ -253,38 +292,53 @@ public final class MusicEngine implements AutoCloseable {
                         continue;
                     }
                     frame = queue.poll();
+                    myGeneration = generation; // 出队时绑定代际
                     nextFrameAtNanos += FRAME_NANOS;
                     break;
                 }
-                if (state != State.PLAYING && state != State.PAUSED) {
-                    return; // IDLE(取消)/CLOSED/FAILED/ENDED：退出
+                if (frame == null) {
+                    if (state != State.PLAYING && state != State.PAUSED) {
+                        return; // IDLE(取消)/CLOSED/FAILED/ENDED：退出
+                    }
+                    continue; // PAUSED 或队列暂时空：回到外层等待
                 }
             } finally {
                 lock.unlock();
             }
-            if (frame != null) {
-                boolean accepted;
-                try {
-                    accepted = sink.accept(frame);
-                } catch (Exception e) {
-                    lock.lock();
-                    try {
-                        state = State.FAILED;
-                        failureReason = "sink failed: " + e.getMessage();
-                    } finally {
-                        lock.unlock();
-                    }
-                    return;
-                }
+            // sink 在锁外执行（T37-6：慢/阻塞 sink 不拖垮控制面）
+            final short[] outFrame = frame;
+            final long frameGeneration = myGeneration;
+            boolean accepted;
+            try {
+                accepted = sink.accept(outFrame);
+            } catch (Exception e) {
                 lock.lock();
                 try {
+                    if (state != State.CLOSED && frameGeneration == generation) {
+                        state = State.FAILED;
+                        failureReason = "sink failed: " + e.getMessage();
+                    }
+                    wakeup.signalAll();
+                } finally {
+                    lock.unlock();
+                }
+                return;
+            }
+            lock.lock();
+            try {
+                if (frameGeneration == generation && state != State.CLOSED && state != State.IDLE) {
+                    // 当前代际的帧才计入提交/许可丢弃
                     framesSubmitted++;
                     if (!accepted) {
                         framesDroppedByPermit++;
                     }
-                } finally {
-                    lock.unlock();
+                } else {
+                    // T37-4：取消/替换后返回的旧代帧 —— 不进新播放
+                    framesDroppedByPermit++;
                 }
+                wakeup.signalAll();
+            } finally {
+                lock.unlock();
             }
         }
     }
@@ -293,12 +347,15 @@ public final class MusicEngine implements AutoCloseable {
     public void close() {
         lock.lock();
         try {
+            if (state == State.CLOSED) {
+                return;
+            }
             state = State.CLOSED;
             queue.clear();
             PcmSource old = source;
             source = null;
             if (old != null) {
-                old.close();
+                old.close(); // T37-5d：close 释放 owned source
             }
             wakeup.signalAll();
         } finally {
