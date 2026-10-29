@@ -58,10 +58,36 @@ public final class MusicSession implements AutoCloseable {
         Runnable playerSessionEndHandle();
     }
 
-    /** 单元测试注入面：已连接的独立连接（不触网）。 */
+    /** 单元测试注入面（仅供回归 harness 使用；生产 connect() 走真实连接）。 */
     public static final class ConnectionBundle {
-        /** 标记独立连接可用（生产实现替换为真实 client/transport）。 */
         public boolean connected = true;
+    }
+
+    /** 生产连接持有物：独立 identity/client/connection/transport（F5）。 */
+    public static final class ProductionConnection {
+        public final Object identity;
+        public final Object client;
+        public final Object connection;
+        public final Object transport;
+        /** Bot 自己连接的关闭桥（AutoCloseable；session close 时调用）——
+         *  绝不指向玩家会话的资源。 */
+        public volatile AutoCloseable closer;
+        /** 绑定授权房间（serverUID/cid）；Bot 被移出即停。 */
+        public volatile String boundServerUid;
+        public volatile int boundChannelId = -1;
+
+        public ProductionConnection(Object identity, Object client, Object connection, Object transport) {
+            this.identity = identity;
+            this.client = client;
+            this.connection = connection;
+            this.transport = transport;
+        }
+    }
+
+    /** 编码器工厂（F5）：生产从 SVC 客户端 API 创建；共享引擎不强制其存在。 */
+    public interface EncoderFactory {
+        /** @return 实际可用的编码器；不可用返回 null（调用方明确失败）。 */
+        OpusEncoderAdapter acquire() throws Exception;
     }
 
     public enum State { IDLE, CONNECTED, PLAYING, PAUSED, ENDED, FAILED, CLOSED }
@@ -74,7 +100,9 @@ public final class MusicSession implements AutoCloseable {
     private final Object stateLock = new Object();
     private State state = State.IDLE;
     private String failureReason = "";
-    private ConnectionBundle connection;
+    private ConnectionBundle testConnection;
+    private volatile ProductionConnection production;
+    private volatile EncoderFactory encoderFactory;
     /** 拥有的编码器（会话生命周期内唯一；close 释放）。 */
     private OpusEncoderAdapter ownedEncoder;
     /** 拥有的引擎（播放期间持有）。 */
@@ -87,13 +115,37 @@ public final class MusicSession implements AutoCloseable {
         this.dependencies = dependencies;
     }
 
-    // ---- 连接生命周期（最小面；生产 connect() 在 Music-1 接线） ----
+    // ---- 连接生命周期 ----
 
-    /** 测试注入：直接绑定已建立的独立连接（生产 connect() 走 identity+transport）。 */
+    /**
+     * 生产连接（F5）：使用独立 identity 建立真实 TS client/connection；绝不
+     * 复用玩家 identity/client，也绝不调用玩家 endSession/currentClient。
+     * connect 由 BotManager 驱动（identity/client 构造见该类）。
+     */
+    public void attachProductionConnection(ProductionConnection connection) {
+        synchronized (stateLock) {
+            ensureNotClosed();
+            this.production = connection;
+            this.testConnection = null;
+            if (state == State.IDLE) {
+                state = State.CONNECTED;
+            }
+        }
+    }
+
+    /** 注册生产编码器工厂（startPlayback 无显式编码器时使用）。 */
+    public void setEncoderFactory(EncoderFactory factory) {
+        synchronized (stateLock) {
+            this.encoderFactory = factory;
+        }
+    }
+
+    /** 测试注入（回归 harness 专用）：绑定无网络连接。 */
     public void connectForTest(ConnectionBundle bundle) {
         synchronized (stateLock) {
             ensureNotClosed();
-            this.connection = bundle;
+            this.testConnection = bundle;
+            this.production = null;
             if (state == State.IDLE) {
                 state = State.CONNECTED;
             }
@@ -102,8 +154,29 @@ public final class MusicSession implements AutoCloseable {
 
     public boolean isConnected() {
         synchronized (stateLock) {
-            return connection != null && state != State.CLOSED && state != State.IDLE;
+            if (state == State.CLOSED || state == State.IDLE) {
+                return false;
+            }
+            return (production != null && production.client != null) || testConnection != null;
         }
+    }
+
+    /** 房间绑定（授权 serverUID/cid）；Bot 被移出该房间即停（F5 边界）。 */
+    public void bindRoom(String serverUid, int channelId) {
+        ProductionConnection pc = production;
+        if (pc != null) {
+            pc.boundServerUid = serverUid;
+            pc.boundChannelId = channelId;
+        }
+    }
+
+    /** Bot 是否仍在其授权房间内（被移出返回 false；无绑定视为在位）。 */
+    public boolean inAuthorizedRoom(String serverUid, int channelId) {
+        ProductionConnection pc = production;
+        if (pc == null || pc.boundServerUid == null) {
+            return true; // 未绑定房间约束
+        }
+        return pc.boundServerUid.equals(serverUid) && pc.boundChannelId == channelId;
     }
 
     // ---- 播放 ----
@@ -122,7 +195,7 @@ public final class MusicSession implements AutoCloseable {
                        java.util.function.LongSupplier clock) throws EncodingUnavailableException {
         synchronized (stateLock) {
             ensureNotClosed();
-            if (connection == null) {
+            if (production == null && testConnection == null) {
                 throw new IllegalStateException("not connected");
             }
         }
@@ -199,6 +272,14 @@ public final class MusicSession implements AutoCloseable {
             }
         }
         if (sender == null) {
+            // 生产装配：BotManager 的 producer hook 在首次播放时绑定
+            ProducerSenderHook hook = producerSenderHook;
+            if (hook != null) {
+                sender = hook.create();
+                frameSenderRef = sender;
+            }
+        }
+        if (sender == null) {
             return false;
         }
         boolean accepted = sender.send(opus);
@@ -222,6 +303,19 @@ public final class MusicSession implements AutoCloseable {
     }
 
     private volatile FrameSender frameSenderRef;
+
+    /** 生产 sender 装配钩子（BotManager 传入工厂；startPlayback 装配发送桥）。 */
+    public interface ProducerSenderHook {
+        FrameSender create();
+    }
+
+    private volatile ProducerSenderHook producerSenderHook;
+
+    public void startPlaybackForTestHookViaProducer(ProducerSenderHook hook) {
+        synchronized (stateLock) {
+            this.producerSenderHook = hook;
+        }
+    }
 
     /** 测试/宿主重载：显式发送桥 + 时钟（公开供回归/宿主接线）。 */
     public void startPlaybackForTest(PcmSource source, OpusEncoderAdapter encoder,
@@ -292,8 +386,18 @@ public final class MusicSession implements AutoCloseable {
     // ---- 生命周期 ----
 
     private OpusEncoderAdapter acquireEncoder() throws EncodingUnavailableException {
-        // 生产实现（Music-1 接线）：依赖注入的编码器工厂。当前阶段由调用方
-        // 显式提供（测试/宿主预建）；无编码器 = 明确失败。
+        EncoderFactory factory = encoderFactory;
+        if (factory != null) {
+            try {
+                OpusEncoderAdapter created = factory.acquire();
+                if (created != null) {
+                    return created;
+                }
+            } catch (Exception e) {
+                throw new EncodingUnavailableException(
+                        "opus encoder factory failed: " + e.getMessage());
+            }
+        }
         throw new EncodingUnavailableException(
                 "opus encoder unavailable: music requires an Opus encoder "
                         + "(SVC API implementation or bundled library with license/packaging evidence)");
@@ -311,6 +415,7 @@ public final class MusicSession implements AutoCloseable {
 
     @Override
     public void close() {
+        ProductionConnection pc;
         OpusEncoderAdapter encoder;
         MusicEngine engine;
         synchronized (stateLock) {
@@ -322,7 +427,9 @@ public final class MusicSession implements AutoCloseable {
             ownedEngine = null;
             encoder = ownedEncoder;
             ownedEncoder = null;
-            connection = null;
+            pc = production;
+            production = null;
+            testConnection = null;
             frameSenderRef = null;
         }
         if (engine != null) {
@@ -332,6 +439,16 @@ public final class MusicSession implements AutoCloseable {
             try {
                 encoder.close();
             } catch (RuntimeException ignored) {
+            }
+        }
+        // F5：独立 Bot 连接的断开（绝不触碰玩家会话 —— pc.client 是音乐自己的
+        // client；通过 Disconnectable 适配断开，MusicSession 不静态依赖
+        // ts3voice 类型，共享核心可在无客户端环境编译/测试）。
+        if (pc != null && pc.closer != null) {
+            try {
+                pc.closer.close();
+            } catch (RuntimeException ignored) {
+            } catch (Exception ignored) {
             }
         }
     }

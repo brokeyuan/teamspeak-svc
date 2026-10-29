@@ -65,6 +65,11 @@ public final class TsVoiceManager {
     private static final long MAX_BACKOFF_MS = 60_000L;
     private static final long ALIVE_POLL_MS = 500L;
     private static final long CONNECT_TIMEOUT_MS = 15_000L;
+
+    /** 连接超时（毫秒）—— 音乐 Bot 等独立会话复用同一网络预算。 */
+    public static long connectTimeoutMs() {
+        return CONNECT_TIMEOUT_MS;
+    }
     /** Serializes blocking network close off the manager and GUI threads. */
     private static final java.util.concurrent.ExecutorService CLOSE_EXECUTOR =
             java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
@@ -803,6 +808,8 @@ public final class TsVoiceManager {
         boolean paused = com.tsvoice.client.connection.BackendCoordinator.disconnectTeamSpeak();
         explicitBookmarkId = null;
         stopSession();
+        // F5：断开 TS 停本机音乐 Bot（产品默认；不触碰他人/服务端 Bot）
+        com.tsvoice.client.music.MusicBotManager.onPlayerVoiceLifecycleChange("TS disconnected");
         if (paused) {
             state = State.PAUSED;
         } else if (activeConfig == null) {
@@ -835,6 +842,8 @@ public final class TsVoiceManager {
         com.tsvoice.client.connection.BackendCoordinator.switchToSvc();
         com.tsvoice.client.backend.SvcBackendAdapter.setVoiceMuted(false);
         stopSession();
+        // F5：切 SVC 停本机音乐 Bot（产品默认）
+        com.tsvoice.client.music.MusicBotManager.onPlayerVoiceLifecycleChange("switched to SVC");
         state = State.DORMANT;
     }
 
@@ -848,6 +857,8 @@ public final class TsVoiceManager {
                 .flushNativePlaybackChannels();
         com.tsvoice.client.backend.SvcBackendAdapter.setVoiceMuted(true);
         stopSession();
+        // F5：OFF 停本机音乐 Bot（已确认产品默认；不触碰他人/服务端 Bot）
+        com.tsvoice.client.music.MusicBotManager.onPlayerVoiceLifecycleChange("voice off");
         state = State.VOICE_OFF;
     }
 

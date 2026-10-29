@@ -108,6 +108,12 @@ public class TeamspeakSvcClient {
                     } catch (Throwable t) {
                         LOGGER.debug("[teamspeak-svc] client-stopping audio teardown: {}", t.getMessage());
                     }
+                    // F5：退出游戏停本机音乐 Bot
+                    try {
+                        com.tsvoice.client.music.MusicBotManager.onPlayerVoiceLifecycleChange("client stopping");
+                    } catch (Throwable t) {
+                        LOGGER.debug("[teamspeak-svc] client-stopping music bot teardown: {}", t.getMessage());
+                    }
                 });
 
         // payload 类型注册（S2C 接收）
@@ -260,6 +266,146 @@ public class TeamspeakSvcClient {
                             });
                             return 1;
                         }))
+                        // F5/Music-1: independent music bot minimal in-game entry.
+                        .then(literal("music")
+                                .executes(ctx -> {
+                                    Minecraft.getInstance().execute(() ->
+                                            ctx.getSource().sendFeedback(Component.literal(
+                                                    "Music bot: /tsvoice music start <host> [port] [channel] | add <wav> | play | pause | resume | next | stop | stopbot | queue | status | volume <0-100>")));
+                                    return 1;
+                                })
+                                .then(literal("start").then(net.fabricmc.fabric.api.client.command.v2.ClientCommands
+                                        .argument("target", com.mojang.brigadier.arguments.StringArgumentType.greedyString())
+                                        .executes(ctx -> {
+                                            Minecraft.getInstance().execute(() -> {
+                                                String arg = com.mojang.brigadier.arguments.StringArgumentType
+                                                        .getString(ctx, "target").trim();
+                                                String[] parts = arg.split("\s+", 3);
+                                                try {
+                                                    String host = parts[0];
+                                                    int port = parts.length > 1 ? Integer.parseInt(parts[1]) : 9987;
+                                                    String channel = parts.length > 2 ? parts[2] : "";
+                                                    com.tsvoice.client.music.MusicBotManager.start(host, port, channel, null);
+                                                    ctx.getSource().sendFeedback(Component.literal(
+                                                            "Music bot started: " + com.tsvoice.client.music.MusicBotManager.statusText()));
+                                                } catch (Exception e) {
+                                                    ctx.getSource().sendError(Component.literal(
+                                                            "Music bot start failed: " + e.getMessage()));
+                                                }
+                                            });
+                                            return 1;
+                                        })))
+                                .then(literal("add").then(net.fabricmc.fabric.api.client.command.v2.ClientCommands
+                                        .argument("path", com.mojang.brigadier.arguments.StringArgumentType.greedyString())
+                                        .executes(ctx -> {
+                                            Minecraft.getInstance().execute(() -> {
+                                                try {
+                                                    com.tsvoice.client.music.MusicBotManager.add(
+                                                            com.mojang.brigadier.arguments.StringArgumentType.getString(ctx, "path"));
+                                                    ctx.getSource().sendFeedback(Component.literal("track added to queue"));
+                                                } catch (Exception e) {
+                                                    ctx.getSource().sendError(Component.literal(e.getMessage()));
+                                                }
+                                            });
+                                            return 1;
+                                        })))
+                                .then(literal("play").executes(ctx -> {
+                                    Minecraft.getInstance().execute(() -> {
+                                        try {
+                                            com.tsvoice.client.music.MusicBotManager.play();
+                                            ctx.getSource().sendFeedback(Component.literal(
+                                                    com.tsvoice.client.music.MusicBotManager.statusText()));
+                                        } catch (Exception e) {
+                                            ctx.getSource().sendError(Component.literal(e.getMessage()));
+                                        }
+                                    });
+                                    return 1;
+                                }))
+                                .then(literal("pause").executes(ctx -> {
+                                    Minecraft.getInstance().execute(() -> {
+                                        try {
+                                            com.tsvoice.client.music.MusicBotManager.pause();
+                                            ctx.getSource().sendFeedback(Component.literal("music paused"));
+                                        } catch (Exception e) {
+                                            ctx.getSource().sendError(Component.literal(e.getMessage()));
+                                        }
+                                    });
+                                    return 1;
+                                }))
+                                .then(literal("resume").executes(ctx -> {
+                                    Minecraft.getInstance().execute(() -> {
+                                        try {
+                                            com.tsvoice.client.music.MusicBotManager.resume();
+                                            ctx.getSource().sendFeedback(Component.literal("music resumed"));
+                                        } catch (Exception e) {
+                                            ctx.getSource().sendError(Component.literal(e.getMessage()));
+                                        }
+                                    });
+                                    return 1;
+                                }))
+                                .then(literal("next").executes(ctx -> {
+                                    Minecraft.getInstance().execute(() -> {
+                                        try {
+                                            com.tsvoice.client.music.MusicBotManager.next();
+                                            ctx.getSource().sendFeedback(Component.literal(
+                                                    com.tsvoice.client.music.MusicBotManager.statusText()));
+                                        } catch (Exception e) {
+                                            ctx.getSource().sendError(Component.literal(e.getMessage()));
+                                        }
+                                    });
+                                    return 1;
+                                }))
+                                .then(literal("stop").executes(ctx -> {
+                                    Minecraft.getInstance().execute(() -> {
+                                        com.tsvoice.client.music.MusicBotManager.stopPlayback();
+                                        ctx.getSource().sendFeedback(Component.literal("playback stopped"));
+                                    });
+                                    return 1;
+                                }))
+                                .then(literal("stopbot").executes(ctx -> {
+                                    Minecraft.getInstance().execute(() -> {
+                                        com.tsvoice.client.music.MusicBotManager.stopBot();
+                                        ctx.getSource().sendFeedback(Component.literal("music bot stopped"));
+                                    });
+                                    return 1;
+                                }))
+                                .then(literal("queue").executes(ctx -> {
+                                    Minecraft.getInstance().execute(() -> {
+                                        var queue = com.tsvoice.client.music.MusicBotManager.queueSnapshot();
+                                        if (queue.isEmpty()) {
+                                            ctx.getSource().sendFeedback(Component.literal("queue is empty"));
+                                        } else {
+                                            StringBuilder sb = new StringBuilder("Queue:");
+                                            for (int i = 0; i < queue.size(); i++) {
+                                                sb.append(System.lineSeparator()).append(i + 1).append(". ").append(queue.get(i));
+                                            }
+                                            ctx.getSource().sendFeedback(Component.literal(sb.toString()));
+                                        }
+                                    });
+                                    return 1;
+                                }))
+                                .then(literal("status").executes(ctx -> {
+                                    Minecraft.getInstance().execute(() ->
+                                            ctx.getSource().sendFeedback(Component.literal(
+                                                    com.tsvoice.client.music.MusicBotManager.statusText())));
+                                    return 1;
+                                }))
+                                .then(literal("volume").then(net.fabricmc.fabric.api.client.command.v2.ClientCommands
+                                        .argument("percent", com.mojang.brigadier.arguments.IntegerArgumentType.integer(0, 100))
+                                        .executes(ctx -> {
+                                            Minecraft.getInstance().execute(() -> {
+                                                int v = com.mojang.brigadier.arguments.IntegerArgumentType
+                                                        .getInteger(ctx, "percent");
+                                                try {
+                                                    com.tsvoice.client.music.MusicBotManager.setVolume(v);
+                                                    ctx.getSource().sendFeedback(Component.literal(
+                                                            "music volume " + v + "% (local listening level)"));
+                                                } catch (Exception e) {
+                                                    ctx.getSource().sendError(Component.literal(e.getMessage()));
+                                                }
+                                            });
+                                            return 1;
+                                        }))))
                         .then(literal("rays").executes(ctx -> {
                             Minecraft.getInstance().execute(() -> {
                                 com.tsvoice.client.audio.TsAudio.showRayTrace = !com.tsvoice.client.audio.TsAudio.showRayTrace;
