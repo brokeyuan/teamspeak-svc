@@ -55,6 +55,8 @@ public final class Ts3VoiceClient {
     private final AtomicBoolean connected = new AtomicBoolean(false);
     private final AtomicBoolean failed = new AtomicBoolean(false);
     private final AtomicReference<String> failReason = new AtomicReference<>();
+    /** S0.7/R26：最近一次结构化协议拒绝（连接建立期间由服务器 error 行触发）。 */
+    private final AtomicReference<TsProtocolException> protocolError = new AtomicReference<>();
     private final CountDownLatch connectLatch = new CountDownLatch(1);
     private final AtomicInteger voiceCounter = new AtomicInteger(0);
     /** 已告警过的不支持入站 codec（每 codec 告警一次）。 */
@@ -290,6 +292,12 @@ public final class Ts3VoiceClient {
             throw new Ts3VoiceException("connect interrupted");
         }
         if (failed.get()) {
+            // S0.7/R26：协议拒绝（服务器 error 行）以结构化异常抛出，保留数值 id；
+            // 其余失败（超时/网络层）保持普通 Ts3VoiceException。
+            TsProtocolException protocol = protocolError.get();
+            if (protocol != null) {
+                throw protocol;
+            }
             throw new Ts3VoiceException(failReason.get() == null ? "connect failed" : failReason.get());
         }
         connected.set(true);
@@ -918,11 +926,40 @@ public final class Ts3VoiceClient {
             String extra = params.get("extra_msg");
             // clientinit 后的首个 error 非 0 = 连接失败
             if (!connected.get() && myClid < 0) {
-                fail("server error id=" + id + " msg=" + msg + (extra != null ? " extra=" + extra : ""));
+                // S0.7/R26：结构化传递数值 id 与原始 msg token，分类层不再从
+                // 拼接文本里猜语义（数值解释须依真实协议资料，本层不解释）。
+                int numericId;
+                try {
+                    numericId = Integer.parseInt(id.trim());
+                } catch (NumberFormatException e) {
+                    numericId = -1;
+                }
+                failWithProtocolError(numericId, msg, extra);
             } else {
                 LOG.warn("[teamspeak-svc] command error id={} msg={} extra={}", id, msg, extra);
             }
         }
+    }
+
+    /**
+     * S0.7/R26：以结构化协议错误终止连接 —— failReason 记录人类可读文本，
+     * 协议拒绝经 {@link TsProtocolException} 保留 id/msg，供上层分类。
+     */
+    private void failWithProtocolError(int id, String msg, String extra) {
+        String reason = "server error id=" + id + " msg=" + msg + (extra != null ? " extra=" + extra : "");
+        if (failed.compareAndSet(false, true)) {
+            failReason.set(reason);
+            protocolError.set(new TsProtocolException(reason, id, msg, extra));
+            LOG.error("[teamspeak-svc] {}", reason);
+        }
+        commandTracker.cancelSession();
+        Ts3FileTransferBridge.cancelClient(this);
+        connectLatch.countDown();
+    }
+
+    /** 最近一次协议拒绝（结构化）；无则 null（普通失败/网络断开）。 */
+    public TsProtocolException lastProtocolError() {
+        return protocolError.get();
     }
 
     // ---- 工具 ----

@@ -67,9 +67,14 @@ public final class VoiceState {
                                   com.tsvoice.client.ts3voice.Ts3VoiceClient source) {
     }
 
-    /** 失败类别（唯一枚举；SelectionPolicy.FailureKind 仅保留常量别名避免同义漂移）。 */
+    /**
+     * 失败类别（唯一枚举；SelectionPolicy.FailureKind 仅保留常量别名避免同义漂移）。
+     * S0.7/R26 新增 {@link #PROTOCOL_REJECTED}：服务器以结构化 error 行明确拒绝、
+     * 但 token 未收录进具体凭据/权限类别 —— 终止重试，不当网络超时。
+     */
     public enum FailureKind {
         NETWORK_TIMEOUT, DNS_FAILED, AUTH_DENIED, CHANNEL_PASSWORD, PERMISSION_DENIED,
-        BANNED, SERVER_FULL, UNSUPPORTED_PROTOCOL, FRONTEND_UNAVAILABLE, CANCELLED, INTERNAL
+        BANNED, SERVER_FULL, UNSUPPORTED_PROTOCOL, FRONTEND_UNAVAILABLE, CANCELLED, INTERNAL,
+        PROTOCOL_REJECTED
     }
 }

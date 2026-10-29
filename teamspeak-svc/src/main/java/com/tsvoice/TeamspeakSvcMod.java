@@ -59,13 +59,11 @@ public final class TeamspeakSvcMod implements ModInitializer {
                     }
                 });
 
-        // 每 server 生命周期：dedicated 与集成服务器统一走这里（无 server 入口例外）
+        // 每 server 生命周期：dedicated 与集成服务器统一走这里（无 server 入口例外）。
+        // S0.3/R22：环境在启动时固定并参与所有状态计算（reload/恢复不再绕过集成门）。
         ServerLifecycleEvents.SERVER_STARTING.register(server -> {
             Path configDir = FabricLoader.getInstance().getConfigDir();
-            ServerRuntime runtime = ServerRuntime.start(configDir);
-            if (!server.isDedicatedServer()) {
-                runtime.applyIntegratedServerGate();
-            }
+            ServerRuntime runtime = ServerRuntime.start(configDir, server.isDedicatedServer());
             RUNTIMES.put(server, runtime);
         });
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> {

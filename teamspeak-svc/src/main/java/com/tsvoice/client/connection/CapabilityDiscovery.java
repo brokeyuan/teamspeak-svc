@@ -40,6 +40,7 @@ public final class CapabilityDiscovery {
         this.contextEpoch = newContextEpoch;
         this.authorized = List.of();
         this.received = List.of();
+        this.rejected = List.of();
         this.windowStartNanos = Long.MIN_VALUE;
         this.begun = false;
         this.requestNonce = Long.MIN_VALUE;
@@ -141,5 +142,41 @@ public final class CapabilityDiscovery {
     public boolean hasAuthorizedTunnel() {
         return authorizedCandidates().stream().anyMatch(c ->
                 c.candidate().kind() == CapabilityWire.CandidateKind.TUNNEL);
+    }
+
+    // ---- S0.4/R23：显式拒绝状态（拒绝的公告候选不得被同窗口重复弹窗打扰）----
+
+    /** 本窗口内被玩家显式拒绝的候选（context 内有效；换服/新公告重置）。 */
+    private volatile List<AnnouncedCandidate> rejected = List.of();
+
+    /**
+     * 玩家显式拒绝：候选必须绑定实际已接收的快照。拒绝后本 context 内不再为
+     * 这些候选弹授权；同 endpoint 的“记住”决定由 manager 写入 servers.json。
+     */
+    public synchronized boolean reject(long contextEpochAtPrompt,
+                                       List<AnnouncedCandidate> candidates) {
+        if (!begun || contextEpochAtPrompt != contextEpoch) {
+            return false;
+        }
+        long now = nanoClock.getAsLong();
+        if (candidates != null) {
+            for (AnnouncedCandidate c : candidates) {
+                if (c == null || c.expiresAtNanos() <= now || !received.contains(c)) {
+                    return false;
+                }
+            }
+        }
+        java.util.LinkedHashSet<AnnouncedCandidate> merged = new java.util.LinkedHashSet<>(rejected);
+        if (candidates != null) {
+            merged.addAll(candidates);
+        }
+        rejected = List.copyOf(merged);
+        return true;
+    }
+
+    /** 本窗口内被显式拒绝且仍在 TTL 内的候选（UI 防重复弹窗）。 */
+    public List<AnnouncedCandidate> rejectedCandidates() {
+        long now = nanoClock.getAsLong();
+        return rejected.stream().filter(c -> c.expiresAtNanos() > now).toList();
     }
 }

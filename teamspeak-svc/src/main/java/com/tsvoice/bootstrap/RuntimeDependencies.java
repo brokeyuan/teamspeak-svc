@@ -36,18 +36,83 @@ public final class RuntimeDependencies {
                 .orElse(null);
     }
 
-    /** SVC API 版本是否满足客户端插件的最低要求（元数据比对，不加载类）。 */
+    /** 客户端插件面使用的 API 自 2.6.20 起稳定；上游兼容目标为 2.6.x（基线 2.6.25）。 */
+    private static final int MIN_MAJOR = 2;
+    private static final int MIN_MINOR = 6;
+    private static final int MIN_PATCH = 20;
+
+    /**
+     * 解析 "major.minor(.patch)" 语义版本（S0.7/R26）：解析失败返回 null，由
+     * 调用方拒绝 —— 不再用 startsWith("2.6") 这类字符串前缀把 2.6.1/2.60.x
+     * 误判为兼容。
+     */
+    static int[] parseSemanticVersion(String friendly) {
+        if (friendly == null || friendly.isBlank()) {
+            return null;
+        }
+        // 剥离常见构建后缀（+build.1 / -beta 等）
+        String core = friendly.split("[+\\-]", 2)[0];
+        String[] parts = core.split("\\.");
+        if (parts.length < 2 || parts.length > 3) {
+            return null;
+        }
+        int[] out = new int[parts.length];
+        for (int i = 0; i < parts.length; i++) {
+            try {
+                out[i] = Integer.parseInt(parts[i].trim());
+            } catch (NumberFormatException e) {
+                return null;
+            }
+            if (out[i] < 0) {
+                return null;
+            }
+        }
+        return out;
+    }
+
+    static boolean semanticVersionAtLeast(int[] v, int minMajor, int minMinor, int minPatch) {
+        if (v == null || v.length < 2) {
+            return false;
+        }
+        if (v[0] != minMajor) {
+            return v[0] > minMajor;
+        }
+        int minor = v[1];
+        if (minor != minMinor) {
+            return minor > minMinor;
+        }
+        int patch = v.length >= 3 ? v[2] : 0;
+        return patch >= minPatch;
+    }
+
+    /**
+     * SVC 版本约束（S0.7/R26）：有工程证据（基线 2.6.25、API 面 2.6.20 起）的
+     * 支持范围是 2.6.20 ≤ v &lt; 2.7.0 —— 同一 2.6 小版本系列内、不低于 2.6.20。
+     * 2.6.1（过旧）、2.60.x（另一小版本系列）、2.7.0（未验证的新系列）均不接受；
+     * 语义范围不得宽于有工程证据的支持范围。新系列须重做 ABI 核对后再放宽。
+     */
+    public static boolean versionSupported(String friendly) {
+        int[] v = parseSemanticVersion(friendly);
+        if (v == null || v.length < 3) {
+            return false;
+        }
+        return v[0] == MIN_MAJOR && v[1] == MIN_MINOR && v[2] >= MIN_PATCH;
+    }
+
+    /**
+     * SVC API 版本是否满足客户端插件的最低要求（元数据比对，不加载类）。
+     * 解析失败/非语义版本号一律拒绝 —— 真实兼容性由具体 ABI 检查判定，
+     * 不因字符串解析失败放行整个 2.6.x 系列。
+     */
     public static boolean svcApiCompatible() {
         Version version = svcVersion();
         if (version == null) {
             return false;
         }
         try {
-            // 客户端插件面使用的 API 自 2.6.20 起稳定（上一轮基线 2.6.25）；
-            // 2.6.x 兼容检查保持与历史约束一致（字符串解析，避免 Version API 形态差异）。
-            return version.getFriendlyString().startsWith("2.6");
+            return versionSupported(version.getFriendlyString());
         } catch (Throwable t) {
-            return true; // 非标准版本号：不因解析失败拒绝（真实兼容性由 SVC 入口验证）
+            return false;
         }
     }
 
@@ -65,7 +130,7 @@ public final class RuntimeDependencies {
         }
         if (!svcApiCompatible()) {
             return "Simple Voice Chat version " + svcVersion() + " is not supported: "
-                    + "a 2.6.x release is required.";
+                    + "version 2.6." + MIN_PATCH + " or newer (2.6.x) is required.";
         }
         return "";
     }

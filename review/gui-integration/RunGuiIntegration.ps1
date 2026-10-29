@@ -19,7 +19,27 @@ public class TeamspeakSvcClient {
 '@
 'net/fabricmc/loader/api/FabricLoader.java'=@'
 package net.fabricmc.loader.api;
-public class FabricLoader {public static FabricLoader getInstance(){return new FabricLoader();} public java.nio.file.Path getConfigDir(){return java.nio.file.Path.of("review/gui-integration/config");}}
+import java.util.Optional;
+public class FabricLoader {public static FabricLoader getInstance(){return new FabricLoader();} public java.nio.file.Path getConfigDir(){return java.nio.file.Path.of("review/gui-integration/config");}
+ public net.fabricmc.api.EnvType getEnvironmentType(){return net.fabricmc.api.EnvType.CLIENT;}
+ public boolean isModLoaded(String id){return "voicechat".equals(id);}
+ public Optional<ModContainer> getModContainer(String id){return Optional.of(new ModContainer());}}
+'@
+'net/fabricmc/api/EnvType.java'=@'
+package net.fabricmc.api;
+public enum EnvType {CLIENT, SERVER}
+'@
+'net/fabricmc/loader/api/Version.java'=@'
+package net.fabricmc.loader.api;
+public interface Version {String getFriendlyString();}
+'@
+'net/fabricmc/loader/api/ModContainer.java'=@'
+package net.fabricmc.loader.api;
+public class ModContainer {public ModMetadata getMetadata(){return new ModMetadata();}}
+'@
+'net/fabricmc/loader/api/ModMetadata.java'=@'
+package net.fabricmc.loader.api;
+public class ModMetadata {public Version getVersion(){return new Version(){public String getFriendlyString(){return "2.6.25";}};}}
 '@
 'net/minecraft/client/Minecraft.java'=@'
 package net.minecraft.client;
@@ -65,7 +85,10 @@ public class AecReferenceMixer{public static void clear(){}}
 '@
 'com/tsvoice/client/ts3voice/Ts3VoiceException.java'=@'
 package com.tsvoice.client.ts3voice;
-public class Ts3VoiceException extends Exception {}
+public class Ts3VoiceException extends Exception {
+ public Ts3VoiceException(String message){super(message);}
+ public Ts3VoiceException(String message,Throwable cause){super(message,cause);}
+}
 '@
 'com/tsvoice/client/ts3voice/Ts3Identity.java'=@'
 package com.tsvoice.client.ts3voice;
@@ -193,7 +216,7 @@ $sources = foreach ($item in $stubs.GetEnumerator()) {
     $path
 }
 $client = 'teamspeak-svc/src/main/java/com/tsvoice/client'
-$prod = @("$client/TsVoiceManager.java", "$client/MicRedirector.java", "$client/audio/MicRouteGate.java",
+$prod = @("$client/TsVoiceManager.java", "$client/ts3voice/TsProtocolException.java", "$client/MicRedirector.java", "$client/audio/MicRouteGate.java",
     "$client/connection/VoiceState.java", "$client/connection/BackendCoordinator.java",
     "$client/connection/SelectionPolicy.java", "$client/connection/TsChannelRoute.java",
     "$client/GroupChannelMapper.java", "$client/ts3voice/TsChannelSnapshot.java",
@@ -204,13 +227,17 @@ $prod = @("$client/TsVoiceManager.java", "$client/MicRedirector.java", "$client/
     "$client/frontend/FrontendLease.java", "$client/frontend/Svc2625FrontendAdapter.java",
     "$client/ClientStateReflector.java", "$client/VoiceStatusModel.java",
     "$client/connection/CapabilityDiscovery.java",
-    'ts3voice-core/src/main/java/com/tsvoice/protocol/capability/CapabilityWire.java') |
+    'ts3voice-core/src/main/java/com/tsvoice/protocol/capability/CapabilityWire.java',
+    'teamspeak-svc/src/main/java/com/tsvoice/bootstrap/RuntimeDependencies.java') |
     Where-Object { Test-Path $_ }
 $svcClientStubs = Get-ChildItem -LiteralPath "$base/stubs/de" -Recurse -Filter '*.java' |
     Select-Object -ExpandProperty FullName
 & javac -encoding UTF-8 -cp 'review/lib/*' -d "$base/classes" @prod @sources $svcClientStubs `
-    "$base/GuiFlowTest.java"
+    "$base/GuiFlowTest.java" "$base/R26VersionProbe.java" "$base/R26CompatibilityTest.java"
 if ($LASTEXITCODE -ne 0) { throw 'GUI flow regression compilation failed' }
 & java -cp "$base/classes;review/lib/*" com.tsvoice.client.GuiFlowTest
 if ($LASTEXITCODE -ne 0) { throw 'GUI flow regression failed' }
+# S0.7/R26: explicit semantic version predicate + structured failure classification.
+& java -cp "$base/classes;review/lib/*" com.tsvoice.client.R26CompatibilityTest
+if ($LASTEXITCODE -ne 0) { throw 'R26 compatibility regression failed' }
 exit $LASTEXITCODE

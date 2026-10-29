@@ -239,6 +239,8 @@ public final class TsAudioInjector {
             }
             TeamspeakSvcClient.LOGGER.info("[teamspeak-svc] TS audio channel for '{}' (participant {}, {})",
                     displayName, channelUuid, mcUuid != null ? "MC-linked display" : "TS user");
+            // S0.6/R25：同 ParticipantKey 重连/通道重建后恢复已保存的逐用户音量/静音
+            ParticipantVolumeControl.reapply(channelUuid);
             return new GhostAudio(channelUuid, displayName, mcUuid, true, null,
                     streamKeyFor(key));
         } catch (Exception e) {

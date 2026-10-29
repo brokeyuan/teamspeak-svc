@@ -79,5 +79,17 @@
   "tsvoice.gui.channels.users": "用户",
   "tsvoice.gui.channels.stay_here": "在当前频道继续",
   "tsvoice.gui.channels.retry": "重试移动",
-  "tsvoice.gui.channels.empty": "暂无频道数据。"
+  "tsvoice.gui.channels.empty": "暂无频道数据。",
+  "tsvoice.consent.title": "确认公告的 TeamSpeak 端点",
+  "tsvoice.consent.warning": "该 MC 服务器通过能力公告下发了 TeamSpeak 端点。只批准你信任的端点；批准不会开启自动连接，也不会自动批准其他能力种类。",
+  "tsvoice.consent.accept": "仅本次批准",
+  "tsvoice.consent.remember": "批准并记住",
+  "tsvoice.consent.none": "当前没有等待确认的公告 TeamSpeak 端点。",
+  "tsvoice.gui.channels.cancel": "取消",
+  "tsvoice.gui.channels.password_for": "频道密码：",
+  "tsvoice.gui.channels.create_hint": "创建频道（名称 / 可选父频道 / 可选密码）",
+  "tsvoice.gui.channels.create_parent": "父频道名称（留空=根频道）",
+  "tsvoice.gui.channels.create_needs_name": "必须填写频道名称",
+  "tsvoice.gui.channels.create_parent_missing": "找不到父频道",
+  "tsvoice.gui.channels.create_parent_ambiguous": "父频道名称不唯一"
 }

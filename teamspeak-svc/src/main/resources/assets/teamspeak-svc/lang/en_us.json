@@ -79,5 +79,17 @@
   "tsvoice.gui.channels.users": "Users",
   "tsvoice.gui.channels.stay_here": "Stay in this channel",
   "tsvoice.gui.channels.retry": "Retry move",
-  "tsvoice.gui.channels.empty": "No channel data yet."
+  "tsvoice.gui.channels.empty": "No channel data yet.",
+  "tsvoice.consent.title": "Approve announced TeamSpeak endpoint",
+  "tsvoice.consent.warning": "This server announced a TeamSpeak endpoint via capability announcements. Only approve endpoints you trust. Approving does not enable auto-connect, and does not approve any other capability kinds.",
+  "tsvoice.consent.accept": "Approve once",
+  "tsvoice.consent.remember": "Approve and remember",
+  "tsvoice.consent.none": "No announced TeamSpeak endpoint is waiting for approval.",
+  "tsvoice.gui.channels.cancel": "Cancel",
+  "tsvoice.gui.channels.password_for": "Channel password for:",
+  "tsvoice.gui.channels.create_hint": "Create channel (name / optional parent / optional password)",
+  "tsvoice.gui.channels.create_parent": "Parent channel name (empty = root)",
+  "tsvoice.gui.channels.create_needs_name": "Channel name is required",
+  "tsvoice.gui.channels.create_parent_missing": "Parent channel not found",
+  "tsvoice.gui.channels.create_parent_ambiguous": "Parent channel name is ambiguous"
 }

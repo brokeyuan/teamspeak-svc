@@ -153,6 +153,11 @@ public final class BackendCoordinator {
      * <p>N1/D04：观察到当前策略不允许的频道时，若此前的发送许可仍然有效，
      * 必须原子撤销许可、递增写出代际并清频道信息 —— 旧频道排队的帧在 writer
      * 最终写出点因代际不符被丢弃（含已出队未写出的帧）。重复对账不再重复递增。</p>
+     *
+     * <p>S0.1/R21：批准后的频道变化同样必须推进全局 ROUTE_EPOCH 计数器 ——
+     * 任何对 routeEpoch 的写入都只能经 {@link #nextRouteEpoch()} 分配，禁止
+     * 局部 +1。否则多次频道移动后全局计数器落后于路由值，会话结束/创建时
+     * 全局分配会回退并与旧会话路由重复，旧 writer 帧借此复活。</p>
      */
     public static synchronized boolean confirmChannel(VoiceState.SessionToken token,
                                                       String serverUid, int cid) {
@@ -172,8 +177,9 @@ public final class BackendCoordinator {
             }
             return false;
         }
-        long nextEpoch = route.routeEpoch()
-                + (confirmedChannelId != null && confirmedChannelId != cid ? 1 : 0);
+        // S0.1/R21：全局唯一分配点；不变频道观察（重复确认同一频道）不递增。
+        long nextEpoch = confirmedChannelId != null && confirmedChannelId != cid
+                ? nextRouteEpoch() : route.routeEpoch();
         route = new VoiceState.RouteSnapshot(token, selection.selectionEpoch(), nextEpoch,
                 Optional.of(VoiceState.BackendKind.TS3), serverUid, cid, true);
         confirmedChannelId = cid;
@@ -220,6 +226,19 @@ public final class BackendCoordinator {
     /** 回调校验：token 是否仍代表当前会话。 */
     public static boolean isCurrent(VoiceState.SessionToken token) {
         return token != null && token.equals(current);
+    }
+
+    /**
+     * S0.1/R21：写出许可的最终校验（writer 线程调用）—— 路由就绪、后端为 TS，
+     * 且快照所属会话与 {@code session} 完全一致。阻塞 writer 的旧会话帧即使
+     * 携带与新会话相同的全局 epoch 数值，也会因会话不匹配被丢弃：epoch 单独
+     * 不再构成跨会话发送许可。
+     */
+    public static boolean writePermittedFor(VoiceState.SessionToken session) {
+        VoiceState.RouteSnapshot snap = route;
+        return snap.transmitReady()
+                && snap.backend().orElse(null) == VoiceState.BackendKind.TS3
+                && snap.session() != null && snap.session().equals(session);
     }
 
     /** MC 连接上下文变化（换服/离开世界）：递增并返回新 contextEpoch。 */

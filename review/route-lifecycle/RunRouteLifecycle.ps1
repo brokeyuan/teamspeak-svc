@@ -65,7 +65,10 @@ public class AecReferenceMixer{public static void clear(){}}
 '@
 'com/tsvoice/client/ts3voice/Ts3VoiceException.java'=@'
 package com.tsvoice.client.ts3voice;
-public class Ts3VoiceException extends Exception {}
+public class Ts3VoiceException extends Exception {
+ public Ts3VoiceException(String message){super(message);}
+ public Ts3VoiceException(String message,Throwable cause){super(message,cause);}
+}
 '@
 'com/tsvoice/client/ts3voice/Ts3Identity.java'=@'
 package com.tsvoice.client.ts3voice;
@@ -193,7 +196,7 @@ $sources = foreach ($item in $stubs.GetEnumerator()) {
     $path
 }
 $client = 'teamspeak-svc/src/main/java/com/tsvoice/client'
-$prod = @("$client/TsVoiceManager.java", "$client/MicRedirector.java", "$client/audio/MicRouteGate.java",
+$prod = @("$client/TsVoiceManager.java", "$client/ts3voice/TsProtocolException.java", "$client/MicRedirector.java", "$client/audio/MicRouteGate.java",
     "$client/connection/VoiceState.java", "$client/connection/BackendCoordinator.java",
     "$client/connection/SelectionPolicy.java", "$client/connection/TsChannelRoute.java", "$client/connection/CapabilityDiscovery.java", "ts3voice-core/src/main/java/com/tsvoice/protocol/capability/CapabilityWire.java",
     "$client/GroupChannelMapper.java", "$client/ts3voice/TsChannelSnapshot.java",
@@ -208,7 +211,7 @@ $svcClientStubs = Get-ChildItem -LiteralPath "$base/stubs/de" -Recurse -Filter '
     Select-Object -ExpandProperty FullName
 & javac -encoding UTF-8 -cp 'review/lib/*' -d "$base/classes" @prod @sources $svcClientStubs `
     "$base/RouteLifecycleTest.java" "$base/BookmarkRouteTest.java" "$base/QueuedVoiceRouteTest.java" `
-    "$base/RouteMoveLifecycleTest.java" "$base/OffGateTest.java"
+    "$base/RouteMoveLifecycleTest.java" "$base/OffGateTest.java" "$base/S0FixRegressionTest.java"
 if ($LASTEXITCODE -ne 0) { throw 'Route lifecycle regression compilation failed' }
 & java -cp "$base/classes;review/lib/*" com.tsvoice.client.RouteLifecycleTest
 if ($LASTEXITCODE -ne 0) { throw 'Route lifecycle regression failed' }
@@ -220,6 +223,10 @@ if ($LASTEXITCODE -ne 0) { throw 'Queued voice route regression failed' }
 if ($LASTEXITCODE -ne 0) { throw 'Route move lifecycle regression failed' }
 & java -cp "$base/classes;review/lib/*" com.tsvoice.client.OffGateTest
 if ($LASTEXITCODE -ne 0) { throw 'Off gate regression failed' }
+# S0 (post-m7 review): R21 epoch monotonicity + session-bound writer permit,
+# R27 malformed announcement boundary, R23 explicit consent flow.
+& java -cp "$base/classes;review/lib/*" com.tsvoice.client.S0FixRegressionTest
+if ($LASTEXITCODE -ne 0) { throw 'S0 fix regression failed' }
 # Connection-level linearization: REAL Ts3Connection/Ts3Crypt/Ts3Packet/TsTransport
 # against a controllable blocking transport; ts3voice-core protocol sources via
 # -sourcepath, client callback surface stubbed (connection layer only).

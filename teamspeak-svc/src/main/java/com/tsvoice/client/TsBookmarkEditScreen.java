@@ -2,6 +2,8 @@ package com.tsvoice.client;
 
 import com.tsvoice.client.config.EndpointCredentialStore;
 import com.tsvoice.client.config.TsBookmarkStore;
+
+import java.io.IOException;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.components.Button;
@@ -59,8 +61,10 @@ public class TsBookmarkEditScreen extends Screen {
         int cx = this.width / 2;
         int lh = 11;
         TsBookmarkStore.Bookmark existing = bookmarkId == null ? null : TsBookmarkStore.get(bookmarkId);
+        // S0.5/R24：按书签自身的 ref 读取凭据（旧书签无 ref 时回落 endpoint），
+        // 同 host:port 的两个书签不再共用同一条目。
         var credential = existing == null ? null
-                : EndpointCredentialStore.get(existing.host(), existing.port());
+                : EndpointCredentialStore.getByRef(existing.credentialRef(), existing.host(), existing.port());
         int y = 28;
 
         label = new EditBox(font, cx - 100, y + lh, 200, 18, Component.translatable("tsvoice.gui.bookmarks.label"));
@@ -163,6 +167,20 @@ public class TsBookmarkEditScreen extends Screen {
         } catch (NumberFormatException e) {
             portValue = 9987;
         }
+        // S0.5/R24：credentialRef/identityRef —— 新书签分配独立 ref；编辑保留
+        // 既有引用（绝不写 null 清空）。带 ref 的书签凭据存独立条目，同 host:port
+        // 的两个书签互不串用；ref 为空的旧书签继续按 endpoint 读写（兼容）。
+        TsBookmarkStore.Bookmark existingBookmark = bookmarkId == null ? null : TsBookmarkStore.get(bookmarkId);
+        String credentialRef = existingBookmark != null ? existingBookmark.credentialRef() : null;
+        String identityRef = existingBookmark != null ? existingBookmark.identityRef() : null;
+        if (credentialRef == null || credentialRef.isBlank()) {
+            credentialRef = "cred-" + id;
+        }
+        if (identityRef == null || identityRef.isBlank()) {
+            // 首次为该书签建立身份引用：复制全局 identity.txt 为独立身份（不移动、
+            // 不替换全局身份；其余书签/配置不受影响）。
+            identityRef = copyGlobalIdentityFor(id);
+        }
         TsBookmarkStore.Bookmark bookmark = new TsBookmarkStore.Bookmark(
                 id,
                 label.getValue().isBlank() ? hostValue : label.getValue().trim(),
@@ -170,17 +188,65 @@ public class TsBookmarkEditScreen extends Screen {
                 portValue,
                 channel.getValue().trim(),
                 transport,
-                null, // credentialRef：按 endpoint 解析，保留扩展位
+                credentialRef,
                 autoConnect,
                 nickname.getValue().isBlank() ? null : nickname.getValue().trim(),
-                null, // identityRef：身份引用扩展位；私钥绝不写入书签
+                identityRef,
                 lockedPolicy ? "locked" : null);
         TsBookmarkStore.put(bookmark);
-        // 凭据按 endpoint 隔离存储（与书签文件分离）
-        EndpointCredentialStore.set(hostValue, portValue,
+        // 凭据按 ref 隔离存储；旧 endpoint 兼容条目仅在 ref 首次启用时复制，
+        // 绝不删除既有 endpoint 条目（未迁移路径继续可用）。
+        boolean refFresh = existingBookmark == null
+                || credentialRef.equals("cred-" + id);
+        if (refFresh) {
+            EndpointCredentialStore.copyEndpointToRef(hostValue, portValue, credentialRef);
+        }
+        EndpointCredentialStore.setByRef(credentialRef,
                 serverPassword.getValue(), channelPassword.getValue());
-        TeamspeakSvcClient.LOGGER.info("[teamspeak-svc] Bookmark '{}' saved ({}:{}, policy={})",
-                bookmark.label(), hostValue, portValue, lockedPolicy ? "locked" : "follow");
+        TeamspeakSvcClient.LOGGER.info("[teamspeak-svc] Bookmark '{}' saved ({}:{}, policy={}, credRef={})",
+                bookmark.label(), hostValue, portValue, lockedPolicy ? "locked" : "follow", credentialRef);
+    }
+
+    /**
+     * 把全局 identity.txt 复制为书签独立身份 {@code identities/<key>.txt}（一次性）。
+     * 全局身份不存在或已复制过时返回 null/既有 ref —— 全局身份绝不被改动，
+     * 不能因迁移给所有用户自动换 TS 身份。
+     */
+    private String copyGlobalIdentityFor(String bookmarkId) {
+        try {
+            net.fabricmc.loader.api.FabricLoader loader = net.fabricmc.loader.api.FabricLoader.getInstance();
+            java.nio.file.Path global = loader.getConfigDir()
+                    .resolve("teamspeak-svc").resolve("identity.txt");
+            if (!java.nio.file.Files.exists(global)) {
+                return null; // 尚无全局身份：书签暂不带引用，连接时按需生成
+            }
+            String ref = "ident-" + bookmarkId;
+            java.nio.file.Path target = EndpointCredentialStore.identityRefPath(ref);
+            if (target == null) {
+                return null;
+            }
+            if (java.nio.file.Files.exists(target)) {
+                return ref; // 已复制过：幂等
+            }
+            java.nio.file.Files.createDirectories(target.getParent());
+            java.nio.file.Files.copy(global, target);
+            // 身份文件含私钥：与 ConfigFileUtil 的私有权限约定一致
+            try {
+                java.nio.file.Files.setPosixFilePermissions(target,
+                        java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+            } catch (UnsupportedOperationException | IOException ignored) {
+                // Windows/非 POSIX 文件系统：目录级保护已由 config 目录承担
+            }
+            TeamspeakSvcClient.LOGGER.info(
+                    "[teamspeak-svc] Bookmark '{}' identity reference created from global identity (copy; global untouched)",
+                    bookmarkId);
+            return ref;
+        } catch (Exception e) {
+            TeamspeakSvcClient.LOGGER.warn(
+                    "[teamspeak-svc] identity reference creation failed: {} (bookmark keeps global identity path)",
+                    e.getMessage());
+            return null;
+        }
     }
 
     private net.minecraft.client.gui.components.StringWidget makeLabel(int x, int y, int w, Component text, int color) {

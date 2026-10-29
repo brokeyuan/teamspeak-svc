@@ -75,7 +75,10 @@ public class AecReferenceMixer{public static void clear(){}}
 '@
 'com/tsvoice/client/ts3voice/Ts3VoiceException.java'=@'
 package com.tsvoice.client.ts3voice;
-public class Ts3VoiceException extends Exception {}
+public class Ts3VoiceException extends Exception {
+ public Ts3VoiceException(String message){super(message);}
+ public Ts3VoiceException(String message,Throwable cause){super(message,cause);}
+}
 '@
 'com/tsvoice/client/ts3voice/Ts3Identity.java'=@'
 package com.tsvoice.client.ts3voice;
@@ -220,7 +223,7 @@ $sources = foreach ($item in $stubs.GetEnumerator()) {
     $path
 }
 $client = 'teamspeak-svc/src/main/java/com/tsvoice/client'
-$prod = @("$client/TsVoiceManager.java", "$client/MicRedirector.java", "$client/audio/MicRouteGate.java",
+$prod = @("$client/TsVoiceManager.java", "$client/ts3voice/TsProtocolException.java", "$client/MicRedirector.java", "$client/audio/MicRouteGate.java",
     "$client/connection/VoiceState.java", "$client/connection/BackendCoordinator.java",
     "$client/connection/SelectionPolicy.java", "$client/connection/TsChannelRoute.java", "$client/connection/CapabilityDiscovery.java", "ts3voice-core/src/main/java/com/tsvoice/protocol/capability/CapabilityWire.java",
     "$client/GroupChannelMapper.java", "$client/ts3voice/TsChannelSnapshot.java",

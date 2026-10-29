@@ -147,6 +147,11 @@ public final class TsVoiceManager {
                         0, "", java.util.List.of()));
     }
 
+    /** 当前发现请求 nonce（回归测试构造合法公告用；生产路径不使用）。 */
+    public static long discoveryRequestNonceForTest() {
+        return capabilityDiscovery.currentRequestNonce();
+    }
+
     /**
      * 公告帧消费（Fabric receiver 在主线程委托）：有界校验 → 解码 → 绑定当前
      * context 与请求 nonce 的状态机登记。返回是否产生了候选。
@@ -162,6 +167,13 @@ public final class TsVoiceManager {
             TeamspeakSvcClient.LOGGER.debug("[teamspeak-svc] malformed capabilities frame: {}", e.getMessage());
             return false;
         }
+        // S0.2/R27：decode 对短帧/坏 magic/非法计数等畸形输入返回 null 而不是抛出
+        // 异常 —— 直接解引用会在 Fabric 接收任务里抛 NPE。null 一律按畸形帧丢弃，
+        // 不改变既有授权/选择状态。
+        if (capabilities == null) {
+            TeamspeakSvcClient.LOGGER.debug("[teamspeak-svc] malformed capabilities frame: decode returned null");
+            return false;
+        }
         if (java.util.Arrays.equals(frame, lastAcceptedAnnouncementFrame)) {
             return false; // 字节级重复响应：状态已登记，幂等拒绝
         }
@@ -171,16 +183,41 @@ public final class TsVoiceManager {
         if (accepted) {
             lastAcceptedAnnouncementFrame = frame.clone();
         }
-        if (accepted && !capabilityDiscovery.hasAuthorizedTsRecommendation()) {
-            authorizeAnnouncedCandidates();
+        if (accepted) {
+            if (!capabilityDiscovery.hasAuthorizedTsRecommendation()) {
+                // 预信任 endpoint（信标记住的同源地址）自动授权；其余进入待授权，
+                // 由用户经 CapabilityConsentScreen 显式决定（S0.4/R23）。
+                authorizeAnnouncedCandidates();
+            }
+            notifyPendingConsent();
         }
         return accepted;
     }
 
+    /** 未授权候选监听器（Fabric 层注册）：进入授权界面或状态提示。 */
+    private static volatile Runnable pendingConsentListener;
+
+    public static void setPendingConsentListener(Runnable listener) {
+        pendingConsentListener = listener;
+    }
+
+    /** 有新的待授权公告候选且玩家尚未拒绝过：通知监听器（客户端线程调用）。 */
+    private static void notifyPendingConsent() {
+        if (capabilityDiscovery.receivedCandidates().isEmpty()
+                || !capabilityDiscovery.rejectedCandidates().isEmpty()) {
+            return; // 无候选，或本窗口已被玩家拒绝过：不再打扰
+        }
+        var listener = pendingConsentListener;
+        if (listener != null) {
+            listener.run();
+        }
+    }
+
     /**
-     * 公告候选授权（N6）：公告来自玩家已加入的 MC 服务器本身 —— 与信标同源的
-     * 信任模型：只有 endpoint 已被信标流程显式信任的候选自动授权；其余保持
-     * 未授权并记录（显式授权入口随 M7 界面交付），绝不把未授权候选送入选择。
+     * 公告候选授权（N6 → S0.4/R23 修订）：公告来自玩家已加入的 MC 服务器本身 ——
+     * 与信标同源的信任模型：只有 endpoint 已被信标流程显式信任的候选自动授权；
+     * 其余候选保持未授权并进入待授权状态（显式授权入口 = CapabilityConsentScreen），
+     * 绝不把未授权候选送入选择。
      */
     public static void authorizeAnnouncedCandidates() {
         var entry = ServerConfigStore.get(currentAddress);
@@ -203,6 +240,80 @@ public final class TsVoiceManager {
                 com.tsvoice.client.connection.BackendCoordinator.currentContextEpoch(), trusted);
         TeamspeakSvcClient.LOGGER.info("[teamspeak-svc] capabilities announcement: {} trusted candidate(s) authorized={}",
                 trusted.size(), ok);
+    }
+
+    // ---- S0.4/R23：公告首次授权入口（显式动作，绑定 context/接收快照/能力种类）----
+
+    /** 是否有等待玩家显式决定的公告候选（未授权、未拒绝、未过期）。 */
+    public static boolean hasPendingAnnouncementConsent() {
+        return !capabilityDiscovery.receivedCandidates().isEmpty()
+                && capabilityDiscovery.hasAuthorizedTsRecommendation() == false
+                && capabilityDiscovery.rejectedCandidates().isEmpty();
+    }
+
+    /** 待授权候选快照（授权界面数据源；未授权、含过期点）。 */
+    public static java.util.List<com.tsvoice.client.connection.CapabilityDiscovery.AnnouncedCandidate>
+    pendingConsentCandidates() {
+        var rejected = capabilityDiscovery.rejectedCandidates();
+        return capabilityDiscovery.receivedCandidates().stream()
+                .filter(c -> !rejected.contains(c))
+                .toList();
+    }
+
+    /**
+     * 玩家显式接受当前待授权公告候选（授权界面动作）。
+     *
+     * @param remember 同时把 TS endpoint 记入本服信任（与信标记住同一语义）；
+     *                 仅记住 TS_ENDPOINT —— 不把同地址所有未来能力自动批准
+     *                 （新能力种类仍需重新授权）。
+     */
+    public static boolean acceptAnnouncedCandidates(boolean remember) {
+        var pending = pendingConsentCandidates();
+        if (pending.isEmpty()) {
+            return false;
+        }
+        boolean ok = capabilityDiscovery.authorize(
+                com.tsvoice.client.connection.BackendCoordinator.currentContextEpoch(), pending);
+        if (ok && remember) {
+            // 记住 TS endpoint（与 BeaconTrustScreen 的 remember 同一信任存储）；
+            // 每个候选单独记录，不扩大到同地址的其他能力种类。
+            for (var c : pending) {
+                if (c.candidate().kind()
+                        == com.tsvoice.protocol.capability.CapabilityWire.CandidateKind.TS_ENDPOINT) {
+                    ServerConfigStore.Entry entry = ServerConfigStore.get(currentAddress);
+                    entry.trustedBeaconHost = c.candidate().host();
+                    entry.trustedBeaconPort = c.candidate().port();
+                    ServerConfigStore.save();
+                    break;
+                }
+            }
+        }
+        if (ok) {
+            TeamspeakSvcClient.LOGGER.info(
+                    "[teamspeak-svc] announcement candidates explicitly accepted ({} candidate(s), remember={})",
+                    pending.size(), remember);
+            evaluateActivation();
+        }
+        return ok;
+    }
+
+    /**
+     * 玩家显式拒绝当前待授权公告候选：本 context 内不再弹窗/自动授权；
+     * 已授权集合不受影响（拒绝只作用于未授权候选）。
+     */
+    public static boolean rejectAnnouncedCandidates() {
+        var pending = pendingConsentCandidates();
+        if (pending.isEmpty()) {
+            return false;
+        }
+        boolean ok = capabilityDiscovery.reject(
+                com.tsvoice.client.connection.BackendCoordinator.currentContextEpoch(), pending);
+        if (ok) {
+            TeamspeakSvcClient.LOGGER.info(
+                    "[teamspeak-svc] announcement candidates rejected by user ({} candidate(s))",
+                    pending.size());
+        }
+        return ok;
     }
 
     /** 当前已授权且未过期的公告 TS 候选（选择策略输入；诊断用）。 */
@@ -317,8 +428,11 @@ public final class TsVoiceManager {
                 com.tsvoice.client.config.TsBookmarkStore.get(explicitBookmarkId);
         if (bookmark != null) {
             Integer port = bookmark.port();
-            var credential = com.tsvoice.client.config.EndpointCredentialStore.get(
-                    bookmark.host(), port);
+            // S0.5/R24：凭据按书签自身 ref 解析（旧书签无 ref 回落 endpoint）——
+            // 同 host:port 的两个书签通过引用保存独立凭据；引用缺失明确无凭据，
+            // 不静默借用其他书签/endpoint 的密码。
+            var credential = com.tsvoice.client.config.EndpointCredentialStore.getByRef(
+                    bookmark.credentialRef(), bookmark.host(), port);
             boolean tcp = "tcp".equalsIgnoreCase(bookmark.transportPolicy());
             return new SessionConfig(bookmark.host(), bookmark.effectivePort(),
                     bookmark.channel() != null ? bookmark.channel() : "Minecraft", "manual", tcp,
@@ -410,11 +524,59 @@ public final class TsVoiceManager {
     /**
      * 连接失败 → 统一 FailureKind（T12/N6）：认证/密码/权限/封禁/版本不再被
      * 当作"UDP 不通"，也不得经跨网络切换绕过 —— 这些类别终止重试等待用户处理。
+     *
+     * <p>S0.7/R26 收紧：优先按异常类型与结构化 TS 错误 id 分类（协议拒绝由
+     * {@link TsProtocolException} 携带 id/msg token）；普通 IOException 及其
+     * "connection refused/reset/timed out" 等传输症状保持可重试的 NETWORK_TIMEOUT；
+     * 取消与内部错误各归各类 —— 未识别异常不再默认 NETWORK_TIMEOUT。</p>
      */
     static com.tsvoice.client.connection.VoiceState.FailureKind classifyConnectFailure(Throwable t) {
-        String message = t == null ? "" : String.valueOf(t.getMessage() == null ? t : t.getMessage()).toLowerCase();
-        if (t instanceof java.net.UnknownHostException || message.contains("unknown host")
-                || message.contains("unknownhostexception")) {
+        if (t == null) {
+            return com.tsvoice.client.connection.VoiceState.FailureKind.INTERNAL;
+        }
+        if (t instanceof java.util.concurrent.CancellationException
+                || (t instanceof InterruptedException)) {
+            return com.tsvoice.client.connection.VoiceState.FailureKind.CANCELLED;
+        }
+        if (t instanceof com.tsvoice.client.ts3voice.TsProtocolException protocol) {
+            // 结构化 TS 协议拒绝：按服务器返回的 msg token 分类（数值 id 的
+            // 解释须依真实协议资料核实，此处仅使用 msg token；未识别 token
+            // 属服务器明确的协议拒绝 —— 终止，不当网络超时重试）。
+            String msg = protocol.errorMessage() == null ? "" : protocol.errorMessage().toLowerCase();
+            String extra = protocol.extraMessage() == null ? "" : protocol.extraMessage().toLowerCase();
+            if (msg.contains("invalid_server_password") || msg.contains("serverpassword")) {
+                return com.tsvoice.client.connection.VoiceState.FailureKind.AUTH_DENIED;
+            }
+            if (msg.contains("invalid_channel_password") || msg.contains("channel_password")) {
+                return com.tsvoice.client.connection.VoiceState.FailureKind.CHANNEL_PASSWORD;
+            }
+            if (msg.contains("permission") || msg.contains("insufficient")) {
+                return com.tsvoice.client.connection.VoiceState.FailureKind.PERMISSION_DENIED;
+            }
+            if (msg.contains("ban")) {
+                return com.tsvoice.client.connection.VoiceState.FailureKind.BANNED;
+            }
+            if (msg.contains("server_full") || msg.contains("maxclients")) {
+                return com.tsvoice.client.connection.VoiceState.FailureKind.SERVER_FULL;
+            }
+            if (msg.contains("version") || msg.contains("protocol")) {
+                return com.tsvoice.client.connection.VoiceState.FailureKind.UNSUPPORTED_PROTOCOL;
+            }
+            // 服务器明确拒绝但 token 未收录：不重试，等待用户/日志研判。
+            return com.tsvoice.client.connection.VoiceState.FailureKind.PROTOCOL_REJECTED;
+        }
+        if (t instanceof java.net.UnknownHostException) {
+            return com.tsvoice.client.connection.VoiceState.FailureKind.DNS_FAILED;
+        }
+        if (t instanceof java.io.IOException
+                || t instanceof java.net.SocketException
+                || t instanceof java.net.SocketTimeoutException
+                || t instanceof java.net.ConnectException) {
+            // 传输层症状（含 UDP 不可达/连接拒绝/超时）：可重试。
+            return com.tsvoice.client.connection.VoiceState.FailureKind.NETWORK_TIMEOUT;
+        }
+        String message = String.valueOf(t.getMessage() == null ? t : t.getMessage()).toLowerCase();
+        if (message.contains("unknown host") || message.contains("unknownhostexception")) {
             return com.tsvoice.client.connection.VoiceState.FailureKind.DNS_FAILED;
         }
         if (message.contains("invalid server password") || message.contains("bad login")
@@ -434,7 +596,21 @@ public final class TsVoiceManager {
                 || message.contains("old client")) {
             return com.tsvoice.client.connection.VoiceState.FailureKind.UNSUPPORTED_PROTOCOL;
         }
-        return com.tsvoice.client.connection.VoiceState.FailureKind.NETWORK_TIMEOUT;
+        if (message.contains("connection closed") || message.contains("removed from server")
+                || message.contains("server error id=")) {
+            // 服务器端断开/拒绝（非结构化历史路径）：保留数值/原因供展示；
+            // 终止性由具体原因判断，未知不当网络超时重试。
+            return com.tsvoice.client.connection.VoiceState.FailureKind.INTERNAL;
+        }
+        if (t instanceof RuntimeException || t instanceof Error
+                || t instanceof IllegalStateException
+                || t instanceof NullPointerException
+                || t instanceof ClassCastException
+                || t instanceof IllegalArgumentException) {
+            return com.tsvoice.client.connection.VoiceState.FailureKind.INTERNAL;
+        }
+        // 未识别异常：显式 INTERNAL —— 不自动推断 UDP 不通（R26）。
+        return com.tsvoice.client.connection.VoiceState.FailureKind.INTERNAL;
     }
 
     /** 失败类别是否终止自动重试（等待用户修改入口：凭据/地址/授权）。 */
@@ -444,7 +620,11 @@ public final class TsVoiceManager {
                 || kind == com.tsvoice.client.connection.VoiceState.FailureKind.PERMISSION_DENIED
                 || kind == com.tsvoice.client.connection.VoiceState.FailureKind.BANNED
                 || kind == com.tsvoice.client.connection.VoiceState.FailureKind.UNSUPPORTED_PROTOCOL
-                || kind == com.tsvoice.client.connection.VoiceState.FailureKind.FRONTEND_UNAVAILABLE;
+                || kind == com.tsvoice.client.connection.VoiceState.FailureKind.FRONTEND_UNAVAILABLE
+                // S0.7/R26：内部错误不是网络症状，不再冒充 NETWORK_TIMEOUT 触发
+                // 跨网络切换推断；可重试（缺陷会记录在 ERROR 展示与日志），但不
+                // 等同"UDP 不通"。PROTOCOL_REJECTED（服务器明确拒绝）终止等待用户。
+                || kind == com.tsvoice.client.connection.VoiceState.FailureKind.PROTOCOL_REJECTED;
     }
 
     /**
@@ -782,12 +962,16 @@ public final class TsVoiceManager {
     }
 
     private static void sessionLoop(long gen) {
+        // S0.1/R21：本代会话的 token 在线程启动时捕获一次。startSession 在同一管理器
+        // 锁内先 beginSession 再启动线程，因此这里读到的一定是本代会话的 token；
+        // stopSession 之后 token 被替换/清零，旧线程捕获值不再匹配当前路由。
+        final com.tsvoice.client.connection.VoiceState.SessionToken loopToken = sessionToken;
         try {
             long backoffMs = INITIAL_BACKOFF_MS;
         int backoffAttempt = 0;
             while (active(gen)) {
                 try {
-                    Ts3VoiceClient c = connect(gen);
+                    Ts3VoiceClient c = connect(gen, loopToken);
                     boolean committed;
                     synchronized (TsVoiceManager.class) {
                         committed = active(gen);
@@ -904,14 +1088,34 @@ public final class TsVoiceManager {
         }
     }
 
-    private static Ts3VoiceClient connect(long gen) throws Exception {
+    private static Ts3VoiceClient connect(long gen,
+            com.tsvoice.client.connection.VoiceState.SessionToken sessionBoundToken) throws Exception {
         SessionConfig cfg = activeConfig;
         if (cfg == null) {
             throw new IllegalStateException("no session config");
         }
+        // S0.5/R24：身份解析顺序 —— 书签 identityRef（受控 identities/ 目录）>
+        // 全局 identity.txt（兼容默认）。引用存在但记录缺失时明确报错，不静默
+        // 换用全局身份；私钥绝不写入书签或日志。
         Path identityPath = FabricLoader.getInstance().getConfigDir()
                 .resolve("teamspeak-svc").resolve("identity.txt");
-        Ts3Identity identity = Ts3Identity.load(identityPath);
+        Ts3Identity identity = null;
+        com.tsvoice.client.config.TsBookmarkStore.Bookmark activeBookmark =
+                explicitBookmarkId != null
+                        ? com.tsvoice.client.config.TsBookmarkStore.get(explicitBookmarkId) : null;
+        if (activeBookmark != null && activeBookmark.identityRef() != null
+                && !activeBookmark.identityRef().isBlank()) {
+            identity = com.tsvoice.client.config.EndpointCredentialStore.loadIdentityRef(
+                    activeBookmark.identityRef());
+            if (identity == null) {
+                throw new IllegalStateException(
+                        "identity reference missing: " + activeBookmark.identityRef()
+                                + " (create it in config/teamspeak-svc/identities/)");
+            }
+        }
+        if (identity == null) {
+            identity = Ts3Identity.load(identityPath);
+        }
         if (identity == null) {
             TeamspeakSvcClient.LOGGER.info("[teamspeak-svc] Generating TS identity (level 24)...");
             identity = Ts3Identity.generate(24, 8_000);
@@ -925,10 +1129,12 @@ public final class TsVoiceManager {
         Ts3VoiceClient c = new Ts3VoiceClient(identity, nickname, "", cfg.tcp());
         c.setServerPassword(cfg.password());
         // writer 最终写出点的路由代际来源（R08/T03）：路由未就绪/已失效时全部语音丢弃。
+        // S0.1/R21：许可额外绑定本代会话 token（sessionLoop 捕获后传入，非实时读取）——
+        // 跨会话重复的全局 epoch 数值不再构成许可；旧会话帧在 writer 线程读到的
+        // token 已被替换，必被丢弃。
         c.setVoiceRouteEpochSupplier(() -> {
             var route = com.tsvoice.client.connection.BackendCoordinator.snapshot().route();
-            return route.transmitReady()
-                    && route.backend().orElse(null) == com.tsvoice.client.connection.VoiceState.BackendKind.TS3
+            return com.tsvoice.client.connection.BackendCoordinator.writePermittedFor(sessionBoundToken)
                     ? route.routeEpoch() : Long.MIN_VALUE;
         });
         // 回调绑定来源 client 与会话代际（投递/处理双检）：被替换会话的迟到回调

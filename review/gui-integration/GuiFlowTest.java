@@ -385,9 +385,13 @@ public class GuiFlowTest {
                         == TsVoiceManager.classifyConnectFailure(new java.net.UnknownHostException("x"))
                 && !TsVoiceManager.isTerminalFailure(com.tsvoice.client.connection.VoiceState.FailureKind.DNS_FAILED),
                 "D5: DNS failures are retryable");
-        check(com.tsvoice.client.connection.VoiceState.FailureKind.NETWORK_TIMEOUT
-                        == TsVoiceManager.classifyConnectFailure(new Exception("connection refused")),
-                "D5: generic transport failures stay retryable");
+        // S0.7/R26: a plain Exception with no transport type is an unknown/internal
+        // failure now — it must NOT be read as NETWORK_TIMEOUT (UDP unreachable).
+        check(com.tsvoice.client.connection.VoiceState.FailureKind.INTERNAL
+                        == TsVoiceManager.classifyConnectFailure(new Exception("connection refused"))
+                && com.tsvoice.client.connection.VoiceState.FailureKind.NETWORK_TIMEOUT
+                        == TsVoiceManager.classifyConnectFailure(new java.net.SocketTimeoutException("t")),
+                "D5/R26: generic transport failures stay retryable; unknown errors are INTERNAL, not UDP-unreachable");
         long backoff = com.tsvoice.client.connection.SelectionPolicy.backoffMillis(0,
                 java.util.random.RandomGenerator.of("L64X128MixRandom"));
         check(backoff >= 1_000L && backoff <= 2_400L + 1,

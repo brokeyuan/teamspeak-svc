@@ -130,6 +130,16 @@ public class TeamspeakSvcClient {
                 }));
         TsVoiceManager.setUntrustedBeaconListener(payload ->
                                     Minecraft.getInstance().setScreenAndShow(new BeaconTrustScreen(payload)));
+        // S0.4/R23：公告候选首次授权入口 —— 未预信任的公告候选弹授权界面
+        //（/tsvoice trust-announce 也可随时手动进入）。setScreenAndShow 顶替当前
+        // 屏是授权流程的预期行为：不弹窗则候选保持未授权（fail-closed），不会
+        // 自动连接。
+        TsVoiceManager.setPendingConsentListener(() ->
+                Minecraft.getInstance().execute(() -> {
+                    if (TsVoiceManager.hasPendingAnnouncementConsent()) {
+                        Minecraft.getInstance().setScreenAndShow(new CapabilityConsentScreen());
+                    }
+                }));
         ClientPlayNetworking.registerGlobalReceiver(BeaconPayload.TYPE, (payload, context) ->
                 context.client().execute(() -> TsVoiceManager.onBeacon(payload)));
 
@@ -203,6 +213,17 @@ public class TeamspeakSvcClient {
                                     ctx.getSource().sendFeedback(Component.translatable("tsvoice.trust.none"));
                                 } else {
                                     Minecraft.getInstance().setScreenAndShow(new BeaconTrustScreen(pending));
+                                }
+                            });
+                            return 1;
+                        }))
+                        // S0.4/R23：公告首次授权入口（无旧 beacon 的纯公告服务器）
+                        .then(literal("trust-announce").executes(ctx -> {
+                            Minecraft.getInstance().execute(() -> {
+                                if (TsVoiceManager.pendingConsentCandidates().isEmpty()) {
+                                    ctx.getSource().sendFeedback(Component.translatable("tsvoice.consent.none"));
+                                } else {
+                                    Minecraft.getInstance().setScreenAndShow(new CapabilityConsentScreen());
                                 }
                             });
                             return 1;

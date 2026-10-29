@@ -144,13 +144,73 @@ public final class AnnouncerTest {
                         && !closing.reload().applied(),
                 "A7: a closed (old-world) runtime never answers new connections");
 
-        // ---- A8: integrated-server gate ----
+        // ---- A8: integrated-server gate (S0.3/R22: environment fixed at start) ----
+        // Dedicated default: start(dir) legacy entry implies dedicated.
+        Path dedicatedDir = dirWith(config(true, "ts.real", 9987, 30));
+        ServerRuntime dedicated = ServerRuntime.start(dedicatedDir);
+        check(dedicated.status().state() == ServerRuntime.State.ACTIVE,
+                "A8/R22: dedicated environment is not affected by the integrated gate");
+        dedicated.close();
+
+        // Integrated default-off: even an otherwise-valid config starts DISABLED.
         Path integratedDir = dirWith(config(true, "ts.real", 9987, 30));
-        ServerRuntime integrated = ServerRuntime.start(integratedDir);
-        integrated.applyIntegratedServerGate();
+        ServerRuntime integrated = ServerRuntime.start(integratedDir, false);
         check(integrated.status().state() == ServerRuntime.State.DISABLED
-                        && integrated.status().reason().contains("integrated server"),
-                "A8: integrated servers default to disabled unless explicitly enabled in config");
+                        && integrated.status().reason().contains("integrated server")
+                        && !integrated.announcing(),
+                "A8/R22: integrated servers default to disabled unless explicitly enabled in config");
+
+        // R22 root cause: reload must NOT bypass the integrated gate. Multiple
+        // reloads with capabilities.enabled=true + integratedServerEnabled=false
+        // keep DISABLED (before the fix this flipped to ACTIVE).
+        ServerRuntime.ReloadResult bypassed = integrated.reload();
+        check(bypassed.applied() && integrated.status().state() == ServerRuntime.State.DISABLED,
+                "R22: reload keeps the integrated server disabled (integratedServerEnabled=false)");
+        ServerRuntime.ReloadResult bypassed2 = integrated.reload();
+        check(bypassed2.applied() && integrated.status().state() == ServerRuntime.State.DISABLED,
+                "R22: repeated reloads keep the integrated server disabled");
+        integrated.close();
+
+        // Invalid-config recovery on an integrated server also keeps the gate.
+        Path integratedRecovery = dirWith(config(true, "ts.real", 9987, 30));
+        ServerRuntime recovery = ServerRuntime.start(integratedRecovery, false);
+        Files.writeString(ServerConfig.file(integratedRecovery), "{ broken");
+        recovery.reload();
+        check(recovery.status().state() == ServerRuntime.State.INVALID_CONFIG
+                        || recovery.status().state() == ServerRuntime.State.DISABLED,
+                "R22: broken config on an integrated server stays gated (INVALID/DISABLED)");
+        ServerConfig.save(config(true, "ts.real", 9987, 30), ServerConfig.file(integratedRecovery));
+        recovery.reload();
+        check(recovery.status().state() == ServerRuntime.State.DISABLED,
+                "R22: config recovery on an integrated server keeps the default-off gate");
+        recovery.close();
+
+        // Explicit opt-in on an integrated server: gate yields to the config.
+        ServerConfig optedIn = config(true, "ts.real", 9987, 30);
+        optedIn.integratedServerEnabled = true;
+        Path integratedOptIn = dirWith(optedIn);
+        ServerRuntime optIn = ServerRuntime.start(integratedOptIn, false);
+        check(optIn.status().state() == ServerRuntime.State.ACTIVE && optIn.announcing(),
+                "R22: explicit integratedServerEnabled=true keeps the integrated server active");
+        optIn.reload();
+        check(optIn.status().state() == ServerRuntime.State.ACTIVE,
+                "R22: reload keeps the explicit integrated opt-in active");
+        // Opt-in revoked by config change: next reload disables again.
+        ServerConfig optedOut = config(true, "ts.real", 9987, 30);
+        optedOut.integratedServerEnabled = false;
+        ServerConfig.save(optedOut, ServerConfig.file(integratedOptIn));
+        optIn.reload();
+        check(optIn.status().state() == ServerRuntime.State.DISABLED,
+                "R22: turning the opt-in off disables the integrated server on reload");
+        optIn.close();
+
+        // Dedicated servers keep announcements through reloads (gate never applies).
+        Path dedicatedReloadDir = dirWith(config(true, "ts.real", 9987, 30));
+        ServerRuntime dedicatedReload = ServerRuntime.start(dedicatedReloadDir, true);
+        dedicatedReload.reload();
+        check(dedicatedReload.status().state() == ServerRuntime.State.ACTIVE,
+                "R22: dedicated reloads stay ACTIVE (no integrated gate)");
+        dedicatedReload.close();
 
         if (failures != 0) {
             throw new AssertionError(failures + " announcer/runtime checks failed");
