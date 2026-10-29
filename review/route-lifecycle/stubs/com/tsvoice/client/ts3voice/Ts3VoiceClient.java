@@ -27,6 +27,7 @@ public class Ts3VoiceClient {
  public void setServerPassword(String password){}
  public void setTextListener(java.util.function.BiConsumer<String,String> l){textListener=l;}
  public void setVoiceListener(java.util.function.Consumer<TsVoiceIn> l){voiceListener=l;}
+ public void setVoiceListenerForTestDispatch(TsVoiceIn frame){java.util.function.Consumer<TsVoiceIn> l=voiceListener;if(l!=null){l.accept(frame);}}
  public void setChannelMembershipListener(java.util.function.IntConsumer l){membershipListener=l;}
  public void connect(java.net.InetAddress host,int port,long timeout) throws Exception {
   if(onConnect!=null){onConnect.accept(this);}

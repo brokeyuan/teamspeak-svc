@@ -132,6 +132,14 @@ public final class Ts3VoiceClient {
         connection.setOnDisconnected(this::onConnectionLost);
     }
 
+    /** 测试分发（E5）：把一帧交给当前注册的 voiceListener（生产消费路径）。 */
+    public void setVoiceListenerForTestDispatch(TsVoiceIn frame) {
+        Consumer<TsVoiceIn> listener = voiceListener.get();
+        if (listener != null) {
+            listener.accept(frame);
+        }
+    }
+
     public void setVoiceListener(Consumer<TsVoiceIn> listener) {
         voiceListener.set(listener);
     }

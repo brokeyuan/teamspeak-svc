@@ -115,8 +115,11 @@ public class OffGateTest {
         check(started.await(5, TimeUnit.SECONDS), "O3: session reaches the network");
         release.countDown();
         check(waitForState(TsVoiceManager.State.CONNECTED, 5000), "O3: TS session connects");
-        check(!SvcBackendAdapter.isNativeReceiveSuppressed(),
-                "O3: TS mode keeps native SVC receive open");
+        // E5 single-backend listen default: TS selected -> native SVC receive
+        // suppressed (the old always-open behavior is superseded by the
+        // confirmed product rule; dual-listen would be a separate explicit option).
+        check(SvcBackendAdapter.isNativeReceiveSuppressed(),
+                "O3: TS mode suppresses native SVC receive (single-listen default)");
         TsVoiceManager.disconnectTeamSpeak();
         check(BackendCoordinator.snapshot().selection().intent() == SelectionPolicy.IntentKind.PAUSED
                         && !SvcBackendAdapter.isNativeReceiveSuppressed(),
@@ -127,9 +130,12 @@ public class OffGateTest {
         check(SvcBackendAdapter.isNativeReceiveSuppressed() && TsVoiceManager.getState() == TsVoiceManager.State.VOICE_OFF,
                 "O4: OFF engages and stops the TS session");
         TsVoiceManager.manualConnect("bm-off");
+        // E5: reconnecting to TS keeps the native gate closed (TS is listening);
+        // the OFF mute override itself is cleared (user settings untouched).
         check(waitForState(TsVoiceManager.State.CONNECTED, 5000)
-                        && !SvcBackendAdapter.isNativeReceiveSuppressed(),
-                "O4: an explicit TS reconnect reopens the native gate");
+                        && SvcBackendAdapter.isNativeReceiveSuppressed()
+                        && !SvcBackendAdapter.isVoiceMuted(),
+                "O4: an explicit TS reconnect clears OFF but keeps single-listen (SVC gate closed)");
 
         // ---- O5: OFF survives an MC server change / announcement while off ----
         TsVoiceManager.disableAllVoice();

@@ -1579,6 +1579,14 @@ public final class TsVoiceManager {
     }
 
     /** TS 语音帧处理：source 是帧的来源会话，解析只依赖 source（F03）。 */
+    /** 测试入口（E5）：从"当前会话的 client"注入一帧，驱动生产 handleVoiceFrame。 */
+    public static void onVoiceFrameForTest(Ts3VoiceClient.TsVoiceIn frame) {
+        Ts3VoiceClient c = client;
+        if (c != null) {
+            c.setVoiceListenerForTestDispatch(frame);
+        }
+    }
+
     private static void handleVoiceFrame(Ts3VoiceClient source, Ts3VoiceClient.TsVoiceIn frame) {
         // 全关/主动断开时不向任何播放管线投递（OFF 覆盖由 SvcBackendAdapter 记录）。
         var intent = com.tsvoice.client.connection.BackendCoordinator.snapshot()

@@ -41,10 +41,12 @@ public record BeaconPayload(String host,int port,String channel,String backendMo
 package com.tsvoice.client;
 public class TsAudioInjector {
  public static int removeAllCalls;public static int onTsFrameCalls;
+ private static final java.util.concurrent.atomic.AtomicLong INJECTED = new java.util.concurrent.atomic.AtomicLong();
+ public static long getInjectedFrames(){return INJECTED.get();}
  public static void removeAll(){removeAllCalls++;}
  public static void reconcile(com.tsvoice.client.ts3voice.Ts3VoiceClient c){}
  public static void syncAllGhostVisibility(com.tsvoice.client.ts3voice.Ts3VoiceClient c){}
- public static void onTsFrame(String authority,String uid,String nick,java.util.UUID uuid,int seq,int codec,byte[] opus){onTsFrameCalls++;}
+ public static void onTsFrame(String authority,String uid,String nick,java.util.UUID uuid,int seq,int codec,byte[] opus){onTsFrameCalls++;INJECTED.incrementAndGet();}
 }
 '@
 'com/tsvoice/client/AvatarPipeline.java'=@'
@@ -164,6 +166,7 @@ public class Ts3VoiceClient {
  public void setServerPassword(String password){}
  public void setTextListener(java.util.function.BiConsumer<String,String> l){textListener=l;}
  public void setVoiceListener(java.util.function.Consumer<TsVoiceIn> l){voiceListener=l;}
+ public void setVoiceListenerForTestDispatch(TsVoiceIn frame){java.util.function.Consumer<TsVoiceIn> l=voiceListener;if(l!=null){l.accept(frame);}}
  public void setChannelMembershipListener(java.util.function.IntConsumer l){membershipListener=l;}
  public void connect(java.net.InetAddress host,int port,long timeout) throws Exception {
   if(onConnect!=null){onConnect.accept(this);}
@@ -272,7 +275,7 @@ $svcClientStubs = Get-ChildItem -LiteralPath "$base/stubs/de" -Recurse -Filter '
     Select-Object -ExpandProperty FullName
 & javac -encoding UTF-8 -cp 'review/lib/*' -d "$base/classes" @prod @sources $svcClientStubs `
     "$base/RouteLifecycleTest.java" "$base/BookmarkRouteTest.java" "$base/QueuedVoiceRouteTest.java" `
-    "$base/RouteMoveLifecycleTest.java" "$base/OffGateTest.java" "$base/S0FixRegressionTest.java"
+    "$base/RouteMoveLifecycleTest.java" "$base/OffGateTest.java" "$base/SingleBackendListenTest.java" "$base/S0FixRegressionTest.java"
 if ($LASTEXITCODE -ne 0) { throw 'Route lifecycle regression compilation failed' }
 & java -cp "$base/classes;review/lib/*" com.tsvoice.client.RouteLifecycleTest
 if ($LASTEXITCODE -ne 0) { throw 'Route lifecycle regression failed' }
@@ -284,6 +287,9 @@ if ($LASTEXITCODE -ne 0) { throw 'Queued voice route regression failed' }
 if ($LASTEXITCODE -ne 0) { throw 'Route move lifecycle regression failed' }
 & java -cp "$base/classes;review/lib/*" com.tsvoice.client.OffGateTest
 if ($LASTEXITCODE -ne 0) { throw 'Off gate regression failed' }
+# E5: single-backend listen default (confirmed product rule)
+& java -cp "$base/classes;review/lib/*" com.tsvoice.client.SingleBackendListenTest
+if ($LASTEXITCODE -ne 0) { throw 'single-backend listen regression failed' }
 # S0 (post-m7 review): R21 epoch monotonicity + session-bound writer permit,
 # R27 malformed announcement boundary, R23 explicit consent flow.
 & java -cp "$base/classes;review/lib/*" com.tsvoice.client.S0FixRegressionTest
