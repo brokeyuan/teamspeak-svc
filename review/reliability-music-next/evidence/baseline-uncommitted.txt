@@ -1,0 +1,47 @@
+ M docs/superpowers/plans/2026-10-29-continuous-development-master-plan.md
+ M review/gui-integration/stubs/com/tsvoice/client/AvatarPipeline.java
+ M review/gui-integration/stubs/com/tsvoice/client/ClientIdentityService.java
+ M review/gui-integration/stubs/com/tsvoice/client/OnlinePlayers.java
+ M review/gui-integration/stubs/com/tsvoice/client/TeamspeakSvcClient.java
+ M review/gui-integration/stubs/com/tsvoice/client/TsAudioInjector.java
+ M review/gui-integration/stubs/com/tsvoice/client/audio/AecReferenceMixer.java
+ M review/gui-integration/stubs/com/tsvoice/client/net/BeaconPayload.java
+ M review/gui-integration/stubs/com/tsvoice/client/net/GroupInfoPayload.java
+ M review/gui-integration/stubs/com/tsvoice/client/ts3voice/Ts3Connection.java
+ M review/gui-integration/stubs/com/tsvoice/client/ts3voice/Ts3Crypt.java
+ M review/gui-integration/stubs/com/tsvoice/client/ts3voice/Ts3Identity.java
+ M review/gui-integration/stubs/com/tsvoice/client/ts3voice/Ts3VoiceException.java
+ M review/gui-integration/stubs/com/tsvoice/client/ts3voice/TsTransport.java
+ M review/gui-integration/stubs/com/tsvoice/common/net/TsRelayPayloads.java
+ M review/gui-integration/stubs/net/fabricmc/api/EnvType.java
+ M review/gui-integration/stubs/net/fabricmc/fabric/api/client/networking/v1/ClientPlayNetworking.java
+ M review/gui-integration/stubs/net/fabricmc/loader/api/FabricLoader.java
+ M review/gui-integration/stubs/net/fabricmc/loader/api/ModContainer.java
+ M review/gui-integration/stubs/net/fabricmc/loader/api/ModMetadata.java
+ M review/gui-integration/stubs/net/fabricmc/loader/api/Version.java
+ M review/gui-integration/stubs/net/minecraft/client/Minecraft.java
+ M review/gui-integration/stubs/net/minecraft/network/chat/Component.java
+ M review/route-lifecycle/stubs/com/tsvoice/client/AvatarPipeline.java
+ M review/route-lifecycle/stubs/com/tsvoice/client/ClientIdentityService.java
+ M review/route-lifecycle/stubs/com/tsvoice/client/OnlinePlayers.java
+ M review/route-lifecycle/stubs/com/tsvoice/client/TeamspeakSvcClient.java
+ M review/route-lifecycle/stubs/com/tsvoice/client/TsAudioInjector.java
+ M review/route-lifecycle/stubs/com/tsvoice/client/audio/AecReferenceMixer.java
+ M review/route-lifecycle/stubs/com/tsvoice/client/net/BeaconPayload.java
+ M review/route-lifecycle/stubs/com/tsvoice/client/net/GroupInfoPayload.java
+ M review/route-lifecycle/stubs/com/tsvoice/client/ts3voice/Ts3Connection.java
+ M review/route-lifecycle/stubs/com/tsvoice/client/ts3voice/Ts3Crypt.java
+ M review/route-lifecycle/stubs/com/tsvoice/client/ts3voice/Ts3Identity.java
+ M review/route-lifecycle/stubs/com/tsvoice/client/ts3voice/Ts3VoiceException.java
+ M review/route-lifecycle/stubs/com/tsvoice/client/ts3voice/TsTransport.java
+ M review/route-lifecycle/stubs/com/tsvoice/common/net/TsRelayPayloads.java
+ M review/route-lifecycle/stubs/net/fabricmc/fabric/api/client/networking/v1/ClientPlayNetworking.java
+ M review/route-lifecycle/stubs/net/fabricmc/loader/api/FabricLoader.java
+ M review/route-lifecycle/stubs/net/minecraft/client/Minecraft.java
+ M review/route-lifecycle/stubs/net/minecraft/network/chat/Component.java
+?? docs/product/
+?? docs/superpowers/plans/2026-10-29-next-round-execution.md
+?? docs/superpowers/plans/2026-10-29-post-m7-transport-execution-plan.md
+?? review/post-81c687c-2026-10-29/
+?? review/post-m7-2026-10-29/
+?? review/reliability-music-next/

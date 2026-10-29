@@ -92,12 +92,34 @@ Write-Output 'PASS artifact: metadata (environment/entries/depends/breaks) corre
 & $jarTool xf "$($jar.FullName)" teamspeak-svc.mixins.json
 $mixins = Get-Content teamspeak-svc.mixins.json -Raw | ConvertFrom-Json
 Remove-Item teamspeak-svc.mixins.json
-# S2/P5: the SVC server-side sendPacketRaw mixin is intentionally common-scoped
-# (targets SVC's internal Server class, present on both physical sides).
+# T31/E1: full FQN -> JAR entry assertion (the old check verified only counts,
+# which allowed the entire mixin package to be wrong in a shippable JAR).
+$mixinPkg = $mixins.package
+if (-not $mixinPkg) { throw 'mixin config has no package' }
+$mixinPkgPath = $mixinPkg.Replace('.', '/')
+# The SVC-conditional plugin must ship in the artifact (config references it).
+$mixinPlugin = $mixins.plugin
+if ($mixinPlugin) {
+    $pluginEntry = $mixinPlugin.Replace('.', '/') + '.class'
+    if ($entries -notcontains $pluginEntry) { throw "mixin plugin class missing from artifact: $pluginEntry" }
+}
+function Assert-MixinEntry([string]$rel, [string]$listName) {
+    if (-not $rel) { throw "empty mixin name in $listName" }
+    $fqn = "$mixinPkgPath/$rel.Replace('.', '/')"
+    $fqn = "$mixinPkgPath/" + $rel.Replace('.', '/') + '.class'
+    if ($entries -notcontains $fqn) { throw "mixin class missing from artifact: $fqn (declared in $listName)" }
+}
+foreach ($m in $mixins.client) { Assert-MixinEntry $m 'client' }
+foreach ($m in $mixins.mixins) { Assert-MixinEntry $m 'mixins(common)' }
+if ($mixins.server) { foreach ($m in $mixins.server) { Assert-MixinEntry $m 'server' } }
+Write-Output ("PASS artifact: every configured mixin class exists in JAR (package={0}, client={1}, common={2}, plugin={3})" -f `
+    $mixinPkg, @($mixins.client).Count, @($mixins.mixins).Count, $mixinPlugin)
+# T31/E1: the common list must contain only the intentionally SVC-conditional
+# server mixin (targets SVC-internal Server.class; gated by TsVoiceMixinPlugin).
 $allowedCommon = @('server.SvcServerSendPacketMixin')
 $unexpected = @($mixins.mixins | Where-Object { $_ -notin $allowedCommon })
 if ($unexpected.Count -ne 0) { throw ('unexpected common mixins: {0}' -f ($unexpected -join ',')) }
 if ($mixins.client.Count -lt 7) { throw ("client mixins must be environment-scoped (got {0})" -f $mixins.client.Count) }
-Write-Output 'PASS artifact: mixin config is client-scoped'
+Write-Output 'PASS artifact: mixin config is client-scoped with SVC-gated common mixin'
 Write-Output ("M7-ARTIFACT-CHECK RESULT: PASS ({0})" -f $hash)
 exit $LASTEXITCODE

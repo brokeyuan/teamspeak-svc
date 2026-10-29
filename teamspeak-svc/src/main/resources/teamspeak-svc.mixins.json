@@ -1,8 +1,9 @@
 {
   "required": true,
-  "package": "com.tsvoice.mixin",
+  "package": "com.tsvoice.client.mixin",
   "compatibilityLevel": "JAVA_17",
   "minVersion": "0.8",
+  "plugin": "com.tsvoice.compat.svc.TsVoiceMixinPlugin",
   "client": [
     "ClientVoicechatMixin",
     "AlSpeakerMixin",
