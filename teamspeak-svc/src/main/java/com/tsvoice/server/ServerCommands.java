@@ -56,10 +56,21 @@ public final class ServerCommands {
 
     private static String describe(com.tsvoice.server.ServerRuntime runtime) {
         var status = runtime.status();
+        // S1.3/P6：中继状态（默认关闭；开启时显示目标数与活跃会话数）
+        var relay = runtime.relayRuntime();
+        String relayText = "";
+        if (relay != null) {
+            var cfg = relay.config();
+            relayText = " | relay=" + (cfg.enabled()
+                    ? "on targets=" + cfg.targets().size() + " sessions=" + relay.sessionCount()
+                    : "off")
+                    + (relay.isClosed() ? " (closed)" : "");
+        }
         return "teamspeak-svc server runtime: state=" + status.state()
                 + " targets=" + status.configuredTargets()
                 + " config=" + status.configFile()
                 + (status.reason() == null || status.reason().isEmpty()
-                ? "" : " — " + status.reason());
+                ? "" : " — " + status.reason())
+                + relayText;
     }
 }

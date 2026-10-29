@@ -1,9 +1,11 @@
 package com.tsvoice.client.ts3voice;
 public class Ts3VoiceClient {
  public static final int CODEC_OPUS_VOICE=4;
- public int sent;
+ public int sent; public boolean connected;
  public record TsVoiceIn(int senderClid,int codec,int sequence,byte[] opus){}
  public Ts3VoiceClient(Ts3Identity id,String n,String channel,boolean tcp){}
+ public Ts3VoiceClient(Ts3Identity id,String n,String channel,com.tsvoice.client.ts3voice.Ts3Connection conn){}
+ public void connect(long timeout) throws Exception{connected=true;}
  public void setServerPassword(String password){}
  public void setTextListener(java.util.function.BiConsumer<String,String> l){}
  public void setVoiceListener(java.util.function.Consumer<TsVoiceIn> l){}

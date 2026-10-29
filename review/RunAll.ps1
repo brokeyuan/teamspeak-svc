@@ -74,6 +74,7 @@ $suites = @(
     'review/server-fixes/RunServerChecks.ps1',
     'review/upload-confirmation/RunUploadConfirmation.ps1',
     'review/gui-integration/RunGuiIntegration.ps1',
+    'review/ts-mc-relay/RunTsMcRelay.ps1',
     'review/m7-unified-release/RunM7.ps1'
 )
 foreach ($suite in $suites) {

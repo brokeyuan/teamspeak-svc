@@ -2,6 +2,7 @@ $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
 $base = 'review/p3-channel'
 $core = Get-ChildItem -LiteralPath 'ts3voice-core/src/main/java/com/tsvoice/protocol' -Filter '*.java' | Select-Object -ExpandProperty FullName
+$relay = Get-ChildItem -LiteralPath 'ts3voice-core/src/main/java/com/tsvoice/protocol/relay' -Filter '*.java' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
 $ts3voice = Get-ChildItem -LiteralPath 'teamspeak-svc/src/main/java/com/tsvoice/client/ts3voice' -Filter '*.java' |
     Where-Object { $_.Name -notin @('Ts3VoiceSelfTest.java', 'Ts3ChannelTest.java') } | Select-Object -ExpandProperty FullName
 New-Item -ItemType Directory -Path "$base/stubs/com/tsvoice/client" -Force | Out-Null
@@ -12,7 +13,7 @@ public class TeamspeakSvcClient {
 }
 '@)
 $stubSources = Get-ChildItem -LiteralPath "$base/stubs" -Recurse -Filter '*.java' | Select-Object -ExpandProperty FullName
-$allSources = @($core) + @($ts3voice) + @($stubSources) + @(
+$allSources = @($core) + @($relay) + @($ts3voice) + @($stubSources) + @(
     'teamspeak-svc/src/main/java/com/tsvoice/client/ConfigFileUtil.java',
     'teamspeak-svc/src/main/java/com/tsvoice/client/Ts3FileTransfer.java',
     'teamspeak-svc/src/main/java/com/tsvoice/client/Ts3FileTransferBridge.java',

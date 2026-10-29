@@ -1,9 +1,15 @@
 package com.tsvoice.client;
 
 import com.tsvoice.client.net.BeaconPayload;
+import com.tsvoice.client.ts3voice.Ts3Connection;
+import com.tsvoice.client.ts3voice.Ts3Crypt;
 import com.tsvoice.client.ts3voice.Ts3Identity;
 import com.tsvoice.client.ts3voice.Ts3VoiceClient;
 import com.tsvoice.client.ts3voice.Ts3VoiceException;
+import com.tsvoice.client.ts3voice.TsMcChannelTransport;
+import com.tsvoice.common.net.TsRelayPayloads;
+import com.tsvoice.protocol.relay.TsRelayWire;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 
@@ -33,9 +39,26 @@ public final class TsVoiceManager {
         VOICE_OFF, ERROR
     }
 
-    /** 当前生效的会话配置（tcp=true 时 port 为隧道端口；password=服务器/频道密码）。 */
-    public record SessionConfig(String host, int port, String channel, String source, boolean tcp,
+    /**
+     * 当前生效的会话配置（S1.1/P6：transport 为明确类型 —— 旧 boolean tcp 只
+     * 迁移为 TS_TUNNEL_V1；password=服务器/频道密码）。
+     */
+    public record SessionConfig(String host, int port, String channel, String source,
+                                com.tsvoice.client.connection.VoiceTransport transport,
                                 String password, String channelPassword) {
+
+        /** 兼容视图：M7 语义的 tcp 标志（true=旧隧道；MC 通道/UDP 均为 false）。 */
+        public boolean tcp() {
+            return transport == com.tsvoice.client.connection.VoiceTransport.TS_TUNNEL_V1;
+        }
+
+        /** 兼容构造器（旧调用方/harness）：boolean tcp → 明确传输类型。 */
+        public SessionConfig(String host, int port, String channel, String source, boolean tcp,
+                             String password, String channelPassword) {
+            this(host, port, channel, source,
+                    com.tsvoice.client.connection.VoiceTransport.fromLegacyTcp(tcp),
+                    password, channelPassword);
+        }
     }
 
     private static final long INITIAL_BACKOFF_MS = 2_000L;
@@ -433,9 +456,13 @@ public final class TsVoiceManager {
             // 不静默借用其他书签/endpoint 的密码。
             var credential = com.tsvoice.client.config.EndpointCredentialStore.getByRef(
                     bookmark.credentialRef(), bookmark.host(), port);
-            boolean tcp = "tcp".equalsIgnoreCase(bookmark.transportPolicy());
+            // S1.1：明确传输类型（旧 "tcp" 只映射 TS_TUNNEL_V1，不自动变 MC 通道；
+            // "mc_channel" 显式选择中继）
+            var transport = com.tsvoice.client.connection.VoiceTransport.fromConfig(
+                    bookmark.transportPolicy());
             return new SessionConfig(bookmark.host(), bookmark.effectivePort(),
-                    bookmark.channel() != null ? bookmark.channel() : "Minecraft", "manual", tcp,
+                    bookmark.channel() != null ? bookmark.channel() : "Minecraft", "manual",
+                    transport,
                     credential != null ? credential.serverPassword() : null,
                     credential != null ? credential.channelPassword() : null);
         }
@@ -906,6 +933,12 @@ public final class TsVoiceManager {
         sessionGeneration++;
         sessionRunning = false;
         lastAppliedConfig = null;
+        // S1.4/P6：MC 中继会话随 TS 会话关闭（CLOSE → 服务端回收 socket/worker）
+        try {
+            closeMcRelaySession();
+        } catch (Exception e) {
+            TeamspeakSvcClient.LOGGER.debug("[teamspeak-svc] relay session close failed: {}", e.getMessage());
+        }
         com.tsvoice.client.frontend.FrontendLease lease = frontendLease;
         frontendLease = null;
         if (lease != null) {
@@ -1126,7 +1159,18 @@ public final class TsVoiceManager {
         String nickname = sessionNicknameOverride != null
                 ? sessionNicknameOverride
                 : "[MC] " + Minecraft.getInstance().getUser().getName();
-        Ts3VoiceClient c = new Ts3VoiceClient(identity, nickname, "", cfg.tcp());
+        // S1.4/P6：MC 中继路径 —— 传输注入构造；客户端不做任何 TS 主机名解析
+        //（endpoint 解析与允许判断都在服务端按 allowlist 执行）。
+        Ts3VoiceClient c;
+        final TsMcChannelTransport mcTransport;
+        if (cfg.transport() == com.tsvoice.client.connection.VoiceTransport.TS_MC_CHANNEL) {
+            mcTransport = new TsMcChannelTransport();
+            Ts3Connection relayConnection = new Ts3Connection(new Ts3Crypt(identity), mcTransport);
+            c = new Ts3VoiceClient(identity, nickname, "", relayConnection);
+        } else {
+            mcTransport = null;
+            c = new Ts3VoiceClient(identity, nickname, "", cfg.tcp());
+        }
         c.setServerPassword(cfg.password());
         // writer 最终写出点的路由代际来源（R08/T03）：路由未就绪/已失效时全部语音丢弃。
         // S0.1/R21：许可额外绑定本代会话 token（sessionLoop 捕获后传入，非实时读取）——
@@ -1153,7 +1197,14 @@ public final class TsVoiceManager {
             }
         });
         try {
-            c.connect(InetAddress.getByName(cfg.host()), cfg.port(), CONNECT_TIMEOUT_MS);
+            if (mcTransport != null) {
+                // MC 中继：OPEN →（服务端 allowlist/限额）→ OPENED → attach，
+                // 再经注入传输进入正常 TS 握手。任何一步失败即连接失败。
+                openMcRelaySession(mcTransport, cfg);
+                c.connect(CONNECT_TIMEOUT_MS);
+            } else {
+                c.connect(InetAddress.getByName(cfg.host()), cfg.port(), CONNECT_TIMEOUT_MS);
+            }
         } catch (Exception e) {
             try {
                 c.disconnect();
@@ -1203,6 +1254,143 @@ public final class TsVoiceManager {
             TeamspeakSvcClient.LOGGER.debug("[teamspeak-svc] post-connect extras failed: {}", e.getMessage());
         }
         return c;
+    }
+
+    // ---- S1.4/P6：MC 中继客户端侧接线 ----
+
+    /** 当前会话的 MC 中继会话 id（OPENED 下发；诊断/上行投递路由用）。 */
+    private static volatile byte[] mcRelaySessionId;
+    /** 当前会话的 MC 中继传输（下行投递目标；非中继会话为 null）。 */
+    private static volatile TsMcChannelTransport mcRelayTransport;
+    /** 在途 OPEN 的请求 id（AtomicInteger 环形分配，避免 id 冲突）。 */
+    private static final java.util.concurrent.atomic.AtomicInteger RELAY_REQUEST_IDS =
+            new java.util.concurrent.atomic.AtomicInteger(1);
+
+    /**
+     * OPEN → OPENED → attach：经 Fabric 通道完成 MC 中继会话建立（阻塞至
+     * 服务端应答或超时）。本方法在会话线程执行；payload 发送是线程安全的，
+     * 下行应答由 Fabric receiver 在主线程投递给 {@link #onRelayOpenedFrame}
+     * 等待队列。客户端不解析 TS 主机名 —— targetId 由书签/配置提供。
+     */
+    private static void openMcRelaySession(TsMcChannelTransport transport, SessionConfig cfg) throws Exception {
+        if (!ClientPlayNetworking.canSend(TsRelayPayloads.RelayOpenPayload.TYPE)) {
+            throw new IllegalStateException("this server does not support the TS relay channel");
+        }
+        // targetId 约定：书签/手动配置的 host:port 规范化串（服务端 allowlist 键）。
+        // 服务器不允许的目标会以 ERR_UNKNOWN_TARGET/ERR_TARGET_NOT_ALLOWED 拒绝。
+        String targetId = com.tsvoice.client.config.EndpointCredentialStore
+                .normalizeEndpoint(cfg.host(), cfg.port());
+        byte[] open = TsRelayWire.encodeOpen(new TsRelayWire.OpenFrame(
+                RELAY_REQUEST_IDS.getAndIncrement(), targetId, TsRelayWire.Purpose.PLAYER_VOICE));
+        java.util.concurrent.CompletableFuture<TsRelayWire.OpenedFrame> waiter =
+                new java.util.concurrent.CompletableFuture<>();
+        PENDING_OPENS.put(targetId, waiter);
+        try {
+            ClientPlayNetworking.send(new TsRelayPayloads.RelayOpenPayload(open));
+            TsRelayWire.OpenedFrame opened = waiter.get(CONNECT_TIMEOUT_MS,
+                    java.util.concurrent.TimeUnit.MILLISECONDS);
+            mcRelaySessionId = opened.relaySessionId();
+            mcRelayTransport = transport;
+            // 上行发送桥：TS3Connection 写线程调用 transport.send —— 这里转
+            // DATA_C2S 帧（有界，服务端按会话限额计费）。
+            transport.setRelaySender(datagram -> {
+                byte[] session = mcRelaySessionId;
+                byte[] frame = TsRelayWire.encodeData(TsRelayWire.MessageType.DATA_C2S,
+                        new TsRelayWire.DataFrame(session, 0, 0, datagram));
+                ClientPlayNetworking.send(new TsRelayPayloads.RelayDataC2sPayload(frame));
+            });
+            transport.attachRelaySession(opened.relaySessionId(), opened.maxDatagramBytes());
+            TeamspeakSvcClient.LOGGER.info(
+                    "[teamspeak-svc] MC relay session attached (target={}, limits={}/{}/{}B)",
+                    targetId, opened.maxDatagramBytes(), opened.maxDatagramsPerSecond(),
+                    opened.maxBytesPerSecond());
+        } finally {
+            PENDING_OPENS.remove(targetId, waiter);
+        }
+    }
+
+    /** 在途 OPEN 等待队列（targetId → waiter；fabric receiver 主线程完成）。 */
+    private static final java.util.concurrent.ConcurrentHashMap<
+            String, java.util.concurrent.CompletableFuture<TsRelayWire.OpenedFrame>> PENDING_OPENS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Fabric receiver（主线程）：OPENED 帧 → 完成在途等待。 */
+    public static void onRelayOpenedFrame(byte[] frame) {
+        TsRelayWire.Decoded decoded = TsRelayWire.decode(frame);
+        if (decoded == null || decoded.type() != TsRelayWire.MessageType.OPENED) {
+            return;
+        }
+        TsRelayWire.OpenedFrame opened = decoded.opened();
+        // 服务端不回传 targetId；等待队列最多一个在途 OPEN（每连接 1 会话约束）。
+        for (var e : PENDING_OPENS.entrySet()) {
+            if (e.getValue().complete(opened)) {
+                return;
+            }
+        }
+    }
+
+    /** Fabric receiver（主线程）：S2C 数据报/CLOSED → 传输投递。 */
+    public static void onRelayDownstreamFrame(byte[] frame) {
+        TsRelayWire.Decoded decoded = TsRelayWire.decode(frame);
+        if (decoded == null) {
+            return;
+        }
+        TsMcChannelTransport transport = mcRelayTransport;
+        switch (decoded.type()) {
+            case DATA_S2C -> {
+                if (transport != null) {
+                    transport.onRelayDatagram(decoded.data().datagram());
+                }
+            }
+            case CLOSED -> {
+                if (transport != null) {
+                    transport.closeWithException(new java.io.IOException(
+                            "relay closed: " + decoded.close().reason()));
+                    mcRelayTransport = null;
+                    mcRelaySessionId = null;
+                }
+            }
+            case ERROR -> {
+                // OPEN 阶段错误：失败在途等待（携带稳定错误码）
+                TsRelayWire.ErrorFrame error = decoded.error();
+                if (error.stableErrorCode() != 0 && !PENDING_OPENS.isEmpty()) {
+                    for (var e : PENDING_OPENS.entrySet()) {
+                        e.getValue().completeExceptionally(new Ts3VoiceException(
+                                "relay open rejected: code=" + error.stableErrorCode()
+                                        + " " + error.message()));
+                    }
+                    PENDING_OPENS.clear();
+                }
+            }
+            default -> {
+            }
+        }
+    }
+
+    /** 当前 MC 中继会话 id（诊断；非中继会话为 null）。 */
+    public static byte[] currentMcRelaySessionId() {
+        byte[] id = mcRelaySessionId;
+        return id == null ? null : id.clone();
+    }
+
+    /** 会话清理：断开 MC 中继会话（CLOSE）并复位桥接状态。 */
+    private static void closeMcRelaySession() {
+        byte[] session = mcRelaySessionId;
+        TsMcChannelTransport transport = mcRelayTransport;
+        mcRelaySessionId = null;
+        mcRelayTransport = null;
+        if (transport != null) {
+            transport.close();
+        }
+        if (session != null && ClientPlayNetworking.canSend(TsRelayPayloads.RelayClosePayload.TYPE)) {
+            try {
+                byte[] frame = TsRelayWire.encodeClose(TsRelayWire.MessageType.CLOSE,
+                        new TsRelayWire.CloseFrame(session, "client session end"));
+                ClientPlayNetworking.send(new TsRelayPayloads.RelayClosePayload(frame));
+            } catch (Exception e) {
+                TeamspeakSvcClient.LOGGER.debug("[teamspeak-svc] relay close send failed: {}", e.getMessage());
+            }
+        }
     }
 
     /**

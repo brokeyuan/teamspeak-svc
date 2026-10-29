@@ -2,6 +2,7 @@ package com.tsvoice.client;
 
 import com.tsvoice.client.net.BeaconPayload;
 import com.tsvoice.client.net.GroupInfoPayload;
+import com.tsvoice.common.net.TsRelayPayloads;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
@@ -117,6 +118,20 @@ public class TeamspeakSvcClient {
         ClientPlayNetworking.registerGlobalReceiver(com.tsvoice.common.net.CapabilitiesPayloads.CapabilitiesPayload.TYPE,
                 (payload, context) -> context.client().execute(() ->
                         TsVoiceManager.onCapabilitiesAnnouncementFrame(payload.frame())));
+
+        // S1.4/P6：TS 中继下行（主线程投递给 manager 的等待队列/传输）
+        ClientPlayNetworking.registerGlobalReceiver(TsRelayPayloads.RelayOpenedPayload.TYPE,
+                (payload, context) -> context.client().execute(() ->
+                        TsVoiceManager.onRelayOpenedFrame(payload.frame())));
+        ClientPlayNetworking.registerGlobalReceiver(TsRelayPayloads.RelayDataS2cPayload.TYPE,
+                (payload, context) -> context.client().execute(() ->
+                        TsVoiceManager.onRelayDownstreamFrame(payload.frame())));
+        ClientPlayNetworking.registerGlobalReceiver(TsRelayPayloads.RelayClosedPayload.TYPE,
+                (payload, context) -> context.client().execute(() ->
+                        TsVoiceManager.onRelayDownstreamFrame(payload.frame())));
+        ClientPlayNetworking.registerGlobalReceiver(TsRelayPayloads.RelayErrorPayload.TYPE,
+                (payload, context) -> context.client().execute(() ->
+                        TsVoiceManager.onRelayDownstreamFrame(payload.frame())));
 
         // 信标：新 endpoint 需要玩家显式授权；只有已记住的 endpoint 自动采用
         // T06/R09：issuer 信任变化立即刷新 Ghost 展示（降级不改稳定 UUID，不停音频）。

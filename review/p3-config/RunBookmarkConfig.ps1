@@ -81,9 +81,11 @@ public class Ts3VoiceException extends Exception {
 package com.tsvoice.client.ts3voice;
 public class Ts3VoiceClient {
  public static final int CODEC_OPUS_VOICE=4;
- public int sent;
+ public int sent; public boolean connected;
  public record TsVoiceIn(int senderClid,int codec,int sequence,byte[] opus){}
  public Ts3VoiceClient(Ts3Identity id,String n,String channel,boolean tcp){}
+ public Ts3VoiceClient(Ts3Identity id,String n,String channel,com.tsvoice.client.ts3voice.Ts3Connection conn){}
+ public void connect(long timeout) throws Exception{connected=true;}
  public void setServerPassword(String password){}
  public void setTextListener(java.util.function.BiConsumer<String,String> l){}
  public void setVoiceListener(java.util.function.Consumer<TsVoiceIn> l){}
@@ -145,12 +147,17 @@ $sources = foreach ($item in $stubs.GetEnumerator()) {
 $client = 'teamspeak-svc/src/main/java/com/tsvoice/client'
 $prod = @("$client/TsVoiceManager.java", "$client/ts3voice/TsProtocolException.java", "$client/audio/MicRouteGate.java", "$client/frontend/SvcFrontendAdapter.java", "$client/frontend/FrontendCapabilities.java", "$client/frontend/FrontendLease.java", "$client/frontend/Svc2625FrontendAdapter.java",
     "$client/connection/VoiceState.java", "$client/connection/BackendCoordinator.java",
-    "$client/connection/SelectionPolicy.java", "$client/connection/TsChannelRoute.java", "$client/connection/CapabilityDiscovery.java", "ts3voice-core/src/main/java/com/tsvoice/protocol/capability/CapabilityWire.java",
+    "$client/connection/SelectionPolicy.java", "$client/connection/TsChannelRoute.java", "$client/connection/CapabilityDiscovery.java", "$client/connection/VoiceTransport.java", "$client/ts3voice/TsMcChannelTransport.java", "ts3voice-core/src/main/java/com/tsvoice/protocol/relay/TsRelayWire.java", "ts3voice-core/src/main/java/com/tsvoice/protocol/capability/CapabilityWire.java",
     "$client/ts3voice/TsChannelSnapshot.java",
     "$client/backend/SvcBackendAdapter.java",
     "$client/config/TsBookmarkStore.java", "$client/config/EndpointCredentialStore.java",
     "$client/ModConfig.java", "$client/ServerConfigStore.java", "$client/ConfigFileUtil.java")
 & javac -encoding UTF-8 -cp 'review/lib/*' -d "$base/classes" @prod @sources `
+    "$base/stubs/com/tsvoice/client/ts3voice/Ts3Crypt.java" `
+    "$base/stubs/com/tsvoice/client/ts3voice/Ts3Connection.java" `
+    "$base/stubs/com/tsvoice/client/ts3voice/TsTransport.java" `
+    "$base/stubs/com/tsvoice/common/net/TsRelayPayloads.java" `
+    "$base/stubs/net/fabricmc/fabric/api/client/networking/v1/ClientPlayNetworking.java" `
     "$base/EndpointCredentialsTest.java" "$base/BookmarkMigrationTest.java"
 if ($LASTEXITCODE -ne 0) { throw 'Bookmark config regression compilation failed' }
 & java -cp "$base/classes;review/lib/*" com.tsvoice.client.config.EndpointCredentialsTest

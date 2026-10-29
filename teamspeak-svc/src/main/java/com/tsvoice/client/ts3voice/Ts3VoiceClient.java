@@ -108,9 +108,22 @@ public final class Ts3VoiceClient {
     }
 
     public Ts3VoiceClient(Ts3Identity identity, String nickname, String defaultChannel, boolean tcp) {
-        this.crypt = new Ts3Crypt(identity);
-        this.tcpTransport = tcp;
-        this.connection = new Ts3Connection(crypt, tcp);
+        this(identity, nickname, defaultChannel,
+                tcp ? new Ts3Connection(new Ts3Crypt(identity), true)
+                        : new Ts3Connection(new Ts3Crypt(identity), false));
+    }
+
+    /**
+     * 传输注入入口（S1.1/P6）：调用方提供已绑定 {@link TsTransport} 的
+     * {@link Ts3Connection}（例如 MC 中继路径构造的连接）。握手/加密/序号
+     * 实现完全复用既有 Ts3Connection 路径 —— 本类不感知传输差异，也不在这里
+     * 做 DNS 解析（MC 通道的 endpoint 解析在服务端）。
+     */
+    public Ts3VoiceClient(Ts3Identity identity, String nickname, String defaultChannel,
+                          Ts3Connection injectedConnection) {
+        this.crypt = injectedConnection.crypt();
+        this.tcpTransport = false; // 传输种类由注入对象决定；cookie 逻辑仅原生 UDP 需要
+        this.connection = injectedConnection;
         this.commandTracker = new TsCommandTracker(this);
         this.nickname = nickname;
         this.defaultChannel = defaultChannel == null ? "" : defaultChannel;
@@ -281,6 +294,24 @@ public final class Ts3VoiceClient {
         } catch (Ts3VoiceException e) {
             throw e;
         }
+        connectAfterTransport(timeoutMs);
+    }
+
+    /**
+     * 经注入传输连接（S1.1/P6，MC 中继路径）：不做任何 DNS/地址解析 ——
+     * 地址参数语义由注入的传输定义（MC 中继的 endpoint 解析与允许判断都在
+     * 服务端）。此后的握手/加密与 {@link #connect(InetAddress, int, long)} 完全一致。
+     */
+    public void connect(long timeoutMs) throws Ts3VoiceException {
+        try {
+            connection.connect(null, 0);
+        } catch (Ts3VoiceException e) {
+            throw e;
+        }
+        connectAfterTransport(timeoutMs);
+    }
+
+    private void connectAfterTransport(long timeoutMs) throws Ts3VoiceException {
         try {
             if (!connectLatch.await(timeoutMs, TimeUnit.MILLISECONDS)) {
                 throw new Ts3VoiceException(failReason.get() != null

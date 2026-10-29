@@ -12,6 +12,9 @@ if(!(Test-Path 'review/lib/gson.jar')){
     'teamspeak-svc/src/main/java/com/tsvoice/server/ServerConfig.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/server/CapabilityAnnouncer.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/server/ServerRuntime.java' `
+    'teamspeak-svc/src/main/java/com/tsvoice/server/relay/TsRelayRuntime.java' `
+    'teamspeak-svc/src/main/java/com/tsvoice/server/relay/TsRelaySession.java' `
+    'ts3voice-core/src/main/java/com/tsvoice/protocol/relay/TsRelayWire.java' `
     "$base/ServerConfigTest.java" "$base/AnnouncerTest.java"
 if ($LASTEXITCODE -ne 0) { throw 'M7 regression compilation failed' }
 & java -cp "$base/classes;review/lib/*" com.tsvoice.server.ServerConfigTest

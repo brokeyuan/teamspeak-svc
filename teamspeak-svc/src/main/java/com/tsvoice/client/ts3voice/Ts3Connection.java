@@ -149,6 +149,11 @@ public final class Ts3Connection {
         this.onDisconnected = callback;
     }
 
+    /** 本连接的加密器（S1.1/P6：Ts3VoiceClient 传输注入构造器复用既有 crypt）。 */
+    public Ts3Crypt crypt() {
+        return crypt;
+    }
+
     public void setClientNid(int nid) {
         synchronized (sendLock) {
             this.clientNid = nid;

@@ -29,6 +29,14 @@ public class Ts3VoiceClient {
         INSTANCES.add(this);
     }
 
+    public Ts3VoiceClient(Ts3Identity id, String nickname, String channel,
+                          com.tsvoice.client.ts3voice.Ts3Connection conn) {
+        INSTANCES.add(this);
+    }
+
+    public void connect(long timeout) throws Exception {
+    }
+
     public String identity() {
         return "client-" + uidPrefix;
     }

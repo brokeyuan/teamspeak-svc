@@ -21,6 +21,8 @@ public class Ts3VoiceClient {
  public java.util.function.IntConsumer membershipListener;
  public record TsVoiceIn(int senderClid,int codec,int sequence,byte[] opus){}
  public Ts3VoiceClient(Ts3Identity id,String n,String channel,boolean tcp){onConnect=connectScripts.poll();}
+ public Ts3VoiceClient(Ts3Identity id,String n,String channel,com.tsvoice.client.ts3voice.Ts3Connection conn){onConnect=connectScripts.poll();}
+ public void connect(long timeout) throws Exception{if(onConnect!=null){onConnect.accept(this);}connected=true;}
  public void setServerPassword(String password){}
  public void setTextListener(java.util.function.BiConsumer<String,String> l){textListener=l;}
  public void setVoiceListener(java.util.function.Consumer<TsVoiceIn> l){voiceListener=l;}

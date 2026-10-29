@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -51,9 +52,36 @@ public final class ServerConfig {
         public List<Target> targets = new ArrayList<>();
     }
 
+    /** TS 中继 allowlist 目标（S1.3/P6）：targetId → host/port；DATA 不携带地址。 */
+    public static final class RelayTarget {
+        public String host;
+        public Integer port;
+
+        public RelayTarget() {
+        }
+
+        public RelayTarget(String host, Integer port) {
+            this.host = host;
+            this.port = port;
+        }
+    }
+
+    /** TS 中继配置节（S1.3/P6）：默认关闭；限额为工程初值，管理员可调小。 */
+    public static final class RelaySection {
+        public boolean enabled = false;
+        public List<RelayTarget> targets = new ArrayList<>();
+        /** targetId → host/port；key 小写规范化。 */
+        public Map<String, RelayTarget> targetIds = new java.util.LinkedHashMap<>();
+        public int maxDatagramBytes = 4096;
+        public int maxDatagramsPerSecond = 256;
+        public int maxBytesPerSecond = 512 * 1024;
+        public int maxSessions = 64;
+    }
+
     public int schemaVersion = SCHEMA_VERSION;
     public boolean integratedServerEnabled = false;
     public CapabilitiesSection capabilities = new CapabilitiesSection();
+    public RelaySection relay = new RelaySection();
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
@@ -158,6 +186,51 @@ public final class ServerConfig {
                     return problem;
                 }
             }
+        }
+        String relayProblem = validateRelay();
+        if (relayProblem != null) {
+            return relayProblem;
+        }
+        return null;
+    }
+
+    /** relay 节校验（S1.3/P6）：allowlist 目标、限额上限。 */
+    public String validateRelay() {
+        if (relay == null) {
+            return null; // 旧配置文件缺 relay 节：Gson 置 null 时按默认关闭处理
+        }
+        if (relay.targetIds == null) {
+            relay.targetIds = new java.util.LinkedHashMap<>();
+        }
+        if (relay.targetIds.size() > 16) {
+            return "relay.targetIds exceeds 16";
+        }
+        for (Map.Entry<String, RelayTarget> e : relay.targetIds.entrySet()) {
+            String id = e.getKey();
+            if (id == null || id.isBlank() || id.length() > 64
+                    || !id.matches("[a-z0-9._-]{1,64}")) {
+                return "relay target id '" + id + "' invalid (use 1..64 chars of a-z 0-9 . _ -)";
+            }
+            RelayTarget t = e.getValue();
+            if (t == null || t.host == null || t.host.isBlank()
+                    || t.host.length() > CapabilityWire.MAX_HOST_LENGTH) {
+                return "relay target '" + id + "' host missing or too long";
+            }
+            if (t.port == null || t.port < 1 || t.port > 65535) {
+                return "relay target '" + id + "' port must be within 1..65535";
+            }
+        }
+        if (relay.maxDatagramBytes < 1 || relay.maxDatagramBytes > 4096) {
+            return "relay.maxDatagramBytes must be within 1..4096";
+        }
+        if (relay.maxDatagramsPerSecond < 1 || relay.maxDatagramsPerSecond > 4096) {
+            return "relay.maxDatagramsPerSecond must be within 1..4096";
+        }
+        if (relay.maxBytesPerSecond < 1024 || relay.maxBytesPerSecond > 16 * 1024 * 1024) {
+            return "relay.maxBytesPerSecond must be within 1 KiB..16 MiB per second";
+        }
+        if (relay.maxSessions < 1 || relay.maxSessions > 64) {
+            return "relay.maxSessions must be within 1..64";
         }
         return null;
     }

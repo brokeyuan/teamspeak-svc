@@ -38,7 +38,7 @@ if (Test-Path "$base/oldsrc/OldBehaviorProbe.java") {
     'teamspeak-svc/src/main/java/com/tsvoice/client/frontend/FrontendLease.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/client/frontend/Svc2625FrontendAdapter.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/client/ClientStateReflector.java' `
-    'teamspeak-svc/src/main/java/com/tsvoice/client/TsAudioInjector.java' `
+    'teamspeak-svc/src/main/java/com/tsvoice/client/TsAudioInjector.java' 'teamspeak-svc/src/main/java/com/tsvoice/client/ParticipantVolumeControl.java' `
     (Get-ChildItem -LiteralPath "$base/stubs" -Recurse -Filter '*.java' | Select-Object -ExpandProperty FullName) `
     "$base/StableParticipantVolumeTest.java"
 if ($LASTEXITCODE -ne 0) { throw 'Stable participant volume regression compilation failed' }

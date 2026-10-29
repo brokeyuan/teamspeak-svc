@@ -1,5 +1,6 @@
 package com.tsvoice.server;
 
+import com.tsvoice.server.relay.TsRelayRuntime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,19 +26,60 @@ public final class ServerRuntime implements AutoCloseable {
     private final Path configDir;
     /** 物理服务器环境（S0.3/R22）：构造时固定，reload/恢复等所有状态计算共用。 */
     private final boolean dedicatedServer;
+    private final TsRelayRuntime mcSinkAdapter;
     private volatile ServerConfig config;
     private volatile CapabilityAnnouncer announcer;
     private volatile CapabilityStatus status;
     private volatile boolean closed;
+    /** TS 中继运行时（S1.3/P6）：默认关闭；sink 由主入口注入。 */
+    private volatile TsRelayRuntime relayRuntime;
 
     private ServerRuntime(Path configDir, ServerConfig config, ServerConfig.LoadResult loadResult,
                           boolean dedicatedServer) {
+        this(configDir, config, loadResult, dedicatedServer, null);
+    }
+
+    /** 完整构造（主入口注入 MC 上行 sink；测试可传 no-op sink）。 */
+    ServerRuntime(Path configDir, ServerConfig config, ServerConfig.LoadResult loadResult,
+                  boolean dedicatedServer, TsRelayRuntime.McSink relaySink) {
         this.configDir = configDir;
         this.dedicatedServer = dedicatedServer;
         this.config = config;
+        this.mcSinkAdapter = relaySink != null ? new TsRelayRuntime(relaySink, relayConfigOf(config))
+                : new TsRelayRuntime((id, player, datagram) -> false, relayConfigOf(config));
+        this.relayRuntime = mcSinkAdapter;
+        this.relayRuntime.applyConfig(relayConfigOf(config));
         this.announcer = new CapabilityAnnouncer(config, System::nanoTime);
         this.status = computeStatus(config, loadResult);
         LOGGER.info("[teamspeak-svc] server runtime started ({}) — {}", status.state(), status.reason());
+    }
+
+    /** ServerConfig.relay 节 → TsRelayRuntime.RelayConfig（缺节按默认关闭）。 */
+    private static TsRelayRuntime.RelayConfig relayConfigOf(ServerConfig config) {
+        if (config == null || config.relay == null || !config.relay.enabled) {
+            return TsRelayRuntime.RelayConfig.disabled();
+        }
+        java.util.Map<String, TsRelayRuntime.RelayConfig.RelayTargetConfig> targets =
+                new java.util.HashMap<>();
+        if (config.relay.targetIds != null) {
+            for (java.util.Map.Entry<String, ServerConfig.RelayTarget> e
+                    : config.relay.targetIds.entrySet()) {
+                if (e.getValue() != null && e.getKey() != null) {
+                    targets.put(e.getKey().toLowerCase(java.util.Locale.ROOT),
+                            new TsRelayRuntime.RelayConfig.RelayTargetConfig(
+                                    e.getValue().host, e.getValue().port));
+                }
+            }
+        }
+        return new TsRelayRuntime.RelayConfig(true, java.util.Map.copyOf(targets),
+                config.relay.maxSessions,
+                new TsRelayRuntime.Limits(config.relay.maxDatagramBytes,
+                        config.relay.maxDatagramsPerSecond, config.relay.maxBytesPerSecond));
+    }
+
+    /** 当前 TS 中继运行时（主入口 payload 接收/诊断；默认关闭时仍可安全调用）。 */
+    public TsRelayRuntime relayRuntime() {
+        return relayRuntime;
     }
 
     /**
@@ -48,16 +90,22 @@ public final class ServerRuntime implements AutoCloseable {
      *                  语义（默认关闭，不受 reload/恢复路径绕过 —— R22）。
      */
     public static ServerRuntime start(Path configDir, boolean dedicated) {
+        return start(configDir, dedicated, null);
+    }
+
+    /** 完整启动（S1.3：主入口注入 relay 上行 sink；测试传 null 用默认 no-op）。 */
+    public static ServerRuntime start(Path configDir, boolean dedicated, TsRelayRuntime.McSink relaySink) {
         ServerConfig.LoadResult result = ServerConfig.load(configDir);
         if (!result.valid()) {
-            ServerRuntime runtime = new ServerRuntime(configDir, new ServerConfig(), result, dedicated);
+            ServerRuntime runtime = new ServerRuntime(configDir, new ServerConfig(), result,
+                    dedicated, relaySink);
             // 损坏输入：公告停止（INVALID_CONFIG），不覆盖用户文件
             return runtime;
         }
         if (result.migratedFromLegacy()) {
             LOGGER.info("[teamspeak-svc] server config migrated: {}", result.source());
         }
-        return new ServerRuntime(configDir, result.config(), result, dedicated);
+        return new ServerRuntime(configDir, result.config(), result, dedicated, relaySink);
     }
 
     /** 兼容入口：环境按 dedicated 处理（旧测试面；生产主入口传真实环境）。 */
@@ -141,11 +189,22 @@ public final class ServerRuntime implements AutoCloseable {
             this.announcer = new CapabilityAnnouncer(this.config, System::nanoTime);
             // 无效配置恢复同样过集成门（旧配置里的开关已不可信）
             this.status = computeStatus(this.config, result);
+            // S1.3：无效配置 → relay 回到默认关闭（回收全部会话）
+            TsRelayRuntime relay = this.relayRuntime;
+            if (relay != null) {
+                relay.applyConfig(relayConfigOf(this.config));
+            }
             return new ReloadResult(false, result.problem());
         }
         this.config = result.config();
         this.announcer = new CapabilityAnnouncer(this.config, System::nanoTime);
         this.status = computeStatus(this.config, result);
+        // S1.3：relay 配置随 reload 应用（目标变更不重定向已建立会话；总开关
+        // 关闭时回收全部会话）
+        TsRelayRuntime relay = this.relayRuntime;
+        if (relay != null) {
+            relay.applyConfig(relayConfigOf(this.config));
+        }
         LOGGER.info("[teamspeak-svc] server config reloaded: {} ({})", status.state(), status.reason());
         return new ReloadResult(true, status.reason());
     }
@@ -159,7 +218,7 @@ public final class ServerRuntime implements AutoCloseable {
         // 环境已在 start(configDir, dedicated) 固定；状态计算统一走 computeStatus。
     }
 
-    /** 幂等关闭：只释放自己的限流记录；不触碰配置文件。 */
+    /** 幂等关闭：释放公告限流记录与中继会话；不触碰配置文件。 */
     @Override
     public synchronized void close() {
         if (closed) {
@@ -167,6 +226,10 @@ public final class ServerRuntime implements AutoCloseable {
         }
         closed = true;
         announcer = null;
+        TsRelayRuntime relay = relayRuntime;
+        if (relay != null) {
+            relay.close();
+        }
         status = new CapabilityStatus(State.DISABLED, "runtime closed", 0, configDir);
     }
 }
