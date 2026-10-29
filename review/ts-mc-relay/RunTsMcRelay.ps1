@@ -6,11 +6,16 @@ New-Item -ItemType Directory -Path "$base/classes" -Force | Out-Null
     'ts3voice-core/src/main/java/com/tsvoice/protocol/relay/TsRelayWire.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/server/relay/TsRelayRuntime.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/server/relay/TsRelaySession.java' `
-    "$base/RelayRuntimeTest.java" "$base/RelayProductionBridgeTest.java"
+    'teamspeak-svc/src/main/java/com/tsvoice/client/ts3voice/TsTransport.java' `
+    'teamspeak-svc/src/main/java/com/tsvoice/client/ts3voice/TsMcChannelTransport.java' `
+    "$base/RelayRuntimeTest.java" "$base/RelayProductionBridgeTest.java" "$base/RelayBoundaryRegressionTest.java"
 if ($LASTEXITCODE -ne 0) { throw 'relay regression compilation failed' }
 & java -cp "$base/classes;review/lib/*" com.tsvoice.RelayRuntimeTest
 if ($LASTEXITCODE -ne 0) { throw 'relay runtime regression failed' }
 # E3/T32+T34: production bridge contract + connection-keyed OPEN correlation
 & java -cp "$base/classes;review/lib/*" com.tsvoice.RelayProductionBridgeTest
 if ($LASTEXITCODE -ne 0) { throw 'relay production bridge regression failed' }
+# E4/T33+T35: barrier enforcement, real pps token bucket, unified 4096 bounds
+& java -cp "$base/classes;review/lib/*" com.tsvoice.RelayBoundaryRegressionTest
+if ($LASTEXITCODE -ne 0) { throw 'relay boundary regression failed' }
 exit $LASTEXITCODE

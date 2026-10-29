@@ -1,5 +1,7 @@
 package com.tsvoice.server.relay;
 
+import com.tsvoice.protocol.relay.TsRelayWire;
+
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -22,8 +24,9 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 final class TsRelaySession {
 
-    /** UDP 收包缓冲上限（TS3 包 ≤ ~1.3 KiB；留裕量并拒绝异常大包）。 */
-    static final int MAX_UDP_RECEIVE_BYTES = 2048;
+    /** UDP 收包缓冲上限（T35：与协商上限一致 —— TsRelayWire.MAX_DATAGRAM_BYTES
+     *  4096 + 1 字节超长判定空间；不再 2048 静默截断）。 */
+    static final int MAX_UDP_RECEIVE_BYTES = TsRelayWire.MAX_DATAGRAM_BYTES;
 
     /** 会话统计（诊断/限额复核）。 */
     final AtomicLong datagramsRelayed = new AtomicLong();
@@ -40,6 +43,19 @@ final class TsRelaySession {
     /** 会话最后活跃时刻（毫秒；空闲超时清理用）。 */
     private volatile long lastActiveMs = System.currentTimeMillis();
 
+    // ---- T33：代际屏障与流量限额（会话内状态；runtime 协调） ----
+
+    /**
+     * 已接受的 ROUTE_BARRIER 代际（单调推进）：barrier 之后的 DATA 若携带更旧
+     * 代际即拒绝。0 = 尚无 barrier（所有代际放行 —— 兼容不发 barrier 的旧客户端）。
+     */
+    private volatile long routeBarrierEpoch = 0;
+    /** 每秒数据报限额（OPEN 协商值；≤0 视为不限 —— 配置已保证 ≥1）。 */
+    private volatile int maxDatagramsPerSecond;
+    /** Token bucket 当前令牌（纳秒精度回填）。 */
+    private double datagramTokens;
+    private long lastTokenNanos;
+
     TsRelaySession(String playerUuid, String connectionId, String targetId,
                    byte[] relaySessionId, TsRelayRuntime runtime) {
         this.playerUuid = playerUuid;
@@ -50,6 +66,56 @@ final class TsRelaySession {
         this.worker = new Thread(this::udpLoop, "tsvoice-relay-"
                 + Integer.toHexString(relaySessionId[0] & 0xFF));
         this.worker.setDaemon(true);
+    }
+
+    // ---- T33：屏障与限额 ----
+
+    /**
+     * 接受路由屏障（单调推进）：nextRouteEpoch 必须严格大于当前记录值，否则
+     * 拒绝（代际倒退）。返回是否接受。
+     */
+    synchronized boolean advanceRouteBarrier(long nextRouteEpoch) {
+        if (nextRouteEpoch <= routeBarrierEpoch) {
+            return false; // 倒退/重复：拒绝（单调性保证）
+        }
+        routeBarrierEpoch = nextRouteEpoch;
+        return true;
+    }
+
+    long currentRouteBarrier() {
+        return routeBarrierEpoch;
+    }
+
+    /** 配置协商限额（OPEN 时由 runtime 调用；同时给 bucket 注满初始令牌）。 */
+    synchronized void configureLimits(int maxDatagramsPerSecond) {
+        this.maxDatagramsPerSecond = maxDatagramsPerSecond;
+        this.datagramTokens = Math.max(1, maxDatagramsPerSecond);
+        this.lastTokenNanos = System.nanoTime();
+    }
+
+    /**
+     * 发送许可（T33b）：token bucket 实际拒绝 —— 突发受初始容量约束，持续
+     * 速率受每秒回填约束。返回是否许可。
+     */
+    synchronized boolean tryAcquireDatagram() {
+        int pps = maxDatagramsPerSecond;
+        if (pps <= 0) {
+            return true;
+        }
+        long now = System.nanoTime();
+        double refill = (now - lastTokenNanos) / 1e9 * pps;
+        datagramTokens = Math.min(Math.max(1, pps), datagramTokens + refill);
+        lastTokenNanos = now;
+        if (datagramTokens < 1) {
+            return false;
+        }
+        datagramTokens -= 1;
+        return true;
+    }
+
+    /** 该代际是否被当前屏障放行。 */
+    boolean routeEpochPermitted(long routeEpoch) {
+        return routeEpoch >= routeBarrierEpoch;
     }
 
     String playerUuid() {

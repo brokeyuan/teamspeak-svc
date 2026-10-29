@@ -28,8 +28,8 @@ public final class TsMcChannelTransport implements TsTransport {
 
     /** 接收队列容量（有界；满时丢弃最旧并计数 —— 与 Ts3Connection 语音队列同策略）。 */
     static final int RECEIVE_QUEUE_CAPACITY = 64;
-    /** 接收单包最大长度（TS3 包上限；超出按协议违规丢弃）。 */
-    static final int MAX_RECEIVE_BYTES = 2048;
+    /** 接收单包最大长度（T35：与协商外层上限一致 —— 4096；不再 2048 静默截断）。 */
+    static final int MAX_RECEIVE_BYTES = TsRelayWire.MAX_DATAGRAM_BYTES;
 
     public enum State { CLOSED, OPENING, OPEN, CLOSING }
 
@@ -151,7 +151,15 @@ public final class TsMcChannelTransport implements TsTransport {
                 }
             }
             byte[] data = receiveQueue.poll();
-            return data.length <= maxLen ? data : java.util.Arrays.copyOf(data, maxLen);
+            // T35：调用方缓冲不足时明确失败 —— 绝不静默裁剪（截断的 TS 包不是
+            // 合法数据；调用方必须按协商 maxDatagramBytes 分配缓冲）。
+            if (data.length > maxLen) {
+                // 帧不丢回队列（调用方缓冲与协商不符是配置错误，明确报错终止）：
+                // 丢弃该帧并抛出，调用方可据此重建会话。
+                throw new IOException("receive buffer too small: frame=" + data.length
+                        + " > maxLen=" + maxLen + " (use the negotiated maxDatagramBytes)");
+            }
+            return data;
         } finally {
             lock.unlock();
         }

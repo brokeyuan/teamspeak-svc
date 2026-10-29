@@ -224,6 +224,8 @@ public final class TsRelayRuntime {
         LOGGER.info("[teamspeak-svc] relay session opened: player={} target={} limits={}/{}/{}B",
                 playerUuid, open.targetId(), negotiated.maxDatagramBytes(),
                 negotiated.maxDatagramsPerSecond(), negotiated.maxBytesPerSecond());
+        // T33：协商限额下发给会话级 token bucket（立即生效，不只是返回值）
+        session.configureLimits(negotiated.maxDatagramsPerSecond());
         return OpenResult.of(opened, sessionId);
     }
 
@@ -240,8 +242,8 @@ public final class TsRelayRuntime {
     /**
      * 下行 DATA（客户端 → 目标）。所有流量计费（控制+媒体一个桶，控制优先只
      * 是调度概念，不改限额）；会话未知/超限拒绝。DATA 帧的 routeEpoch/trafficClass
-     * 属于 TS 数据报外层中继信封 —— 本服务端不解码 TS 载荷，代际守卫由
-     * ROUTE_BARRIER 通知排序（S1.4：barrier 之后旧代际帧丢弃）。
+     * 属于 TS 数据报外层中继信封 —— 本服务端不解码 TS 载荷。T33 实际执行：
+     * 代际守卫（barrier 之下拒绝）与协商 pps token bucket 都在转发前检查。
      */
     public boolean onData(String connectionId, byte[] frame) {
         if (closed) {
@@ -259,6 +261,14 @@ public final class TsRelayRuntime {
         if (data.datagram().length > MAX_DATAGRAM_BYTES) {
             return false; // codec 已拒绝超长，双保险
         }
+        // T33a：代际屏障实际执行 —— barrier 之下的旧代际帧拒绝（不只是记录）
+        if (!session.routeEpochPermitted(data.routeEpoch())) {
+            return false;
+        }
+        // T33b：协商 pps 限额实际执行（token bucket 拒绝；控制/媒体同桶计费）
+        if (!session.tryAcquireDatagram()) {
+            return false;
+        }
         try {
             session.sendToTarget(data.datagram());
             return true;
@@ -271,10 +281,8 @@ public final class TsRelayRuntime {
     // ---- ROUTE_BARRIER / CLOSE ----
 
     /**
-     * 客户端路由屏障：代际推进点。服务端对旧代际 UDP 帧没有回撤能力（已在
-     * 途中）—— barrier 的意义是：此后本会话的 DATA 若携带更旧代际，客户端
-     * writer 已保证不发送；服务端按原样转发并把 barrier 记录在会话上（诊断）。
-     * 返回是否识别了会话。
+     * 客户端路由屏障：代际推进点（T33a 实际执行版）。barrier 单调推进该会话的
+     * 最低放行代际；倒退/重复拒绝。返回是否识别了会话并接受了代际。
      */
     public boolean onRouteBarrier(String connectionId, byte[] frame) {
         TsRelayWire.Decoded decoded = TsRelayWire.decode(frame);
@@ -283,7 +291,8 @@ public final class TsRelayRuntime {
         }
         TsRelayWire.RouteBarrierFrame barrier = decoded.routeBarrier();
         TsRelaySession session = sessions.get(hexKey(barrier.relaySessionId()));
-        return session != null && session.connectionId().equals(connectionId);
+        return session != null && session.connectionId().equals(connectionId)
+                && session.advanceRouteBarrier(barrier.nextRouteEpoch());
     }
 
     /** 客户端主动关闭：回收会话并回 CLOSED。 */
