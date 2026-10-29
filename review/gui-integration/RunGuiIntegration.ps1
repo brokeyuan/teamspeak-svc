@@ -289,7 +289,7 @@ $prod = @("$client/music/MusicBotLifecycle.java", "$client/TsVoiceManager.java",
     "$client/connection/CapabilityDiscovery.java",
     'ts3voice-core/src/main/java/com/tsvoice/protocol/capability/CapabilityWire.java',
     "ts3voice-core/src/main/java/com/tsvoice/protocol/relay/TsRelayWire.java", "ts3voice-core/src/main/java/com/tsvoice/protocol/relay/TsDatagramKind.java",
-    "teamspeak-svc/src/main/java/com/tsvoice/server/relay/TsRelayRuntime.java",
+    "teamspeak-svc/src/main/java/com/tsvoice/server/relay/TsRelayRuntime.java", "teamspeak-svc/src/main/java/com/tsvoice/server/relay/OpenEstablisher.java",
     "teamspeak-svc/src/main/java/com/tsvoice/server/relay/TsRelaySession.java",
     "$client/ts3voice/TsMcChannelTransport.java", "$client/connection/VoiceTransport.java",
     'teamspeak-svc/src/main/java/com/tsvoice/bootstrap/RuntimeDependencies.java') |
