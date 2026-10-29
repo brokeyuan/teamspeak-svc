@@ -103,5 +103,5 @@ if ($failed.Count -gt 0) {
     Write-Output ("Full per-suite logs: {0}" -f $logDir)
     exit 1
 }
-Write-Output ('CI-EQUIVALENT RESULT: PASS (core test + all 23 harness suites green)')
+Write-Output ('CI-EQUIVALENT RESULT: PASS (core test + all ' + $suites.Count + ' harness suites green)')
 exit 0

@@ -1277,6 +1277,16 @@ public final class TsVoiceManager {
     private static final java.util.concurrent.atomic.AtomicInteger RELAY_REQUEST_IDS =
             new java.util.concurrent.atomic.AtomicInteger(1);
 
+    /** G1 测试入口：驱动生产 openMcRelaySession（含 canSend 分支）。 */
+    public static void openMcRelaySessionForTest(TsMcChannelTransport transport, SessionConfig cfg) throws Exception {
+        openMcRelaySession(transport, cfg);
+    }
+
+    /** G1 测试入口：驱动生产 closeMcRelaySession（含 canSend 分支与本地清理）。 */
+    public static void closeMcRelaySessionForTest() {
+        closeMcRelaySession();
+    }
+
     /**
      * OPEN → OPENED → attach：经 Fabric 通道完成 MC 中继会话建立（阻塞至
      * 服务端应答或超时）。本方法在会话线程执行；payload 发送是线程安全的，
