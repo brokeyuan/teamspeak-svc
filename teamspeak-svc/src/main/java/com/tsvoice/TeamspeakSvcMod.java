@@ -1,10 +1,14 @@
 package com.tsvoice;
 
 import com.tsvoice.common.net.CapabilitiesPayloads;
+import com.tsvoice.common.net.SvcMcChannelPayloads;
 import com.tsvoice.common.net.TsRelayPayloads;
+import com.tsvoice.bootstrap.RuntimeDependencies;
 import com.tsvoice.protocol.relay.TsRelayWire;
 import com.tsvoice.server.ServerCommands;
 import com.tsvoice.server.ServerRuntime;
+import com.tsvoice.server.svc.SvcMcChannelAdapter;
+import com.tsvoice.server.svc.SvcServerBridge;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -42,6 +46,20 @@ public final class TeamspeakSvcMod implements ModInitializer {
         CapabilitiesPayloads.register();
         // S1.2/P6：TS 中继 wire 注册（方向化；不支持中继的服务器只是不收/不回）
         TsRelayPayloads.register();
+        // S2/P5：SVC_MC_CHANNEL 注册（自有 ID，与 svc-extra 双装隔离）
+        SvcMcChannelPayloads.register();
+
+        // ---- S2/P5：SVC MC 通道接收（C2S：SVC NetworkMessage 原始字节）----
+        // SVC 不在场时 addRawPacket 失败为 no-op —— 基本功能不因无 SVC 失败。
+        ServerPlayNetworking.registerGlobalReceiver(
+                SvcMcChannelPayloads.SvcVoiceC2sPayload.TYPE, (payload, context) -> {
+                    ServerPlayer player = context.player();
+                    MinecraftServer server = context.server();
+                    if (server == null) {
+                        return;
+                    }
+                    SvcMcChannelAdapter.onVoiceFromClient(server, player.getUUID(), payload.data());
+                });
 
         // 服务端公告 hello 接收器（全局注册一次；按 player→server 路由）
         ServerPlayNetworking.registerGlobalReceiver(
@@ -153,6 +171,8 @@ public final class TeamspeakSvcMod implements ModInitializer {
                         }
                     });
             RUNTIMES.put(server, runtime);
+            // S2/P5：SVC MC 通道桥登记当前 server（SVC 不在场时桥为 no-op）
+            SvcServerBridge.setMinecraftServer(server);
         });
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
             ServerRuntime runtime = RUNTIMES.remove(server);
@@ -168,6 +188,36 @@ public final class TeamspeakSvcMod implements ModInitializer {
                 String connectionId = connectionId(handler.player);
                 runtime.forgetConnection(connectionId);
                 runtime.relayRuntime().onClientDisconnected(connectionId);
+                // S2/P5：SVC MC 通道会话地址回收
+                SvcMcChannelAdapter.onPlayerDisconnected(handler.player.getUUID());
+            }
+        });
+
+        // S2/P5：玩家连接建立 —— 登记会话地址并宣告本服 SVC 传输
+        //（svc-extra 在场时本扩展让出 SVC 域：不宣告、不登记）
+        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
+            if (handler.player == null) {
+                return;
+            }
+            if (RuntimeDependencies.svcExtraPresent()) {
+                return; // 双装所有者策略：Extra 拥有 SVC 域，本扩展不宣告
+            }
+            ServerRuntime runtime = RUNTIMES.get(server);
+            if (runtime == null) {
+                return;
+            }
+            boolean enabled = runtime.relayConfig().svcMcChannelEnabled();
+            SvcMcChannelPayloads.SvcTransportConfigPayload announcement =
+                    new SvcMcChannelPayloads.SvcTransportConfigPayload(enabled
+                            ? SvcMcChannelPayloads.SvcTransportConfigPayload.TRANSPORT_MC_CHANNEL
+                            : SvcMcChannelPayloads.SvcTransportConfigPayload.TRANSPORT_UDP);
+            try {
+                ServerPlayNetworking.send(handler.player, announcement);
+                if (enabled) {
+                    SvcMcChannelAdapter.onPlayerInitialized(handler.player.getUUID());
+                }
+            } catch (RuntimeException e) {
+                LOGGER.debug("[teamspeak-svc] SVC transport announcement failed: {}", e.getMessage());
             }
         });
 

@@ -38,6 +38,18 @@ public class VoicechatPluginImpl implements VoicechatPlugin {
     public void registerEvents(EventRegistration registration) {
         registration.registerEvent(ClientVoicechatInitializationEvent.class, event -> {
             TeamspeakSvcClient.setClientApi(event.getVoicechat());
+            // S2/P5：SVC_MC_CHANNEL 客户端 socket —— 服务器宣告 MC_CHANNEL 且
+            // 本机支持时，经官方 initialization event 设置自有 socket（不与
+            // svc-extra 争用注入点；对方未装/装了都在 payload ID 层隔离）。
+            // UDP 语义默认不变：只有收到服务端 config 才切换。
+            try {
+                if (com.tsvoice.client.backend.SvcMcChannelClient.supported()) {
+                    com.tsvoice.client.backend.SvcMcChannelClient.registerSocket(event);
+                }
+            } catch (Throwable t) {
+                TeamspeakSvcClient.LOGGER.warn("[teamspeak-svc] MC-channel socket registration unavailable: {}",
+                        t.toString());
+            }
             TeamspeakSvcClient.LOGGER.info("[teamspeak-svc] SVC client initialized (client api ready)");
         });
         registration.registerEvent(ClientVoicechatConnectionEvent.class, event -> {

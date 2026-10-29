@@ -92,7 +92,11 @@ Write-Output 'PASS artifact: metadata (environment/entries/depends/breaks) corre
 & $jarTool xf "$($jar.FullName)" teamspeak-svc.mixins.json
 $mixins = Get-Content teamspeak-svc.mixins.json -Raw | ConvertFrom-Json
 Remove-Item teamspeak-svc.mixins.json
-if ($mixins.mixins.Count -ne 0) { throw 'common mixins must be empty (all client-side targets)' }
+# S2/P5: the SVC server-side sendPacketRaw mixin is intentionally common-scoped
+# (targets SVC's internal Server class, present on both physical sides).
+$allowedCommon = @('server.SvcServerSendPacketMixin')
+$unexpected = @($mixins.mixins | Where-Object { $_ -notin $allowedCommon })
+if ($unexpected.Count -ne 0) { throw ('unexpected common mixins: {0}' -f ($unexpected -join ',')) }
 if ($mixins.client.Count -lt 7) { throw ("client mixins must be environment-scoped (got {0})" -f $mixins.client.Count) }
 Write-Output 'PASS artifact: mixin config is client-scoped'
 Write-Output ("M7-ARTIFACT-CHECK RESULT: PASS ({0})" -f $hash)

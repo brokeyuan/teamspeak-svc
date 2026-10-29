@@ -83,6 +83,20 @@ public final class ServerRuntime implements AutoCloseable {
     }
 
     /**
+     * 当前通道配置视图（S2/P5 主入口 JOIN 宣告用：svcMcChannelEnabled 决定
+     * SVC 传输宣告；配置缺节时为默认关闭）。
+     */
+    public RelayView relayConfig() {
+        ServerConfig current = config;
+        boolean svcEnabled = current != null && current.relay != null && current.relay.svcMcChannelEnabled;
+        return new RelayView(svcEnabled);
+    }
+
+    /** 通道配置视图（不可变快照）。 */
+    public record RelayView(boolean svcMcChannelEnabled) {
+    }
+
+    /**
      * 启动运行时：读取/迁移配置并进入初始状态。
      *
      * @param dedicated 物理环境是否为 dedicated 服务器；集成（单人内嵌）服务器传

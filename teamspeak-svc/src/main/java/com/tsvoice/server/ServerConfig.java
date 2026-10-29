@@ -76,6 +76,8 @@ public final class ServerConfig {
         public int maxDatagramsPerSecond = 256;
         public int maxBytesPerSecond = 512 * 1024;
         public int maxSessions = 64;
+        /** SVC_MC_CHANNEL 服务端适配（S2/P5）：默认关闭；需要 SVC 服务端在场。 */
+        public boolean svcMcChannelEnabled = false;
     }
 
     public int schemaVersion = SCHEMA_VERSION;

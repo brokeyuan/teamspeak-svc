@@ -139,4 +139,11 @@ public final class RuntimeDependencies {
     public static boolean legacyAnnouncerPresent() {
         return FabricLoader.getInstance().isModLoaded(LEGACY_ANNOUNCER_ID);
     }
+
+    /** svc-extra（S2/P5 双装检测）：在场时本扩展让出 SVC MC 通道域。 */
+    public static final String SVC_EXTRA_ID = "svc-extra";
+
+    public static boolean svcExtraPresent() {
+        return FabricLoader.getInstance().isModLoaded(SVC_EXTRA_ID);
+    }
 }
