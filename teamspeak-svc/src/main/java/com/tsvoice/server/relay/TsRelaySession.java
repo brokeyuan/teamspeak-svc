@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * 级错误关闭会话并通知 runtime；{@link #close()} 幂等，关闭唤醒阻塞 receive。
  * 限流/计费与 MC 侧投递由 {@link TsRelayRuntime} 协调。</p>
  */
-final class TsRelaySession {
+public final class TsRelaySession {
 
     /** UDP 收包缓冲上限（T35：与协商上限一致 —— TsRelayWire.MAX_DATAGRAM_BYTES
      *  4096 + 1 字节超长判定空间；不再 2048 静默截断）。 */
@@ -173,7 +173,7 @@ final class TsRelaySession {
      * 建立到目标 endpoint 的 UDP 通道并启动中继线程。DNS/socket 失败抛出，
      * 由 runtime 回 ERROR（目标不可用）并回收会话。
      */
-    void start(String host, int port) throws IOException {
+    public void start(String host, int port) throws IOException {
         InetAddress resolved = InetAddress.getByName(host); // 服务端解析（客户端不做 DNS）
         DatagramSocket sock = new DatagramSocket();
         try {
@@ -239,7 +239,7 @@ final class TsRelaySession {
     }
 
     /** 幂等关闭：关 socket（唤醒阻塞 receive）；worker 随之退出。 */
-    void close() {
+    public void close() {
         if (!closed.compareAndSet(false, true)) {
             return;
         }

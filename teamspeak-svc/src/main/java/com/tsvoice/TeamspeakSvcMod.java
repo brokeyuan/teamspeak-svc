@@ -8,6 +8,8 @@ import com.tsvoice.protocol.relay.TsRelayWire;
 import com.tsvoice.server.ServerCommands;
 import com.tsvoice.server.ServerRuntime;
 import com.tsvoice.server.svc.SvcMcChannelAdapter;
+import com.tsvoice.server.relay.OpenEstablisher;
+import com.tsvoice.server.relay.TsRelaySession;
 import com.tsvoice.server.svc.SvcServerBridge;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -92,6 +94,10 @@ public final class TeamspeakSvcMod implements ModInitializer {
                     String connectionId = connectionId(player);
                     var result = runtime.relayRuntime().onOpen(connectionId,
                             String.valueOf(player.getUUID()), payload.frame());
+                    if (!result.ok() && result.openedFrame() == null && result.errorFrame() == null) {
+                        // G4：OPEN 已受理，异步建立中 —— 应答帧由完成回调发送。
+                        return;
+                    }
                     try {
                         if (result.ok()) {
                             ServerPlayNetworking.send(player,
@@ -178,6 +184,44 @@ public final class TeamspeakSvcMod implements ModInitializer {
                             return false;
                         }
                     });
+            // G4：OPEN 异步建立器 —— DNS/socket 在有界 worker（4 worker/64 待办）
+            // 进行，不阻塞 MC 主线程；迟到结果丢弃并回收；断连撤销。
+            runtime.relayRuntime().installEstablisher(new OpenEstablisher(
+                    new OpenEstablisher.Attempt() {
+                        @Override
+                        public void discard(TsRelaySession session) {
+                            session.close();
+                        }
+
+                        @Override
+                        public void complete(String connectionId, String playerUuid,
+                                             TsRelayWire.OpenFrame openFrame, TsRelaySession session,
+                                             String failure) {
+                            var result = runtime.relayRuntime().completeAsyncOpen(
+                                    connectionId, playerUuid, openFrame, session, failure);
+                            ServerPlayer target = findPlayer(server, playerUuid);
+                            if (target == null) {
+                                if (session != null) {
+                                    session.close(); // 玩家已离线：回收会话
+                                }
+                                return;
+                            }
+                            try {
+                                if (result.ok()) {
+                                    ServerPlayNetworking.send(target,
+                                            new TsRelayPayloads.RelayOpenedPayload(result.openedFrame()));
+                                } else {
+                                    ServerPlayNetworking.send(target,
+                                            new TsRelayPayloads.RelayErrorPayload(result.errorFrame()));
+                                }
+                            } catch (RuntimeException e) {
+                                LOGGER.error("[teamspeak-svc] failed to answer async relay OPEN", e);
+                                if (session != null) {
+                                    session.close();
+                                }
+                            }
+                        }
+                    }));
             RUNTIMES.put(server, runtime);
             // S2/P5：SVC MC 通道桥登记当前 server（SVC 不在场时桥为 no-op）
             SvcServerBridge.setMinecraftServer(server);

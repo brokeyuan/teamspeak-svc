@@ -41,6 +41,11 @@ public final class MusicBotManager {
 
     /** 当前 Bot 会话（单实例；重复 start 拒绝并反馈）。 */
     private static final AtomicReference<MusicSession> ACTIVE = new AtomicReference<>();
+    /** G4：start 异步进行中标志（防重入；stop 可取消当前尝试）。 */
+    private static final java.util.concurrent.atomic.AtomicBoolean START_IN_FLIGHT =
+            new java.util.concurrent.atomic.AtomicBoolean();
+    private static final java.util.concurrent.atomic.AtomicBoolean STOP_REQUESTED =
+            new java.util.concurrent.atomic.AtomicBoolean();
     /** 活跃 Bot 的授权曲目（绝对路径字符串，按加入顺序播放）。 */
     private static final List<String> QUEUE = new ArrayList<>();
     /** 当前曲目在队列中的下标（-1 = 未开始）。 */
@@ -64,7 +69,13 @@ public final class MusicBotManager {
 
     public static String statusText() {
         MusicSession s = ACTIVE.get();
-        if (s == null || !isActive()) {
+        if (s == null) {
+            if (START_IN_FLIGHT.get()) {
+                return "Music bot: connecting..." + (LAST_START_ERROR == null ? "" : " (last error: " + LAST_START_ERROR + ")");
+            }
+            if (LAST_START_ERROR != null) {
+                return "Music bot: stopped (last start failed: " + LAST_START_ERROR + ")";
+            }
             return "Music bot: stopped";
         }
         StringBuilder sb = new StringBuilder("Music bot: ").append(s.state());
@@ -149,59 +160,74 @@ public final class MusicBotManager {
         if (host == null || host.isBlank()) {
             throw new BotStateException("TS host required");
         }
-        // 独立身份：专用文件，绝不复用玩家身份（玩家身份仍由玩家会话持有）。
-        Path identityPath = FabricLoader.getInstance().getConfigDir()
-                .resolve("teamspeak-svc").resolve("identity-music.txt");
-        Ts3Identity identity = Ts3Identity.load(identityPath);
-        if (identity == null) {
-            TeamspeakSvcClient.LOGGER.info("[teamspeak-svc] generating music bot identity (level 16)...");
-            identity = Ts3Identity.generate(16, 4_000);
-            identity.save(identityPath);
+        if (START_IN_FLIGHT.get()) {
+            throw new BotStateException("music bot start already in progress");
         }
-        String nickname = "[Music Bot] " + Minecraft.getInstance().getUser().getName();
-
-        // 独立连接：自己的 crypt/connection/client（UDP 直连传输）。
-        Ts3Connection connection = new Ts3Connection(new Ts3Crypt(identity), false);
-        Ts3VoiceClient client = new Ts3VoiceClient(identity, nickname, channel == null ? "" : channel,
-                connection);
-
-        MusicSession session = new MusicSession(host, port, nickname, null);
-        // G3/P1-01：生产装配 —— writer 代际来源 = 可撤销许可；频道确认绑定
-        // 授权房间；sender/编码后复核/writer 共用同一份许可（无永久常量）。
-        MusicSendPermit permit = MusicBotAssembly.assemble(session, client, serverUid);
-
-        // 编码器工厂：SVC 客户端 API（48kHz 单声道 20ms 帧）。
-        session.setEncoderFactory(() -> {
-            de.maxhenkel.voicechat.api.VoicechatClientApi api = TeamspeakSvcClient.clientApi();
-            if (api == null) {
-                return null; // 无 SVC 客户端实例：明确不可用
-            }
-            de.maxhenkel.voicechat.api.opus.OpusEncoder enc = api.createEncoder();
-            return enc == null ? null : new SvcApiEncoderAdapter(enc);
-        });
-
-        if (!ACTIVE.compareAndSet(null, session)) {
+        START_IN_FLIGHT.set(true);
+        // G4：identity 生成、DNS、最长 15 秒握手全部移出客户端线程 —— 命令立即
+        // 返回"连接中"，状态/错误在客户端线程反馈；stop 可取消当前尝试。
+        Thread worker = new Thread(() -> {
+            MusicSession session = null;
             try {
-                session.close();
-            } catch (RuntimeException ignored) {
-            }
-            throw new BotStateException("music bot already running");
-        }
+                Path identityPath = FabricLoader.getInstance().getConfigDir()
+                        .resolve("teamspeak-svc").resolve("identity-music.txt");
+                Ts3Identity identity = Ts3Identity.load(identityPath);
+                if (identity == null) {
+                    TeamspeakSvcClient.LOGGER.info("[teamspeak-svc] generating music bot identity (level 16)...");
+                    identity = Ts3Identity.generate(16, 4_000);
+                    identity.save(identityPath);
+                }
+                String nickname = "[Music Bot] " + Minecraft.getInstance().getUser().getName();
 
-        // 建立连接（阻塞至握手完成；失败即整体回滚）。
-        session.markConnecting();
-        try {
-            client.connect(java.net.InetAddress.getByName(host), port, 15_000L);
-        } catch (Exception e) {
-            stopInternal(session);
-            throw new BotStateException("music bot connect failed: " + e.getMessage());
-        }
-        permit.connectedUnconfirmed(); // G3：连接已成 ≠ 可发送（频道未确认）
-        session.markConnected();
-        TeamspeakSvcClient.LOGGER.info(
-                "[teamspeak-svc] music bot connected (uid={}, host={}:{}, channel='{}', awaiting channel confirm)",
-                identity.getClientUid(), host, port, channel);
+                Ts3Connection connection = new Ts3Connection(new Ts3Crypt(identity), false);
+                Ts3VoiceClient client = new Ts3VoiceClient(identity, nickname,
+                        channel == null ? "" : channel, connection);
+                session = new MusicSession(host, port, nickname, null);
+                MusicSendPermit permit = MusicBotAssembly.assemble(session, client, serverUid);
+                session.setEncoderFactory(() -> {
+                    de.maxhenkel.voicechat.api.VoicechatClientApi api = TeamspeakSvcClient.clientApi();
+                    if (api == null) {
+                        return null;
+                    }
+                    de.maxhenkel.voicechat.api.opus.OpusEncoder enc = api.createEncoder();
+                    return enc == null ? null : new SvcApiEncoderAdapter(enc);
+                });
+                if (!ACTIVE.compareAndSet(null, session)) {
+                    session.close();
+                    return; // 已有 Bot：放弃本次启动
+                }
+                session.markConnecting();
+                if (STOP_REQUESTED.get()) {
+                    stopInternal(session);
+                    return;
+                }
+                client.connect(java.net.InetAddress.getByName(host), port, 15_000L);
+                if (STOP_REQUESTED.get()) {
+                    stopInternal(session);
+                    return;
+                }
+                permit.connectedUnconfirmed();
+                session.markConnected();
+                TeamspeakSvcClient.LOGGER.info(
+                        "[teamspeak-svc] music bot connected (uid={}, host={}:{}, channel='{}', awaiting channel confirm)",
+                        identity.getClientUid(), host, port, channel);
+            } catch (Exception e) {
+                if (session != null) {
+                    stopInternal(session);
+                }
+                LAST_START_ERROR = e.getMessage() == null ? e.toString() : e.getMessage();
+                TeamspeakSvcClient.LOGGER.info("[teamspeak-svc] music bot start failed: {}", LAST_START_ERROR);
+            } finally {
+                START_IN_FLIGHT.set(false);
+                STOP_REQUESTED.set(false);
+            }
+        }, "tsvoice-music-bot-start");
+        worker.setDaemon(true);
+        worker.start();
     }
+
+    /** start 过程中的错误（连接线程写入；statusText 反馈）。 */
+    private static volatile String LAST_START_ERROR;
 
     /** 供 start() 装配的内部钩子（把 sender 工厂交给 MusicSession）。 */
     private interface SenderFactory {
@@ -310,6 +336,7 @@ public final class MusicBotManager {
 
     /** 完全停止 Bot（断开独立连接、释放编码器/引擎）。 */
     public static synchronized void stopBot() {
+        STOP_REQUESTED.set(true);
         MusicSession s = ACTIVE.getAndSet(null);
         if (s != null) {
             s.cancel();

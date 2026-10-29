@@ -66,6 +66,10 @@ public final class TsRelayRuntime {
     /** 在途 OPEN：connection+requestId → 登记（T34：不同连接的同名 requestId
      *  互不冲突；同一连接重复 requestId 拒绝）。迟到 OPENED 不复活已取消请求。 */
     private final Map<String, PendingOpen> pendingOpens = new ConcurrentHashMap<>();
+    /** G4：OPEN 异步建立器（DNS/socket 移出 MC 主线程；有界 worker/待办）。 */
+    /** G4：OPEN 异步建立器（DNS/socket 移出 MC 主线程；有界 worker/待办）。
+     *  构造为 null（同步语义），Fabric 层 SERVER_STARTING 注入后启用异步。 */
+    private volatile OpenEstablisher establisher;
     private final AtomicLong requestIdCounter = new AtomicLong(1);
     private volatile boolean closed;
 
@@ -90,8 +94,17 @@ public final class TsRelayRuntime {
     }
 
     public TsRelayRuntime(McSink sink, RelayConfig initialConfig) {
+        this(sink, initialConfig, null);
+    }
+
+    /**
+     * 完整构造（G4）：异步建立回调注入 —— Fabric 层提供 complete 回调（回原
+     * 连接发送 OPENED/ERROR）；null 时 onOpen 保持同步语义（测试/兼容）。
+     */
+    public TsRelayRuntime(McSink sink, RelayConfig initialConfig, OpenEstablisher establisher) {
         this.sink = sink;
         this.configRef = new AtomicReference<>(initialConfig);
+        this.establisher = establisher;
     }
 
     // ---- 配置 ----
@@ -208,6 +221,31 @@ public final class TsRelayRuntime {
         if (sessions.size() >= Math.min(config.maxSessions(), MAX_SESSIONS_GLOBAL)) {
             return failOpen(open, TsRelayWire.ERR_LIMIT_SESSIONS, "server session limit reached");
         }
+        // G4：有异步建立器时，DNS/socket 在有界 worker 中进行（不阻塞 MC 主
+        // 线程）；主线程只做校验+受理（pending 占额度，可超时撤销）。
+        if (establisher != null) {
+            final RelayConfig.RelayTargetConfig establishedTarget = target;
+            final String tid = open.targetId().toLowerCase(Locale.ROOT);
+            if (!establisher.submit(connectionId, playerUuid, open,
+                    () -> {
+                        TsRelaySession session = newSession(playerUuid, connectionId, tid);
+                        session.start(establishedTarget.host(), establishedTarget.port());
+                        return session;
+                    })) {
+                return failOpen(open, TsRelayWire.ERR_LIMIT_SESSIONS, "relay open queue full");
+            }
+            // OPEN 已受理：应答帧由 establisher 完成回调经 Fabric 层发送；
+            // openedFrame/errorFrame 均为 null 表示"已受理，应答稍后"。
+            return new OpenResult(false, null, null, null);
+        }
+        return establishNow(connectionId, playerUuid, open, target, sessionBucket);
+    }
+
+    /** 同步建立（既有路径；无建立器时使用）。Fabric 层立即发送应答。 */
+    private OpenResult establishNow(String connectionId, String playerUuid,
+                                    TsRelayWire.OpenFrame open,
+                                    RelayConfig.RelayTargetConfig target, String sessionBucket) {
+        RelayConfig config = configRef.get();
         // 认领会话并连接目标
         byte[] sessionId = TsRelayWire.newSessionId();
         TsRelaySession session = new TsRelaySession(playerUuid, connectionId,
@@ -239,6 +277,50 @@ public final class TsRelayRuntime {
         session.configureLimits(negotiated.maxDatagramsPerSecond(), negotiated.maxBytesPerSecond());
         return OpenResult.of(opened, sessionId);
     }
+
+    /**
+     * G4：异步建立完成回调（establisher worker 线程执行）。成功 → 登记 +
+     * OPENED 帧；失败 → ERROR 帧。返回应答帧（Fabric 层发往原连接）。
+     */
+    public OpenResult completeAsyncOpen(String connectionId, String playerUuid,
+                                        TsRelayWire.OpenFrame open, TsRelaySession session,
+                                        String failure) {
+        if (session == null) {
+            LOGGER.warn("[teamspeak-svc] relay target unreachable (async): {}", failure);
+            return failOpen(open, TsRelayWire.ERR_TARGET_UNAVAILABLE, "target endpoint unavailable");
+        }
+        Limits negotiated = new Limits(
+                Math.min(MAX_DATAGRAM_BYTES, configRef.get().limits().maxDatagramBytes()),
+                Math.min(MAX_DATAGRAMS_PER_SECOND, configRef.get().limits().maxDatagramsPerSecond()),
+                Math.min(MAX_BYTES_PER_SECOND, configRef.get().limits().maxBytesPerSecond()));
+        session.configureLimits(negotiated.maxDatagramsPerSecond(), negotiated.maxBytesPerSecond());
+        String sessionBucket = sessionsByConnectionKey(connectionId, open.purpose());
+        sessions.put(hexKey(session.relaySessionId()), session);
+        sessionsByConnection.put(sessionBucket, session);
+        pendingOpens.put(pendingOpenKey(connectionId, open.requestId()), new PendingOpen(connectionId,
+                open.requestId(), playerUuid, open.targetId(), System.currentTimeMillis()));
+        byte[] opened = TsRelayWire.encodeOpened(new TsRelayWire.OpenedFrame(
+                open.requestId(), session.relaySessionId(), negotiated.maxDatagramBytes(),
+                negotiated.maxDatagramsPerSecond(), negotiated.maxBytesPerSecond()));
+        LOGGER.info("[teamspeak-svc] relay session opened (async): player={} target={} limits={}/{}/{}B",
+                playerUuid, open.targetId(), negotiated.maxDatagramBytes(),
+                negotiated.maxDatagramsPerSecond(), negotiated.maxBytesPerSecond());
+        return OpenResult.of(opened, session.relaySessionId());
+    }
+
+    /** G4：server 启动后安装异步建立器（Fabric 层注入完成回调；幂等）。 */
+    public void installEstablisher(OpenEstablisher establisher) {
+        if (this.establisher == null && establisher != null) {
+            this.establisher = establisher;
+        }
+    }
+
+    /** G4：异步建立的会话预构造（establisher worker 线程调用）。 */
+    public TsRelaySession newSession(String playerUuid, String connectionId, String targetId) {
+        return new TsRelaySession(playerUuid, connectionId,
+                targetId.toLowerCase(Locale.ROOT), TsRelayWire.newSessionId(), this);
+    }
+
 
     private static TsRelayWire.ErrorFrame errorFor(TsRelayWire.OpenFrame open, int code, String message) {
         return new TsRelayWire.ErrorFrame(open.requestId(), null, code, message);
@@ -400,6 +482,9 @@ public final class TsRelayRuntime {
             return;
         }
         closed = true;
+        if (establisher != null) {
+            establisher.close();
+        }
         for (TsRelaySession session : sessions.values()) {
             session.close();
         }
