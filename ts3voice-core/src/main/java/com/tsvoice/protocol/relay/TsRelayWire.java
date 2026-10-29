@@ -73,14 +73,23 @@ public final class TsRelayWire {
     /** relay 能力发现帧（S1.2 兼容要求：独立 relay v1 发现，不动 capabilities v1）。 */
     public static final byte[] RELAY_CAPABILITY_MAGIC = {'T', 'S', 'R', 'C'};
 
-    /** 中继用途（初版只启用 PLAYER_VOICE；MUSIC_BOT 需明确授权后再开放）。 */
+    /**
+     * 中继用途。PLAYER_VOICE 默认可用；MUSIC_BOT（E8/Music-1）wire id 预留，
+     * 服务端授权开关默认关闭 —— 由管理员显式启用后才接受 OPEN（受控第二会话）。
+     */
     public enum Purpose {
-        PLAYER_VOICE(1);
+        PLAYER_VOICE(1),
+        MUSIC_BOT(2);
 
         final int wire;
 
         Purpose(int wire) {
             this.wire = wire;
+        }
+
+        /** 稳定 wire id（登记/诊断用）。 */
+        public int wireValue() {
+            return wire;
         }
 
         static Purpose fromWire(int value) {

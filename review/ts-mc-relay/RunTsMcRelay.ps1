@@ -8,7 +8,7 @@ New-Item -ItemType Directory -Path "$base/classes" -Force | Out-Null
     'teamspeak-svc/src/main/java/com/tsvoice/server/relay/TsRelaySession.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/client/ts3voice/TsTransport.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/client/ts3voice/TsMcChannelTransport.java' `
-    "$base/RelayRuntimeTest.java" "$base/RelayProductionBridgeTest.java" "$base/RelayBoundaryRegressionTest.java"
+    "$base/RelayRuntimeTest.java" "$base/RelayProductionBridgeTest.java" "$base/RelayBoundaryRegressionTest.java" "$base/RelayMusicBotPurposeTest.java"
 if ($LASTEXITCODE -ne 0) { throw 'relay regression compilation failed' }
 & java -cp "$base/classes;review/lib/*" com.tsvoice.RelayRuntimeTest
 if ($LASTEXITCODE -ne 0) { throw 'relay runtime regression failed' }
@@ -18,4 +18,7 @@ if ($LASTEXITCODE -ne 0) { throw 'relay production bridge regression failed' }
 # E4/T33+T35: barrier enforcement, real pps token bucket, unified 4096 bounds
 & java -cp "$base/classes;review/lib/*" com.tsvoice.RelayBoundaryRegressionTest
 if ($LASTEXITCODE -ne 0) { throw 'relay boundary regression failed' }
+# E8/Music-1: MUSIC_BOT purpose wire + purpose-scoped registry (default-off)
+& java -cp "$base/classes;review/lib/*" com.tsvoice.RelayMusicBotPurposeTest
+if ($LASTEXITCODE -ne 0) { throw 'relay MUSIC_BOT purpose regression failed' }
 exit $LASTEXITCODE

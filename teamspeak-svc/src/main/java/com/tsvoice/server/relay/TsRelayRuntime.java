@@ -58,7 +58,8 @@ public final class TsRelayRuntime {
     private final AtomicReference<RelayConfig> configRef;
     /** 会话表：hex(relaySessionId) → session。 */
     private final Map<String, TsRelaySession> sessions = new ConcurrentHashMap<>();
-    /** 每 MC 连接的会话（connectionId → session；每连接上限 1）。 */
+    /** 每 MC 连接的会话（E8：键 = connectionId#purposeWire —— PLAYER_VOICE 与
+     *  MUSIC_BOT 互不覆盖；PLAYER_VOICE 仍限每连接 1 个）。 */
     private final Map<String, TsRelaySession> sessionsByConnection = new ConcurrentHashMap<>();
     /** 每 MC 连接的 OPEN 限流桶（connectionId → bucket）。 */
     private final Map<String, OpenBucket> openBuckets = new ConcurrentHashMap<>();
@@ -81,6 +82,11 @@ public final class TsRelayRuntime {
     /** 在途 OPEN 键（T34）：真实连接 + requestId。 */
     private static String pendingOpenKey(String connectionId, int requestId) {
         return connectionId + "#" + requestId;
+    }
+
+    /** 会话归属桶键（E8）：连接 + purpose。 */
+    private static String sessionsByConnectionKey(String connectionId, TsRelayWire.Purpose purpose) {
+        return connectionId + "#" + purpose.wireValue();
     }
 
     public TsRelayRuntime(McSink sink, RelayConfig initialConfig) {
@@ -189,8 +195,11 @@ public final class TsRelayRuntime {
         if (target == null) {
             return failOpen(open, TsRelayWire.ERR_UNKNOWN_TARGET, "unknown target id");
         }
-        // 每连接 1 个 PLAYER_VOICE 会话
-        if (sessionsByConnection.containsKey(connectionId)) {
+        // 会话归属按 purpose 分桶：PLAYER_VOICE 每连接 1 个；MUSIC_BOT 由
+        // 管理员开关控制且与玩家语音互不覆盖（E8 登记结构）。
+        String sessionBucket = sessionsByConnectionKey(connectionId, open.purpose());
+        if (open.purpose() == TsRelayWire.Purpose.PLAYER_VOICE
+                && sessionsByConnection.containsKey(sessionBucket)) {
             return failOpen(open, TsRelayWire.ERR_LIMIT_SESSIONS, "connection already holds a relay session");
         }
         // 全服上限
@@ -210,7 +219,7 @@ public final class TsRelayRuntime {
                     "target endpoint unavailable");
         }
         sessions.put(hexKey(sessionId), session);
-        sessionsByConnection.put(connectionId, session);
+        sessionsByConnection.put(sessionBucket, session);
         pendingOpens.put(pendingOpenKey(connectionId, open.requestId()), new PendingOpen(connectionId,
                 open.requestId(), playerUuid, open.targetId(), System.currentTimeMillis()));
         // 协商限额 = min(工程初值, 管理员配置)
@@ -337,13 +346,17 @@ public final class TsRelayRuntime {
     /** MC 连接断开：回收该连接的全部会话（Fabric DISCONNECT 事件调用）。 */
     public int onClientDisconnected(String connectionId) {
         int n = sessionsByConnection.size();
-        TsRelaySession session = sessionsByConnection.remove(connectionId);
-        if (session != null) {
-            removeSession(session);
-        }
+        // E8：回收该连接全部 purpose 的会话（PLAYER_VOICE + MUSIC_BOT 等）
+        sessionsByConnection.entrySet().removeIf(e -> {
+            if (e.getKey().startsWith(connectionId + "#")) {
+                removeSession(e.getValue());
+                return true;
+            }
+            return false;
+        });
         openBuckets.remove(connectionId);
         pendingOpens.values().removeIf(p -> p.connectionId().equals(connectionId));
-        return session != null ? 1 : 0;
+        return n - sessionsByConnection.size();
     }
 
     /** 空闲/超时清理（worker 在 receive 超时路径周期调用；也可由外部 tick 驱动）。 */
@@ -397,7 +410,7 @@ public final class TsRelayRuntime {
     private boolean removeSession(TsRelaySession session) {
         String key = hexKey(session.relaySessionId());
         boolean removed = sessions.remove(key, session);
-        sessionsByConnection.remove(session.connectionId(), session);
+        sessionsByConnection.values().removeIf(s -> s == session);
         // T34：会话终结（CLOSE/死亡/空闲/禁用）释放其 OPEN 登记 ——
         // 同一连接之后可再次以相同 requestId OPEN。
         pendingOpens.values().removeIf(p ->
