@@ -7,6 +7,31 @@ if (!(Test-Path 'review/lib/gson.jar')) {
     Copy-Item -LiteralPath $jar.FullName -Destination 'review/lib/gson.jar'
 }
 $stubs = @{
+ # P1-03/G1: this suite owns its ClientPlayNetworking contract. Other p0
+ # suites (identity/issuing) overwrite this shared file with a bare variant
+ # lacking canSend, which broke the TsVoiceManager harness compilation; regen
+ # here keeps the mic regression independent of whatever ran before it.
+    'net/fabricmc/fabric/api/client/networking/v1/ClientPlayNetworking.java' = @'
+package net.fabricmc.fabric.api.client.networking.v1;
+public class ClientPlayNetworking {
+ public static final java.util.Map<Object,java.util.function.BiConsumer<Object,Object>> RECEIVERS=new java.util.HashMap<>();
+ /** Test-controlled allow-list for canSend (G1): set per payload type, cleared
+  *  between cases. Default-deny so "channel absent" is actually exercised. */
+ private static final java.util.Set<Object> ALLOWED_TYPES=java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<>());
+ /** Payloads passed to send() (test assertion surface). */
+ public static final java.util.List<Object> SENT=java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+ public static void setCanSend(Object type,boolean allowed){if(allowed){ALLOWED_TYPES.add(type);}else{ALLOWED_TYPES.remove(type);}}
+ public static void clearCanSend(){ALLOWED_TYPES.clear();}
+ public static void clearSent(){SENT.clear();}
+ public static boolean canSend(Object type){return ALLOWED_TYPES.contains(type);}
+ public static <T> void registerGlobalReceiver(net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<T> type,java.util.function.BiConsumer<T,Context> handler){
+  RECEIVERS.put(type,(java.util.function.BiConsumer<Object,Object>)(java.util.function.BiConsumer<?,?>)handler);
+ }
+ public static void send(Object payload){SENT.add(payload);}
+ public record Context(){public net.minecraft.client.Minecraft client(){return net.minecraft.client.Minecraft.getInstance();}}
+}
+'@
+
  'com/tsvoice/client/music/MusicBotLifecycle.java' = @'
 package com.tsvoice.client.music;
 /** Harness stub: the real MusicBotManager is compiled by gradle and the
@@ -170,7 +195,7 @@ $sources = foreach ($item in $stubs.GetEnumerator()) {
 }
 $client = 'teamspeak-svc/src/main/java/com/tsvoice/client'
 # MicRouteGate is part of the fix; tolerate its absence when proving the old code fails.
-$prod = @("$client/TsVoiceManager.java", "$client/ts3voice/TsProtocolException.java", "$client/MicRedirector.java", "$client/frontend/SvcFrontendAdapter.java", "$client/frontend/FrontendCapabilities.java", "$client/frontend/FrontendLease.java", "$client/frontend/Svc2625FrontendAdapter.java", "$client/audio/MicRouteGate.java", "$client/connection/VoiceState.java", "$client/connection/BackendCoordinator.java", "$client/connection/SelectionPolicy.java", "$client/connection/TsChannelRoute.java", "$client/connection/CapabilityDiscovery.java", "$client/connection/VoiceTransport.java", "$client/ts3voice/TsMcChannelTransport.java", "ts3voice-core/src/main/java/com/tsvoice/protocol/relay/TsRelayWire.java", "$client/ts3voice/TsChannelSnapshot.java", "ts3voice-core/src/main/java/com/tsvoice/protocol/capability/CapabilityWire.java",
+$prod = @("$client/TsVoiceManager.java", "$client/ts3voice/TsProtocolException.java", "$client/MicRedirector.java", "$client/frontend/SvcFrontendAdapter.java", "$client/frontend/FrontendCapabilities.java", "$client/frontend/FrontendLease.java", "$client/frontend/Svc2625FrontendAdapter.java", "$client/audio/MicRouteGate.java", "$client/connection/VoiceState.java", "$client/connection/BackendCoordinator.java", "$client/connection/SelectionPolicy.java", "$client/connection/TsChannelRoute.java", "$client/connection/CapabilityDiscovery.java", "$client/connection/VoiceTransport.java", "$client/ts3voice/TsMcChannelTransport.java", "ts3voice-core/src/main/java/com/tsvoice/protocol/relay/TsRelayWire.java", "ts3voice-core/src/main/java/com/tsvoice/protocol/relay/TsDatagramKind.java", "$client/ts3voice/TsChannelSnapshot.java", "ts3voice-core/src/main/java/com/tsvoice/protocol/capability/CapabilityWire.java",
     "$client/config/TsBookmarkStore.java", "$client/config/EndpointCredentialStore.java", "$client/backend/SvcBackendAdapter.java",
     "$client/ModConfig.java", "$client/ServerConfigStore.java", "$client/ConfigFileUtil.java") | Where-Object { Test-Path $_ }
 & javac -encoding UTF-8 -cp 'review/lib/*' -d "$base/classes" @prod @sources "$base/stubs/com/tsvoice/client/ts3voice/Ts3Crypt.java"    "$base/stubs/com/tsvoice/client/ts3voice/Ts3Connection.java"    "$base/stubs/com/tsvoice/client/ts3voice/TsTransport.java"    "$base/stubs/com/tsvoice/common/net/TsRelayPayloads.java"    "$base/stubs/net/minecraft/network/protocol/common/custom/CustomPacketPayload.java" "$base/stubs/net/minecraft/resources/Identifier.java" "$base/stubs/net/fabricmc/fabric/api/client/networking/v1/ClientPlayNetworking.java" "$base/MicRedirectorRegression.java"

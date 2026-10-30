@@ -13,6 +13,8 @@ if(!(Test-Path 'review/lib/gson.jar')){
     'teamspeak-svc/src/main/java/com/tsvoice/server/CapabilityAnnouncer.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/server/ServerRuntime.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/server/relay/TsRelayRuntime.java' `
+    'teamspeak-svc/src/main/java/com/tsvoice/server/relay/OpenEstablisher.java' `
+    'ts3voice-core/src/main/java/com/tsvoice/protocol/relay/TsDatagramKind.java' `
     'teamspeak-svc/src/main/java/com/tsvoice/server/relay/TsRelaySession.java' `
     'ts3voice-core/src/main/java/com/tsvoice/protocol/relay/TsRelayWire.java' `
     "$base/ServerConfigTest.java" "$base/AnnouncerTest.java"
@@ -43,7 +45,22 @@ if ($null -eq $jar) {
     if ($null -eq $jar) { throw 'gradlew build produced no jar' }
 }
 Write-Output ("artifact: {0} ({1} bytes)" -f $jar.Name, $jar.Length)
-$hash = (Get-FileHash $jar.FullName -Algorithm SHA256).Hash
+# SHA-256 without Get-FileHash: on GitHub runners this suite's nested
+# gradlew build resets PSModulePath in-process, which can make the
+# Microsoft.PowerShell.Utility module (Get-FileHash) unloadable. Use a
+# .NET API call that does not depend on module autoloading.
+$sha = [System.Security.Cryptography.SHA256]::Create()
+try {
+    $stream = [System.IO.File]::OpenRead($jar.FullName)
+    try {
+        $hashBytes = $sha.ComputeHash($stream)
+    } finally {
+        $stream.Dispose()
+    }
+} finally {
+    $sha.Dispose()
+}
+$hash = ([System.BitConverter]::ToString($hashBytes)).Replace('-', '')
 Write-Output ("artifact sha256: {0}" -f $hash)
 # jar tool from the JDK (gradle's JAVA_HOME or the standard install path)
 $jarTool = $null

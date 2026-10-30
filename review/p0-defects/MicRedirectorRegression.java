@@ -190,6 +190,103 @@ public class MicRedirectorRegression {
                 "healthy path: exactly one frame encoded once and sent to TS");
 
         TsVoiceManager.manualDisconnect();
+
+        // ---- G1/P1-03: real canSend branches on the actual manager code ----
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.clearCanSend();
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.clearSent();
+
+        var relayTransport = new com.tsvoice.client.ts3voice.TsMcChannelTransport();
+        var relayCfg = new TsVoiceManager.SessionConfig("127.0.0.1", 9987, "", "g1-relay",
+                com.tsvoice.client.connection.VoiceTransport.TS_MC_CHANNEL, null, null);
+
+        // (1) Channel absent (default-deny): explicit failure, no OPEN sent.
+        boolean failed = false;
+        try {
+            TsVoiceManager.openMcRelaySessionForTest(relayTransport, relayCfg);
+        } catch (IllegalStateException e) {
+            failed = e.getMessage() != null && e.getMessage().contains("does not support the TS relay channel");
+        }
+        check(failed, "G1: absent relay channel fails openMcRelaySession explicitly");
+        check(net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.SENT.isEmpty(),
+                "G1: no OPEN payload is sent when the channel is absent");
+        check(relayTransport.state() == com.tsvoice.client.ts3voice.TsMcChannelTransport.State.CLOSED
+                        && relayTransport.relaySessionId() == null,
+                "G1: transport stays unattached after the rejected OPEN");
+
+        // (2) Channel present: OPEN goes out, production branch enters the wait;
+        // complete it via the real onRelayOpenedFrame path.
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.setCanSend(
+                com.tsvoice.common.net.TsRelayPayloads.RelayOpenPayload.TYPE, true);
+        Thread opener = new Thread(() -> {
+            try {
+                TsVoiceManager.openMcRelaySessionForTest(relayTransport, relayCfg);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }, "g1-relay-open");
+        opener.start();
+        long deadline = System.currentTimeMillis() + 5000;
+        while (net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.SENT.isEmpty()
+                && System.currentTimeMillis() < deadline) {
+            Thread.sleep(10);
+        }
+        check(!net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.SENT.isEmpty(),
+                "G1: supported channel sends the OPEN payload");
+        // Resolve the pending OPEN through the real receiver branch.
+        byte[] sessionId = new byte[16];
+        new java.security.SecureRandom().nextBytes(sessionId);
+        TsVoiceManager.onRelayOpenedFrame(com.tsvoice.protocol.relay.TsRelayWire.encodeOpened(
+                new com.tsvoice.protocol.relay.TsRelayWire.OpenedFrame(1, sessionId, 4096, 256, 512 * 1024)));
+        opener.join(5000);
+        check(!opener.isAlive(), "G1: OPENED completion unblocks the production OPEN branch");
+        check(relayTransport.state() == com.tsvoice.client.ts3voice.TsMcChannelTransport.State.OPEN
+                        && relayTransport.relaySessionId() != null,
+                "G1: attach happened on the production path (transport OPEN with session id)");
+
+        // (3) CLOSE with the channel disallowed: local cleanup still completes,
+        //     no CLOSE payload is sent.
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.clearSent();
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.setCanSend(
+                com.tsvoice.common.net.TsRelayPayloads.RelayClosePayload.TYPE, false);
+        TsVoiceManager.closeMcRelaySessionForTest();
+        check(TsVoiceManager.currentMcRelaySessionId() == null,
+                "G1: local relay state cleared even when CLOSE cannot be sent");
+        check(net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.SENT.isEmpty(),
+                "G1: disallowed CLOSE channel means no CLOSE payload leaves");
+        check(relayTransport.isClosed(), "G1: transport closed by local cleanup");
+
+        // (4) CLOSE allowed: the CLOSE payload is sent (positive control).
+        var relayTransport2 = new com.tsvoice.client.ts3voice.TsMcChannelTransport();
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.setCanSend(
+                com.tsvoice.common.net.TsRelayPayloads.RelayOpenPayload.TYPE, true);
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.setCanSend(
+                com.tsvoice.common.net.TsRelayPayloads.RelayClosePayload.TYPE, true);
+        Thread opener2 = new Thread(() -> {
+            try {
+                TsVoiceManager.openMcRelaySessionForTest(relayTransport2, relayCfg);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }, "g1-relay-open-2");
+        opener2.start();
+        deadline = System.currentTimeMillis() + 5000;
+        while (net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.SENT.isEmpty()
+                && System.currentTimeMillis() < deadline) {
+            Thread.sleep(10);
+        }
+        byte[] sessionId2 = new byte[16];
+        new java.security.SecureRandom().nextBytes(sessionId2);
+        TsVoiceManager.onRelayOpenedFrame(com.tsvoice.protocol.relay.TsRelayWire.encodeOpened(
+                new com.tsvoice.protocol.relay.TsRelayWire.OpenedFrame(2, sessionId2, 4096, 256, 512 * 1024)));
+        opener2.join(5000);
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.clearSent();
+        TsVoiceManager.closeMcRelaySessionForTest();
+        boolean closeSent = net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.SENT.stream()
+                .anyMatch(pl -> pl instanceof com.tsvoice.common.net.TsRelayPayloads.RelayClosePayload);
+        check(closeSent, "G1: allowed CLOSE channel sends the CLOSE payload");
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.clearCanSend();
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.clearSent();
+
         if (failures != 0) {
             throw new AssertionError(failures + " mic redirect checks failed");
         }

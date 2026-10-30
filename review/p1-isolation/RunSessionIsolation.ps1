@@ -108,7 +108,7 @@ $client = 'teamspeak-svc/src/main/java/com/tsvoice/client'
 # The connection control-plane classes are part of the fix; tolerate their absence
 # when proving the old code fails.
 $prod = @("$client/TsVoiceManager.java", "$client/ts3voice/TsProtocolException.java", "$client/audio/MicRouteGate.java", "$client/connection/VoiceState.java",
-    "$client/connection/BackendCoordinator.java", "$client/connection/SelectionPolicy.java", "$client/connection/TsChannelRoute.java", "$client/connection/CapabilityDiscovery.java", "$client/connection/VoiceTransport.java", "$client/ts3voice/TsMcChannelTransport.java", "ts3voice-core/src/main/java/com/tsvoice/protocol/relay/TsRelayWire.java", "ts3voice-core/src/main/java/com/tsvoice/protocol/capability/CapabilityWire.java",
+    "$client/connection/BackendCoordinator.java", "$client/connection/SelectionPolicy.java", "$client/connection/TsChannelRoute.java", "$client/connection/CapabilityDiscovery.java", "$client/connection/VoiceTransport.java", "$client/ts3voice/TsMcChannelTransport.java", "ts3voice-core/src/main/java/com/tsvoice/protocol/relay/TsRelayWire.java", "ts3voice-core/src/main/java/com/tsvoice/protocol/relay/TsDatagramKind.java", "ts3voice-core/src/main/java/com/tsvoice/protocol/capability/CapabilityWire.java",
     "$client/frontend/SvcFrontendAdapter.java", "$client/frontend/FrontendCapabilities.java",
     "$client/frontend/FrontendLease.java", "$client/frontend/Svc2625FrontendAdapter.java",
     "$client/ts3voice/TsChannelSnapshot.java",

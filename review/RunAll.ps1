@@ -50,7 +50,7 @@ if ($coreProc.ExitCode -eq 0) {
     Get-Content $coreErr -Tail 6 -ErrorAction SilentlyContinue | ForEach-Object { Write-Output "  $_" }
 }
 
-# ---- Phase 2: harness suites (23 = 20 previous + upload-confirmation + gui-integration + m7)
+# ---- Phase 2: harness suites (count comes from $suites.Count below, never hardcode)
 $suites = @(
     'review/channel-fixes/RunProtocol.ps1',
     'review/channel-fixes/RunMapper.ps1',
@@ -103,5 +103,5 @@ if ($failed.Count -gt 0) {
     Write-Output ("Full per-suite logs: {0}" -f $logDir)
     exit 1
 }
-Write-Output ('CI-EQUIVALENT RESULT: PASS (core test + all 23 harness suites green)')
+Write-Output ('CI-EQUIVALENT RESULT: PASS (core test + all ' + $suites.Count + ' harness suites green)')
 exit 0

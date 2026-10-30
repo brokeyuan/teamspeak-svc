@@ -41,6 +41,11 @@ public final class MusicBotManager {
 
     /** 当前 Bot 会话（单实例；重复 start 拒绝并反馈）。 */
     private static final AtomicReference<MusicSession> ACTIVE = new AtomicReference<>();
+    /** G4：start 异步进行中标志（防重入；stop 可取消当前尝试）。 */
+    private static final java.util.concurrent.atomic.AtomicBoolean START_IN_FLIGHT =
+            new java.util.concurrent.atomic.AtomicBoolean();
+    private static final java.util.concurrent.atomic.AtomicBoolean STOP_REQUESTED =
+            new java.util.concurrent.atomic.AtomicBoolean();
     /** 活跃 Bot 的授权曲目（绝对路径字符串，按加入顺序播放）。 */
     private static final List<String> QUEUE = new ArrayList<>();
     /** 当前曲目在队列中的下标（-1 = 未开始）。 */
@@ -56,6 +61,11 @@ public final class MusicBotManager {
 
     // ---- 状态查询（UI/命令反馈） ----
 
+    /** G6：当前活跃会话（UI/音量派生用；无则 null）。 */
+    public static MusicSession activeSession() {
+        return ACTIVE.get();
+    }
+
     public static boolean isActive() {
         MusicSession s = ACTIVE.get();
         return s != null && s.state() != MusicSession.State.CLOSED
@@ -64,7 +74,13 @@ public final class MusicBotManager {
 
     public static String statusText() {
         MusicSession s = ACTIVE.get();
-        if (s == null || !isActive()) {
+        if (s == null) {
+            if (START_IN_FLIGHT.get()) {
+                return "Music bot: connecting..." + (LAST_START_ERROR == null ? "" : " (last error: " + LAST_START_ERROR + ")");
+            }
+            if (LAST_START_ERROR != null) {
+                return "Music bot: stopped (last start failed: " + LAST_START_ERROR + ")";
+            }
             return "Music bot: stopped";
         }
         StringBuilder sb = new StringBuilder("Music bot: ").append(s.state());
@@ -125,6 +141,22 @@ public final class MusicBotManager {
             throw new BotStateException("volume must be 0..100");
         }
         localVolumePercent = percent;
+        // G6/P2-05：写入实际本机收听链（SVC 参与者音量存储；键 = serverUID +
+        // Bot TS UID 稳定派生）。重连后由播放通道重放；不影响发送。
+        applyListeningGain();
+    }
+
+    /** 音量/静音应用到 Bot 参与者键（identity 快照可用时）。 */
+    private static void applyListeningGain() {
+        var session = ACTIVE.get();
+        var snapshot = session == null ? null : session.botIdentitySnapshot();
+        if (snapshot == null || snapshot.serverUid() == null || snapshot.tsUid() == null) {
+            return; // 未连接或身份未就绪：连接确认后由 UI/播放重放
+        }
+        var key = com.tsvoice.client.TsAudioInjector.participantUuidFor(
+                snapshot.serverUid(), snapshot.tsUid());
+        com.tsvoice.client.ParticipantVolumeControl.setVolume(key, localVolumePercent / 100.0);
+        com.tsvoice.client.ParticipantVolumeControl.reapply(key);
     }
 
     public static int volume() {
@@ -143,85 +175,110 @@ public final class MusicBotManager {
      */
     public static synchronized void start(String host, int port, String channel, String serverUid)
             throws Exception {
+        start(host, port, channel, serverUid, false, null);
+    }
+
+    /**
+     * G5：传输模式显式 —— udp（直连 TS）或 mc（经当前 MC 服务器的受控
+     * MUSIC_BOT 第二会话；targetId = 服务端 allowlist 键）。禁止 UI 选择了
+     * MC 却悄悄走 UDP。
+     *
+     * @param mcTargetId MC 模式下的中继 targetId（服务端 allowlist 键；UDP 模式忽略）
+     */
+    public static synchronized void start(String host, int port, String channel, String serverUid,
+                                          boolean viaMcChannel, String mcTargetId)
+            throws Exception {
         if (isActive()) {
             throw new BotStateException("music bot already running (use /tsvoice music stop)");
         }
-        if (host == null || host.isBlank()) {
-            throw new BotStateException("TS host required");
+        if (!viaMcChannel && (host == null || host.isBlank())) {
+            throw new BotStateException("TS host required (or use the MC-channel mode)");
         }
-        // 独立身份：专用文件，绝不复用玩家身份（玩家身份仍由玩家会话持有）。
-        Path identityPath = FabricLoader.getInstance().getConfigDir()
-                .resolve("teamspeak-svc").resolve("identity-music.txt");
-        Ts3Identity identity = Ts3Identity.load(identityPath);
-        if (identity == null) {
-            TeamspeakSvcClient.LOGGER.info("[teamspeak-svc] generating music bot identity (level 16)...");
-            identity = Ts3Identity.generate(16, 4_000);
-            identity.save(identityPath);
+        if (viaMcChannel && (mcTargetId == null || mcTargetId.isBlank())) {
+            throw new BotStateException("MC-channel mode requires a relay targetId");
         }
-        String nickname = "[Music Bot] " + Minecraft.getInstance().getUser().getName();
-
-        // 独立连接：自己的 crypt/connection/client（UDP 直连传输）。
-        Ts3Connection connection = new Ts3Connection(new Ts3Crypt(identity), false);
-        Ts3VoiceClient client = new Ts3VoiceClient(identity, nickname, channel == null ? "" : channel,
-                connection);
-
-        MusicSession session = new MusicSession(host, port, nickname, null);
-        MusicSession.ProductionConnection production = new MusicSession.ProductionConnection(
-                identity, client, connection, null);
-        session.attachProductionConnection(production);
-        // close 桥：MusicSession 通过 AutoCloseable 断开 Bot 自己的连接
-        production.closer = client::disconnect;
-
-        // 编码器工厂：SVC 客户端 API（48kHz 单声道 20ms 帧）。
-        session.setEncoderFactory(() -> {
-            de.maxhenkel.voicechat.api.VoicechatClientApi api = TeamspeakSvcClient.clientApi();
-            if (api == null) {
-                return null; // 无 SVC 客户端实例：明确不可用
-            }
-            de.maxhenkel.voicechat.api.opus.OpusEncoder enc = api.createEncoder();
-            return enc == null ? null : new SvcApiEncoderAdapter(enc);
-        });
-
-        // 发送桥：编码帧 → 玩家独立 Bot 的 sendVoice(CODEC_OPUS_MUSIC, routeEpoch)。
-        // Bot 的 route 许可：Bot 会话在位 + 授权频道绑定成立。
-        final long botRoute = botRouteEpoch(production);
-        session.startPlaybackForTestHookViaProducer(() ->
-                opus -> {
-                    // sendVoice 是 void：不抛即视为已提交网络层（许可由 Bot 会话
-                    // 常量代际承载；断线由独立连接自己的错误路径终止播放）。
-                    try {
-                        client.sendVoice(opus, MusicSession.CODEC_OPUS_MUSIC, botRoute);
-                        return true;
-                    } catch (com.tsvoice.client.ts3voice.Ts3VoiceException e) {
-                        TeamspeakSvcClient.LOGGER.debug(
-                                "[teamspeak-svc] music bot voice send failed: {}", e.getMessage());
-                        return false; // 帧丢弃，播放继续（引擎许可语义）
-                    }
-                });
-
-        if (!ACTIVE.compareAndSet(null, session)) {
+        if (viaMcChannel && !com.tsvoice.client.TsVoiceManager.isMcRelayChannelSupported()) {
+            throw new BotStateException("this server does not support the TS relay channel");
+        }
+        if (START_IN_FLIGHT.get()) {
+            throw new BotStateException("music bot start already in progress");
+        }
+        START_IN_FLIGHT.set(true);
+        // G4：identity 生成、DNS、最长 15 秒握手全部移出客户端线程 —— 命令立即
+        // 返回"连接中"，状态/错误在客户端线程反馈；stop 可取消当前尝试。
+        Thread worker = new Thread(() -> {
+            MusicSession session = null;
             try {
-                session.close();
-            } catch (RuntimeException ignored) {
+                Path identityPath = FabricLoader.getInstance().getConfigDir()
+                        .resolve("teamspeak-svc").resolve("identity-music.txt");
+                Ts3Identity identity = Ts3Identity.load(identityPath);
+                if (identity == null) {
+                    TeamspeakSvcClient.LOGGER.info("[teamspeak-svc] generating music bot identity (level 16)...");
+                    identity = Ts3Identity.generate(16, 4_000);
+                    identity.save(identityPath);
+                }
+                String nickname = "[Music Bot] " + Minecraft.getInstance().getUser().getName();
+
+                Ts3Connection connection = new Ts3Connection(new Ts3Crypt(identity), false);
+                Ts3VoiceClient client = new Ts3VoiceClient(identity, nickname,
+                        channel == null ? "" : channel, connection);
+                session = new MusicSession(host, port, nickname, null);
+                MusicSendPermit permit = MusicBotAssembly.assemble(session, client, serverUid);
+                session.setBotTsUid(identity.getClientUid());
+                session.setEncoderFactory(() -> {
+                    de.maxhenkel.voicechat.api.VoicechatClientApi api = TeamspeakSvcClient.clientApi();
+                    if (api == null) {
+                        return null;
+                    }
+                    de.maxhenkel.voicechat.api.opus.OpusEncoder enc = api.createEncoder();
+                    return enc == null ? null : new SvcApiEncoderAdapter(enc);
+                });
+                if (!ACTIVE.compareAndSet(null, session)) {
+                    session.close();
+                    return; // 已有 Bot：放弃本次启动
+                }
+                session.markConnecting();
+                if (STOP_REQUESTED.get()) {
+                    stopInternal(session);
+                    return;
+                }
+                if (viaMcChannel) {
+                    // G5：受控第二会话 —— OPEN(purpose=MUSIC_BOT) → OPENED →
+                    // attach → TS 握手（经 MC 通道传输；客户端不解析 TS DNS）。
+                    com.tsvoice.client.ts3voice.TsMcChannelTransport botTransport =
+                            new com.tsvoice.client.ts3voice.TsMcChannelTransport();
+                    com.tsvoice.client.music.MusicRelayBridge.openMcRelaySessionForBot(botTransport, mcTargetId);
+                    connection.setTransportForTest(botTransport);
+                    client.connect(15_000L);
+                } else {
+                    client.connect(java.net.InetAddress.getByName(host), port, 15_000L);
+                }
+                if (STOP_REQUESTED.get()) {
+                    stopInternal(session);
+                    return;
+                }
+                permit.connectedUnconfirmed();
+                session.markConnected();
+                TeamspeakSvcClient.LOGGER.info(
+                        "[teamspeak-svc] music bot connected (uid={}, host={}:{}, via={}, channel='{}', awaiting channel confirm)",
+                        identity.getClientUid(), host, viaMcChannel ? "MC_CHANNEL" : "UDP", channel);
+            } catch (Exception e) {
+                if (session != null) {
+                    stopInternal(session);
+                }
+                LAST_START_ERROR = e.getMessage() == null ? e.toString() : e.getMessage();
+                TeamspeakSvcClient.LOGGER.info("[teamspeak-svc] music bot start failed: {}", LAST_START_ERROR);
+            } finally {
+                START_IN_FLIGHT.set(false);
+                STOP_REQUESTED.set(false);
             }
-            throw new BotStateException("music bot already running");
-        }
-
-        // 建立连接（阻塞至握手完成；失败即整体回滚）。
-        try {
-            client.connect(java.net.InetAddress.getByName(host), port, 15_000L);
-        } catch (Exception e) {
-            stopInternal(session);
-            throw new BotStateException("music bot connect failed: " + e.getMessage());
-        }
-        TeamspeakSvcClient.LOGGER.info("[teamspeak-svc] music bot connected (uid={}, host={}:{}, channel='{}')",
-                identity.getClientUid(), host, port, channel);
+        }, "tsvoice-music-bot-start");
+        worker.setDaemon(true);
+        worker.start();
     }
 
-    /** Bot 发送许可：会话在位即有效（频道确认后续轮增强；F5 记录边界）。 */
-    private static long botRouteEpoch(MusicSession.ProductionConnection pc) {
-        return 1L; // 独立 Bot 会话的代际空间与玩家会话分离；1 = Bot 会话常量许可
-    }
+    /** start 过程中的错误（连接线程写入；statusText 反馈）。 */
+    private static volatile String LAST_START_ERROR;
 
     /** 供 start() 装配的内部钩子（把 sender 工厂交给 MusicSession）。 */
     private interface SenderFactory {
@@ -258,6 +315,11 @@ public final class MusicBotManager {
         if (currentIndex < 0 || currentIndex >= queue.size()) {
             currentIndex = 0;
         }
+        // G3：新一轮播放取得新许可代际（旧帧全部失效）
+        if (s.permitForTest() != null && !s.permitForTest().rearmForPlayback()) {
+            throw new BotStateException("music bot cannot play (permission revoked: "
+                    + s.permitForTest().snapshot().revokeReason() + ")");
+        }
         playTrack(s, queue.get(currentIndex));
     }
 
@@ -273,12 +335,20 @@ public final class MusicBotManager {
             throw new BotStateException("music bot is not running");
         }
         s.pause();
+        // G3：暂停撤销旧播放许可（代际推进；恢复时再武装取得新代际）
+        if (s.permitForTest() != null) {
+            s.permitForTest().revoke("paused");
+        }
     }
 
     public static synchronized void resume() {
         MusicSession s = ACTIVE.get();
         if (s == null) {
             throw new BotStateException("music bot is not running");
+        }
+        if (s.permitForTest() != null && !s.permitForTest().rearmForPlayback()) {
+            throw new BotStateException("music bot cannot resume (permission revoked: "
+                    + s.permitForTest().snapshot().revokeReason() + ")");
         }
         s.resume();
     }
@@ -297,6 +367,10 @@ public final class MusicBotManager {
             queue = List.copyOf(QUEUE);
         }
         s.cancel();
+        // G3：跳过撤销旧许可；下一轮播放再武装取得新代际（旧帧全部失效）
+        if (s.permitForTest() != null) {
+            s.permitForTest().revoke("skipped");
+        }
         playTrack(s, queue.get(currentIndex));
     }
 
@@ -304,15 +378,22 @@ public final class MusicBotManager {
         MusicSession s = ACTIVE.get();
         if (s != null) {
             s.cancel();
+            if (s.permitForTest() != null) {
+                s.permitForTest().revoke("stopped playback");
+            }
         }
         currentIndex = -1;
     }
 
     /** 完全停止 Bot（断开独立连接、释放编码器/引擎）。 */
     public static synchronized void stopBot() {
+        STOP_REQUESTED.set(true);
         MusicSession s = ACTIVE.getAndSet(null);
         if (s != null) {
             s.cancel();
+            if (s.permitForTest() != null) {
+                s.permitForTest().revoke("bot closed");
+            }
             s.close();
         }
         currentIndex = -1;

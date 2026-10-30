@@ -127,8 +127,12 @@ public class TeamspeakSvcClient {
 
         // S1.4/P6：TS 中继下行（主线程投递给 manager 的等待队列/传输）
         ClientPlayNetworking.registerGlobalReceiver(TsRelayPayloads.RelayOpenedPayload.TYPE,
-                (payload, context) -> context.client().execute(() ->
-                        TsVoiceManager.onRelayOpenedFrame(payload.frame())));
+                (payload, context) -> context.client().execute(() -> {
+                    // G5：MUSIC_BOT 的 OPENED 分发给 Bot 的在途 OPEN（不触玩家全局）
+                    if (!TsVoiceManager.completeBotRelayOpened(payload.frame())) {
+                        TsVoiceManager.onRelayOpenedFrame(payload.frame());
+                    }
+                }));
         ClientPlayNetworking.registerGlobalReceiver(TsRelayPayloads.RelayDataS2cPayload.TYPE,
                 (payload, context) -> context.client().execute(() ->
                         TsVoiceManager.onRelayDownstreamFrame(payload.frame())));
@@ -136,8 +140,12 @@ public class TeamspeakSvcClient {
                 (payload, context) -> context.client().execute(() ->
                         TsVoiceManager.onRelayDownstreamFrame(payload.frame())));
         ClientPlayNetworking.registerGlobalReceiver(TsRelayPayloads.RelayErrorPayload.TYPE,
-                (payload, context) -> context.client().execute(() ->
-                        TsVoiceManager.onRelayDownstreamFrame(payload.frame())));
+                (payload, context) -> context.client().execute(() -> {
+                    // G5：MUSIC_BOT 的 ERROR 分发优先（Bot 在途 OPEN 失败）
+                    if (!TsVoiceManager.completeBotRelayError(payload.frame())) {
+                        TsVoiceManager.onRelayDownstreamFrame(payload.frame());
+                    }
+                }));
 
         // E2/T36：SVC MC 通道下行（服务端 S2C SVC NetworkMessage 原始字节 →
         // socket 队列）与传输宣告（config）。顺序无关：宣告可先于/后于

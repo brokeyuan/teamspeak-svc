@@ -96,9 +96,21 @@ public class RelayProductionBridgeTest {
         return TsRelayWire.encodeOpen(new TsRelayWire.OpenFrame(id, "ts", TsRelayWire.Purpose.PLAYER_VOICE));
     }
 
+    /** 真实 TS 包头 fixture（[MAC8][header5]，type=VOICE；见 Ts3Packet 布局）。 */
+    static byte[] realVoice(int payloadLen) {
+        byte[] raw = new byte[13 + payloadLen];
+        raw[12] = 0x00;
+        return raw;
+    }
+    static byte[] realVoice(int payloadLen, byte firstPayloadByte) {
+        byte[] raw = realVoice(payloadLen);
+        raw[13] = firstPayloadByte;
+        return raw;
+    }
+
     static byte[] data(byte[] id, long epoch, byte[] b) {
         return TsRelayWire.encodeData(TsRelayWire.MessageType.DATA_C2S,
-                new TsRelayWire.DataFrame(id, epoch, 1, b));
+                new TsRelayWire.DataFrame(id, epoch, com.tsvoice.protocol.relay.TsDatagramKind.TRAFFIC_MEDIA, b));
     }
 
     public static void main(String[] args) throws Exception {
@@ -110,7 +122,7 @@ public class RelayProductionBridgeTest {
             var openResult = runtime.onOpen("conn-t32", "player-t32", open(1));
             check(openResult.ok(), "T32: OPEN accepted");
             byte[] sid = openResult.relaySessionId();
-            boolean sent = runtime.onData("conn-t32", data(sid, 1, new byte[]{5, 6, 7, 8}));
+            boolean sent = runtime.onData("conn-t32", data(sid, 1, realVoice(4, (byte) 5)));
             check(sent, "T32: upstream DATA accepted");
             boolean delivered = got.await(2, TimeUnit.SECONDS)
                     || (bridge.clientBoundPayloads.size() > 0);
@@ -132,7 +144,7 @@ public class RelayProductionBridgeTest {
                         : upstream;
                 TsRelayWire.Decoded decoded = TsRelayWire.decode(clientFrame);
                 check(decoded != null && decoded.type() == TsRelayWire.MessageType.DATA_S2C
-                                && java.util.Arrays.equals(decoded.data().datagram(), new byte[]{5, 6, 7, 8}),
+                                && java.util.Arrays.equals(java.util.Arrays.copyOfRange(decoded.data().datagram(), 13, 17), new byte[]{5, 0, 0, 0}),
                         "T32: client handler decodes the bridged frame and restores the original datagram");
             }
             runtime.close();

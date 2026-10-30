@@ -34,8 +34,12 @@ public final class MusicSession implements AutoCloseable {
 
     /** Opus 编码适配（E7/T38：独立于 SVC 内部类；提供方给出实现与许可证据）。 */
     public interface OpusEncoderAdapter extends AutoCloseable {
-        /** 48kHz 单声道 short[] PCM → Opus 字节帧。 */
-        byte[] encode(short[] pcm);
+        /**
+         * 48kHz 单声道 short[] PCM → Opus 字节帧。
+         *
+         * @throws Exception 反射/实现底层异常（引擎按 FAILED 处理）
+         */
+        byte[] encode(short[] pcm) throws Exception;
 
         @Override
         void close();
@@ -69,6 +73,8 @@ public final class MusicSession implements AutoCloseable {
         public final Object client;
         public final Object connection;
         public final Object transport;
+        /** G3：Bot 发送许可（身份/连接/确认频道共同绑定）。 */
+        public final MusicSendPermit permit;
         /** Bot 自己连接的关闭桥（AutoCloseable；session close 时调用）——
          *  绝不指向玩家会话的资源。 */
         public volatile AutoCloseable closer;
@@ -76,11 +82,13 @@ public final class MusicSession implements AutoCloseable {
         public volatile String boundServerUid;
         public volatile int boundChannelId = -1;
 
-        public ProductionConnection(Object identity, Object client, Object connection, Object transport) {
+        public ProductionConnection(Object identity, Object client, Object connection, Object transport,
+                                    MusicSendPermit permit) {
             this.identity = identity;
             this.client = client;
             this.connection = connection;
             this.transport = transport;
+            this.permit = permit;
         }
     }
 
@@ -90,7 +98,7 @@ public final class MusicSession implements AutoCloseable {
         OpusEncoderAdapter acquire() throws Exception;
     }
 
-    public enum State { IDLE, CONNECTED, PLAYING, PAUSED, ENDED, FAILED, CLOSED }
+    public enum State { IDLE, CONNECTING, CONNECTED, PLAYING, PAUSED, ENDED, FAILED, CLOSED }
 
     private final String host;
     private final int port;
@@ -103,6 +111,9 @@ public final class MusicSession implements AutoCloseable {
     private ConnectionBundle testConnection;
     private volatile ProductionConnection production;
     private volatile EncoderFactory encoderFactory;
+    /** G3 发送门（生产装配注入）：可发送判定 + 当前代际（编码后复核用）。 */
+    private volatile java.util.function.BooleanSupplier sendGate;
+    private volatile java.util.function.LongSupplier gateEpochSupplier;
     /** 拥有的编码器（会话生命周期内唯一；close 释放）。 */
     private OpusEncoderAdapter ownedEncoder;
     /** 拥有的引擎（播放期间持有）。 */
@@ -127,9 +138,8 @@ public final class MusicSession implements AutoCloseable {
             ensureNotClosed();
             this.production = connection;
             this.testConnection = null;
-            if (state == State.IDLE) {
-                state = State.CONNECTED;
-            }
+            // G3/P2-04：attach ≠ 握手成功 —— 不在此置 CONNECTED；
+            // markConnecting/markConnected 由 BotManager 按真实连接进度调用。
         }
     }
 
@@ -137,6 +147,35 @@ public final class MusicSession implements AutoCloseable {
     public void setEncoderFactory(EncoderFactory factory) {
         synchronized (stateLock) {
             this.encoderFactory = factory;
+        }
+    }
+
+    /** 连接进行中（握手未完成；attachProductionConnection 后、connect 成功前）。 */
+    public void markConnecting() {
+        synchronized (stateLock) {
+            ensureNotClosed();
+            if (state == State.IDLE) {
+                state = State.CONNECTING;
+            }
+        }
+    }
+
+    /** 连接已建立（频道未确认 —— 可发送性由 sendGate/许可决定）。 */
+    public void markConnected() {
+        synchronized (stateLock) {
+            ensureNotClosed();
+            if (state == State.IDLE || state == State.CONNECTING) {
+                state = State.CONNECTED;
+            }
+        }
+    }
+
+    /** G3：注入生产发送门（可发送判定 + 代际来源；编码后复核共用）。 */
+    public void setSendGate(java.util.function.BooleanSupplier sendable,
+                            java.util.function.LongSupplier epochSupplier) {
+        synchronized (stateLock) {
+            this.sendGate = sendable;
+            this.gateEpochSupplier = epochSupplier;
         }
     }
 
@@ -159,6 +198,38 @@ public final class MusicSession implements AutoCloseable {
             }
             return (production != null && production.client != null) || testConnection != null;
         }
+    }
+
+    /** G3 诊断/回归：生产装配句柄（未装配为 null）。 */
+    public ProductionConnection productionForTest() {
+        synchronized (stateLock) {
+            return production;
+        }
+    }
+
+    /** G3 诊断/回归：当前发送许可（未装配为 null）。 */
+    public MusicSendPermit permitForTest() {
+        ProductionConnection pc = productionForTest();
+        return pc == null ? null : pc.permit;
+    }
+
+    /** G6 音量键来源：Bot 绑定房间的 serverUID + Bot TS UID（未确认时 null）。 */
+    public record BotIdentitySnapshot(String serverUid, String tsUid) {
+    }
+
+    public BotIdentitySnapshot botIdentitySnapshot() {
+        ProductionConnection pc = productionForTest();
+        if (pc == null) {
+            return null;
+        }
+        return new BotIdentitySnapshot(pc.boundServerUid, botTsUid);
+    }
+
+    /** Bot 自己的 TS UID（identity 派生；attach 后由 BotManager 设置）。 */
+    private volatile String botTsUid;
+
+    public void setBotTsUid(String uid) {
+        this.botTsUid = uid;
     }
 
     /** 房间绑定（授权 serverUID/cid）；Bot 被移出该房间即停（F5 边界）。 */
@@ -190,13 +261,19 @@ public final class MusicSession implements AutoCloseable {
         startPlayback(source, acquireEncoder(), clock);
     }
 
-    /** 编码器由调用方持有注入时的路径（测试/宿主预建）。 */
-    void startPlayback(PcmSource source, OpusEncoderAdapter encoder,
-                       java.util.function.LongSupplier clock) throws EncodingUnavailableException {
+    /** 编码器由调用方持有注入时的路径（测试/宿主预建；公开供生产回归）。 */
+    public void startPlayback(PcmSource source, OpusEncoderAdapter encoder,
+                              java.util.function.LongSupplier clock) throws EncodingUnavailableException {
         synchronized (stateLock) {
             ensureNotClosed();
             if (production == null && testConnection == null) {
                 throw new IllegalStateException("not connected");
+            }
+            // G3：生产会话必须已确认房间（许可 READY）才能开始播放；
+            // CONNECTING/CONNECTED(未确认) 明确失败，不提前显示可播。
+            if (production != null && sendGate != null && !sendGate.getAsBoolean()) {
+                throw new IllegalStateException(
+                        "bot not ready: channel not confirmed or permission revoked");
             }
         }
         if (encoder == null) {
@@ -229,10 +306,12 @@ public final class MusicSession implements AutoCloseable {
         OpusEncoderAdapter encoder;
         long myGeneration;
         FrameSender sender;
+        long capturedEpoch;
         synchronized (stateLock) {
             encoder = ownedEncoder;
             myGeneration = playbackGeneration;
             sender = frameSenderRef;
+            capturedEpoch = gateEpochSupplier == null ? 0 : gateEpochSupplier.getAsLong();
             if (state != State.PLAYING && state != State.PAUSED) {
                 return false; // 已取消/关闭：丢弃取出帧
             }
@@ -243,7 +322,7 @@ public final class MusicSession implements AutoCloseable {
         byte[] opus;
         try {
             opus = encoder.encode(pcm);
-        } catch (RuntimeException e) {
+        } catch (Exception e) {
             synchronized (stateLock) {
                 if (state == State.PLAYING || state == State.PAUSED) {
                     state = State.FAILED;
@@ -264,10 +343,21 @@ public final class MusicSession implements AutoCloseable {
         // F4：编码后、最终网络入队前的许可复核 —— 编码期间发生的 cancel/
         // pause/replace/断连/关闭使本帧作废：不调用 sender（绝不给旧帧换绑
         // 新 sender），播放代际由 startPlayback/cancel 递增。
+        // G3：生产路径同时复核发送门与代际（许可撤销/房间移动 → 帧作废）。
         synchronized (stateLock) {
             if (playbackGeneration != myGeneration
                     || (state != State.PLAYING && state != State.PAUSED)) {
                 framesDroppedAfterEncode++;
+                return false;
+            }
+        }
+        java.util.function.BooleanSupplier gate = sendGate;
+        java.util.function.LongSupplier gateEpoch = gateEpochSupplier;
+        if (gate != null) {
+            if (!gate.getAsBoolean() || gateEpoch.getAsLong() != capturedEpoch) {
+                synchronized (stateLock) {
+                    framesDroppedAfterEncode++;
+                }
                 return false;
             }
         }

@@ -35,7 +35,7 @@ public final class Ts3Connection {
 
     private final Ts3Crypt crypt;
     /** 传输层（UDP 原生 / TCP 隧道），构造时决定。 */
-    private final TsTransport transport;
+    private TsTransport transport;
     private final Object sendLock = new Object();
     private Ts3VoiceClient client;
 
@@ -167,6 +167,14 @@ public final class Ts3Connection {
     /**
      * 启动连接：绑定 socket、发送 init0、启动接收/重发/写线程。
      */
+    /**
+     * G5：注入已建立的传输（MC 中继模式 —— transport 已 attach 中继会话）。
+     * 注入后 connect(InetAddress,int) 不再重建传输，直接沿用（UDP 模式不变）。
+     */
+    public void setTransportForTest(TsTransport injected) {
+        this.transport = injected;
+    }
+
     public void connect(InetAddress address, int port) throws Ts3VoiceException {
         writerThread = new Thread(this::writerLoop, "teamspeak-svc-voice-writer");
         writerThread.setDaemon(true);
@@ -311,7 +319,9 @@ public final class Ts3Connection {
     private void sendRaw(Ts3Packet packet, PacketType type, long routeEpoch) throws Ts3VoiceException {
         // 入队而非直接发送（F09）：写线程负责 transport.send；队列满时语音丢最旧、
         // 控制命令抛错（调用方可见），绝不静默无界积压。
-        if (type == PacketType.VOICE) {
+        // G2：VOICE_WHISPER 同为媒体 —— 必须走带代际的语音队列，不得落入
+        // 控制队列绕过媒体屏障。
+        if (type == PacketType.VOICE || type == PacketType.VOICE_WHISPER) {
             OutgoingFrame frame = new OutgoingFrame(packet.raw, System.nanoTime(), routeEpoch);
             while (!voiceQueue.offer(frame)) {
                 if (voiceQueue.poll() == null) {

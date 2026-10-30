@@ -2,8 +2,21 @@ $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
 $root = 'review/server-fixes'
 New-Item -ItemType Directory -Path "$root/lib" -Force | Out-Null
-$gson = Get-ChildItem -LiteralPath "$env:USERPROFILE/.gradle/caches/modules-2/files-2.1/com.google.code.gson/gson/2.11.0" -Filter '*.jar' -Recurse | Select-Object -First 1
-Copy-Item -LiteralPath $gson.FullName -Destination "$root/lib/gson.jar" -Force
+# gson.jar is tracked in review/lib and therefore present in every CI
+# checkout. Only fall back to a Gradle cache search when it is missing
+# (GRADLE_USER_HOME first: CI runners keep caches outside USERPROFILE).
+if (!(Test-Path 'review/lib/gson.jar')) {
+    $cacheRoots = @()
+    if ($env:GRADLE_USER_HOME) { $cacheRoots += "$env:GRADLE_USER_HOME/caches/modules-2/files-2.1/com.google.code.gson/gson" }
+    $cacheRoots += "$env:USERPROFILE/.gradle/caches/modules-2/files-2.1/com.google.code.gson/gson"
+    $jar = $null
+    foreach ($cacheRoot in $cacheRoots) {
+        $jar = Get-ChildItem -LiteralPath $cacheRoot -Recurse -Filter '*.jar' -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($jar) { break }
+    }
+    if (-not $jar) { throw 'gson.jar not found in review/lib or any Gradle cache' }
+    Copy-Item -LiteralPath $jar.FullName -Destination "$root/lib/gson.jar" -Force
+}
 $stubs = @{
 'com/svcb/tsbridge/TsBridgeMod.java' = @'
 package com.svcb.tsbridge;
@@ -87,6 +100,14 @@ $sources = foreach ($item in $stubs.GetEnumerator()) {
 }
 $base='teamspeak&svcbridge/src/main/java/com/svcb/tsbridge'
 $production=@("$base/net/TcpTunnelServer.java","$base/ts/TsQueryClient.java","$base/config/BridgeConfig.java","$base/transport/PlayerVoiceClients.java","$base/svc/McToTsDispatcher.java","$base/svc/BridgeMembershipService.java","$base/ghost/GhostPlayerInjector.java")
+# The production sources under test (TcpTunnelServer etc.) reference
+# com.tsvoice.protocol classes from ts3voice-core. This suite must stand
+# alone on a clean checkout, so build the needed core sources itself
+# instead of relying on a gradle run (or RunAll phase 1) having happened.
+New-Item -ItemType Directory -Path 'ts3voice-core/build/classes/java/main' -Force | Out-Null
+$coreSources = Get-ChildItem 'ts3voice-core/src/main/java' -Recurse -Filter '*.java' | ForEach-Object { $_.FullName }
+& javac -encoding UTF-8 -d 'ts3voice-core/build/classes/java/main' @coreSources
+if ($LASTEXITCODE -ne 0) { throw 'ts3voice-core compilation for server regression failed' }
 $cp="review/lib/*;$root/lib/*;ts3voice-core/build/classes/java/main"
 & javac -encoding UTF-8 -cp $cp -d "$root/classes" @sources @production "$root/ServerRegression.java"
 if($LASTEXITCODE -ne 0){throw 'Server regression compilation failed'}

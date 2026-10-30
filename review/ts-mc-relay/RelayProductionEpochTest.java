@@ -65,9 +65,28 @@ public class RelayProductionEpochTest {
     }
 
     /** 生产 sender 形状：会话绑定 + 携带入队代际（与 TsVoiceManager 闭包一致）。 */
+    /** 真实 TS 包头 fixture：[MAC8][header5(type=VOICE)][payload]；MAC 置零。 */
+    static byte[] realVoice(int payloadLen) {
+        byte[] raw = new byte[13 + payloadLen];
+        raw[12] = 0x00;
+        return raw;
+    }
+    static byte[] realVoice(int payloadLen, byte firstPayloadByte) {
+        byte[] raw = realVoice(payloadLen);
+        raw[13] = firstPayloadByte;
+        return raw;
+    }
+    /** 3000 字节级 fixture：真实头 + 内容按 i*7 填充（保留大小/内容断言）。 */
+    static byte[] bigVoice(byte[] old) {
+        byte[] raw = realVoice(old.length);
+        System.arraycopy(old, 0, raw, 13, old.length);
+        return raw;
+    }
+
     static byte[] productionFrame(byte[] boundSessionId, long routeEpoch, byte[] datagram) {
         return TsRelayWire.encodeData(TsRelayWire.MessageType.DATA_C2S,
-                new TsRelayWire.DataFrame(boundSessionId, routeEpoch, 0, datagram));
+                new TsRelayWire.DataFrame(boundSessionId, routeEpoch,
+                        com.tsvoice.protocol.relay.TsDatagramKind.TRAFFIC_MEDIA, datagram));
     }
 
     static byte[] barrier(byte[] id, long epoch) {
@@ -88,15 +107,15 @@ public class RelayProductionEpochTest {
             // 生产 sender：确认频道后代际推进到 200，barrier 推给服务端
             check(runtime.onRouteBarrier("conn-f2", barrier(sid, 200)),
                     "F2b: production-style barrier accepted");
-            check(!runtime.onData("conn-f2", productionFrame(sid, 199, new byte[]{1})),
+            check(!runtime.onData("conn-f2", productionFrame(sid, 199, realVoice(8, (byte) 1))),
                     "F2a: frame carrying the pre-barrier epoch (199) is rejected");
-            check(runtime.onData("conn-f2", productionFrame(sid, 200, new byte[]{2})),
+            check(runtime.onData("conn-f2", productionFrame(sid, 200, realVoice(8, (byte) 2))),
                     "F2a: frame carrying the barrier epoch (200) is forwarded");
-            check(runtime.onData("conn-f2", productionFrame(sid, 201, new byte[]{3})),
+            check(runtime.onData("conn-f2", productionFrame(sid, 201, realVoice(8, (byte) 3))),
                     "F2a: frame carrying a newer epoch (201) is forwarded");
             check(!runtime.onRouteBarrier("conn-f2", barrier(sid, 150)),
                     "F2b: barrier regression is rejected");
-            check(runtime.onData("conn-f2", productionFrame(sid, 200, new byte[]{4})),
+            check(runtime.onData("conn-f2", productionFrame(sid, 200, realVoice(8, (byte) 4))),
                     "F2b: rejected regression did not disturb the live barrier");
             runtime.close();
         }
@@ -108,13 +127,13 @@ public class RelayProductionEpochTest {
             var o = runtime.onOpen("conn-b", "player-b", open(2));
             byte[] sid = o.relaySessionId();
             byte[] big = new byte[3000];
-            boolean first = runtime.onData("conn-b", productionFrame(sid, 1, big));
-            boolean second = runtime.onData("conn-b", productionFrame(sid, 1, big));
+            boolean first = runtime.onData("conn-b", productionFrame(sid, 1, bigVoice(big)));
+            boolean second = runtime.onData("conn-b", productionFrame(sid, 1, bigVoice(big)));
             // 预算 4096：3000 通过后剩 1096 —— 第二个 3000 帧超预算必须拒绝
             check(first, "F2c: first 3000-byte frame within the 4KiB/s budget is accepted");
             check(!second, "F2c: second frame exceeds the byte budget and is rejected");
             Thread.sleep(1100);
-            boolean refill = runtime.onData("conn-b", productionFrame(sid, 1, big));
+            boolean refill = runtime.onData("conn-b", productionFrame(sid, 1, bigVoice(big)));
             check(refill, "F2c: after one second the byte budget refills");
             runtime.close();
         }
@@ -125,7 +144,7 @@ public class RelayProductionEpochTest {
                     config(echo.socket.getLocalPort(), 2, 512 * 1024)); // pps=2, bytes 宽裕
             var o = runtime.onOpen("conn-d", "player-d", open(3));
             byte[] sid = o.relaySessionId();
-            byte[] small = new byte[10];
+            byte[] small = realVoice(8);
             boolean a = runtime.onData("conn-d", productionFrame(sid, 1, small));
             boolean b = runtime.onData("conn-d", productionFrame(sid, 1, small));
             boolean c = runtime.onData("conn-d", productionFrame(sid, 1, small));
