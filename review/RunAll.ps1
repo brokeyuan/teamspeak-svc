@@ -50,7 +50,7 @@ if ($coreProc.ExitCode -eq 0) {
     Get-Content $coreErr -Tail 6 -ErrorAction SilentlyContinue | ForEach-Object { Write-Output "  $_" }
 }
 
-# ---- Phase 2: harness suites (23 = 20 previous + upload-confirmation + gui-integration + m7)
+# ---- Phase 2: harness suites (count comes from $suites.Count below, never hardcode)
 $suites = @(
     'review/channel-fixes/RunProtocol.ps1',
     'review/channel-fixes/RunMapper.ps1',
